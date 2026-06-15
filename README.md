@@ -1,36 +1,144 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Zerodha Online Production Tracker
 
-## Getting Started
+Internal production tracker for LearnApp / Zerodha Online B2B content operations. Replaces Google Sheets with a single tool for tracking project status, ownership, timelines, delays, and delivery.
 
-First, run the development server:
+## Tech Stack
+
+- **Next.js 16** (App Router) + TypeScript
+- **Tailwind CSS**
+- **Supabase** — database, auth, RLS
+
+## Quick Start
+
+### 1. Clone & install
+
+```bash
+npm install
+```
+
+### 2. Set up Supabase
+
+1. Create a project at [supabase.com](https://supabase.com)
+2. Copy `.env.example` → `.env.local` and fill in your keys:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+```
+
+3. Run the schema in **Supabase SQL Editor**:
+
+```bash
+# Paste contents of:
+supabase/schema.sql
+```
+
+4. Enable **Email/Password** auth in Supabase Dashboard → Authentication → Providers
+
+### 3. Create your first admin user
+
+In Supabase Dashboard → Authentication → Users → **Add user**:
+- Email: `admin@learnapp.com`
+- Password: (your choice)
+- Copy the user's UUID
+
+Then run in SQL Editor:
+
+```sql
+INSERT INTO profiles (id, name, email, role, organization, is_active)
+VALUES ('YOUR-USER-UUID', 'Admin User', 'admin@learnapp.com', 'Admin', 'LearnApp', true);
+```
+
+### 4. Seed sample data (optional)
+
+```bash
+# Paste contents of supabase/seed.sql in SQL Editor
+```
+
+### 5. Run locally
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) and sign in.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## User Roles
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Role | Access |
+|------|--------|
+| **Admin** | Full access — users, settings, all projects |
+| **Internal Team** | Create/edit projects, update stages, all views |
+| **Agency** | Only assigned projects; limited field edits |
+| **Zerodha Viewer** | Read-only external view |
 
-## Learn More
+Agency users must have `organization` set to match an agency name (e.g. `Studio Alpha`).
 
-To learn more about Next.js, take a look at the following resources:
+## Pages
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Route | Description |
+|-------|-------------|
+| `/dashboard` | Stats cards + filtered project table |
+| `/board` | Kanban board with drag-and-drop stage changes |
+| `/projects` | Full project list with filters |
+| `/projects/new` | Create project form |
+| `/projects/[id]` | Project detail — timeline, comments, activity |
+| `/monthly-report` | IP-wise monthly metrics |
+| `/agency-view` | Agency-scoped dashboard |
+| `/zerodha-view` | Read-only stakeholder view |
+| `/users` | Admin user management |
+| `/settings` | IPs, types, stages, agencies, editors |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Structure
 
-## Deploy on Vercel
+```
+src/
+├── app/
+│   ├── (app)/          # Authenticated pages with sidebar
+│   ├── login/
+│   └── layout.tsx
+├── components/
+│   ├── board/          # Kanban
+│   ├── layout/         # Sidebar, Topbar, AppShell
+│   ├── projects/       # Table, Form, Timeline, etc.
+│   ├── reports/
+│   ├── ui/             # Badge, Button, Input, Modal, etc.
+│   └── users/
+├── context/            # AuthContext
+└── lib/
+    ├── actions/        # Server actions
+    ├── data/           # Data fetching
+    ├── supabase/       # Client, server, admin, middleware
+    ├── auth.ts
+    ├── constants.ts
+    ├── types.ts
+    └── utils.ts
+supabase/
+├── schema.sql          # Tables, RLS, triggers, seed lookups
+└── seed.sql            # 10 sample projects
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Health Logic
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Condition | Health |
+|-----------|--------|
+| Stage = Delivered | Delivered |
+| Stage = Hold | On hold |
+| Target date passed | Delayed |
+| Target within 3 days | At risk |
+| Otherwise | On track |
+
+## Stage Changes
+
+Every stage change automatically:
+- Creates a `stage_history` record
+- Updates `last_status_update_at`
+- Sets `delivered_date` when moving to Delivered
+- Recalculates health status
+
+Hold can happen at any time and projects can resume from Hold to any stage. Full timeline is preserved.
+
+## Deploy
+
+Works on Vercel. Set the same env vars in your Vercel project settings.

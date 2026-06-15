@@ -1,0 +1,12 @@
+-- Reference: create these users in Supabase Auth, then insert matching profiles rows.
+-- Team: Apoorv, Aalim, Anmol, Manish, Satyavrat (Internal Team)
+-- Graphics: Amit (Internal Team or dedicated role)
+
+-- Example profile insert (replace UUID with auth.users id):
+-- INSERT INTO profiles (id, name, email, role, organization) VALUES
+--   ('<uuid>', 'Apoorv', 'apoorv@learnapp.in', 'Internal Team', 'LearnApp'),
+--   ('<uuid>', 'Aalim', 'aalim@learnapp.in', 'Internal Team', 'LearnApp'),
+--   ('<uuid>', 'Anmol', 'anmol@learnapp.in', 'Internal Team', 'LearnApp'),
+--   ('<uuid>', 'Manish', 'manish@learnapp.in', 'Internal Team', 'LearnApp'),
+--   ('<uuid>', 'Satyavrat', 'satyavrat@learnapp.in', 'Internal Team', 'LearnApp'),
+--   ('<uuid>', 'Amit', 'amit@learnapp.in', 'Internal Team', 'LearnApp');
