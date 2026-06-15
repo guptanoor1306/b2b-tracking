@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   DndContext, DragEndEvent, DragOverlay, DragStartEvent,
   PointerSensor, useSensor, useSensors, closestCorners,
@@ -13,14 +14,18 @@ import { changeProjectStage } from '@/lib/actions/projects'
 import { StageChangeModal } from '@/components/projects/StageChangeModal'
 import { QuickAddModal } from './QuickAddModal'
 import { Button } from '@/components/ui/Button'
-import { Plus, GripVertical } from 'lucide-react'
+import { Plus, GripVertical, Clock, Layers, AlertTriangle } from 'lucide-react'
 import { mapInternalToExternalStage } from '@/lib/views'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { getProjectTimeliness, resolveTargetReleaseDate } from '@/lib/timelines'
-import { getTimelinessBorderClass } from '@/components/projects/ProjectTimeliness'
+import {
+  getTimelinessCardClassV2,
+  getTimelinessTextClassV2,
+  pipelineProgressPercent,
+  getColumnAccent,
+} from '@/lib/design/theme-v2'
 
-const CARD_BASE =
-  'rounded-md border bg-[#1a1a1a] hover:brightness-110 transition-colors'
+const CARD_BASE = 'rounded-xl border bg-white transition-all hover:shadow-md'
 
 function KanbanCard({
   project, onOpen, readOnly, holidays,
@@ -37,50 +42,80 @@ function KanbanCard({
   })
 
   const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined
-  const borderClass = getTimelinessBorderClass(project, holidays)
   const t = getProjectTimeliness(project, holidays)
   const target = resolveTargetReleaseDate(project, holidays)
+  const progress = pipelineProgressPercent(project.current_stage)
+  const cardClass = getTimelinessCardClassV2(t.status)
+  const delayClass = getTimelinessTextClassV2(t.status)
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={cn(CARD_BASE, borderClass, 'p-2.5', isDragging && 'opacity-50 scale-[0.98]')}
+      className={cn(CARD_BASE, cardClass, 'p-3.5', isDragging && 'opacity-60 scale-[0.98] shadow-lg ring-2 ring-violet-200')}
     >
       <div className="flex gap-2">
         {!readOnly && (
           <button
             {...listeners}
             {...attributes}
-            className="text-zinc-700 hover:text-zinc-500 cursor-grab shrink-0 mt-0.5"
+            className="text-zinc-300 hover:text-zinc-500 cursor-grab shrink-0 mt-1"
             aria-label="Drag"
           >
-            <GripVertical size={13} />
+            <GripVertical size={15} />
           </button>
         )}
         <button type="button" onClick={onOpen} className="flex-1 text-left min-w-0">
-          <p className="text-sm font-medium text-zinc-200 line-clamp-2 leading-snug">{project.title}</p>
-          <p className="text-[10px] text-zinc-500 mt-1 truncate">{project.ip}</p>
-          <div className="flex items-center justify-between gap-2 mt-1.5">
+          {t.status === 'delayed' && (
+            <span className="inline-block mb-1.5 rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">
+              Delayed
+            </span>
+          )}
+          <p className="text-[15px] font-bold text-zinc-900 line-clamp-2 leading-snug tracking-tight">
+            {project.title}
+          </p>
+          <p className="text-xs text-zinc-500 mt-1 truncate font-medium">{project.ip}</p>
+
+          <div className="mt-3">
+            <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
+              <div
+                className={cn(
+                  'h-full rounded-full transition-all',
+                  t.status === 'delayed' ? 'bg-orange-400' : 'bg-violet-500'
+                )}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-zinc-500 mt-1 font-medium tabular-nums">{progress}% complete</p>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-zinc-100">
             <div className="min-w-0">
               {t.showLabel && (
-                <span className={cn('text-[10px] font-medium', t.textClass)}>{t.label}</span>
+                <span className={cn('text-[11px] font-bold', delayClass)}>{t.label}</span>
               )}
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
               {target && t.status !== 'delivered' && (
-                <span className="text-[10px] text-zinc-500">
+                <span className="flex items-center gap-1 text-[11px] text-zinc-500 mt-0.5 font-medium">
+                  <Clock size={11} className="shrink-0" />
                   {formatDate(target, 'dd MMM')}
                 </span>
               )}
-              {project.stage_assignee && (
+            </div>
+            {project.stage_assignee ? (
+              <div className="flex items-center gap-1.5 shrink-0 max-w-[110px]">
                 <AssigneeAvatar
                   name={project.stage_assignee.name}
                   id={project.stage_assignee.id}
                   size="sm"
+                  theme="light"
                 />
-              )}
-            </div>
+                <span className="text-[11px] font-semibold text-zinc-700 truncate">
+                  {project.stage_assignee.name.split(' ')[0]}
+                </span>
+              </div>
+            ) : (
+              <span className="text-[11px] text-zinc-400 font-medium">Unassigned</span>
+            )}
           </div>
         </button>
       </div>
@@ -89,33 +124,43 @@ function KanbanCard({
 }
 
 function KanbanColumn({
-  stage, projects, onOpen, readOnly, holidays,
+  stage, projects, onOpen, readOnly, holidays, index, isLast,
 }: {
   stage: string
   projects: Project[]
   onOpen: (id: string) => void
   readOnly?: boolean
   holidays: string[]
+  index: number
+  isLast: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage, disabled: readOnly })
+  const accent = getColumnAccent(index)
 
   return (
-    <div className="flex flex-col w-[220px] shrink-0">
-      <div className="flex items-center justify-between mb-2 px-1">
-        <h3 className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider leading-tight">{stage}</h3>
-        <span className="text-[10px] text-zinc-600 bg-[#141414] px-1.5 py-0.5 rounded border border-white/[0.06]">
-          {projects.length}
-        </span>
+    <div
+      className={cn(
+        'flex flex-col w-[268px] shrink-0',
+        !isLast && 'border-r border-zinc-200 pr-5 mr-1'
+      )}
+    >
+      <div className={cn('mb-3 pb-2 border-b-2', accent.border)}>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', accent.dot)} />
+          <h3 className="text-sm font-bold text-zinc-900 truncate leading-tight">{stage}</h3>
+          <span className="text-sm font-normal text-zinc-400 shrink-0">({projects.length})</span>
+        </div>
       </div>
       <div
         ref={setNodeRef}
         className={cn(
-          'flex-1 min-h-[120px] space-y-2 p-1 rounded-md transition-colors',
-          isOver ? 'bg-white/[0.03] ring-1 ring-white/[0.08]' : 'bg-transparent'
+          'flex-1 min-h-[160px] space-y-3 p-2 rounded-xl transition-all',
+          accent.bg,
+          isOver && 'ring-2 ring-violet-300 ring-offset-2 ring-offset-[#f4f4f5] bg-violet-50/60'
         )}
       >
         {projects.length === 0 && (
-          <p className="text-[10px] text-zinc-700 text-center py-6">No projects</p>
+          <p className="text-xs text-zinc-400 text-center py-10 font-medium">No projects</p>
         )}
         {projects.map(p => (
           <KanbanCard
@@ -127,6 +172,41 @@ function KanbanColumn({
           />
         ))}
       </div>
+    </div>
+  )
+}
+
+function BoardFooter({ projects, holidays }: { projects: Project[]; holidays: string[] }) {
+  const overdue = useMemo(
+    () => projects.filter(p => getProjectTimeliness(p, holidays).status === 'delayed').length,
+    [projects, holidays]
+  )
+  const inProgress = projects.filter(p => p.current_stage !== 'Final Delivery Done').length
+
+  return (
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200/80 bg-white px-4 py-3 shadow-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-100 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
+          <Layers size={13} />
+          {projects.length} projects
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-600">
+          {inProgress} in pipeline
+        </span>
+        {overdue > 0 && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700">
+            <AlertTriangle size={13} />
+            {overdue} overdue
+          </span>
+        )}
+      </div>
+      <Link
+        href="/dashboard"
+        className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-xs font-bold text-white hover:bg-violet-700 transition-colors shadow-sm"
+      >
+        <Layers size={14} />
+        View dashboard
+      </Link>
     </div>
   )
 }
@@ -204,44 +284,49 @@ export function KanbanBoard({
     <>
       {canAdd && (
         <div className="mb-4">
-          <Button size="sm" onClick={() => setAddOpen(true)}>
+          <Button size="sm" onClick={() => setAddOpen(true)} className="v2-btn-primary font-semibold">
             <Plus size={14} /> Add project
           </Button>
         </div>
       )}
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragStart={e => { const p = projects.find(x => x.id === e.active.id); if (p) setActiveProject(p) }}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="flex gap-3 overflow-x-auto pb-4">
-          {stages.map(stage => (
-            <KanbanColumn
-              key={stage}
-              stage={stage}
-              projects={byStage(stage)}
-              onOpen={id => router.push(`/projects/${id}`)}
-              readOnly={readOnly}
-              holidays={holidays}
-            />
-          ))}
-        </div>
-        <DragOverlay>
-          {activeProject && (
-            <div className={cn(CARD_BASE, getTimelinessBorderClass(activeProject, holidays), 'p-2.5 w-52')}>
-              <p className="text-sm font-medium text-zinc-200 line-clamp-2">{activeProject.title}</p>
-              <p className="text-[10px] text-zinc-500 mt-1">{activeProject.ip}</p>
-              {resolveTargetReleaseDate(activeProject, holidays) && (
-                <p className="text-[10px] text-zinc-500 mt-1">
-                  {formatDate(resolveTargetReleaseDate(activeProject, holidays), 'dd MMM')}
-                </p>
-              )}
-            </div>
-          )}
-        </DragOverlay>
-      </DndContext>
+      <div className="rounded-2xl border border-zinc-200/80 bg-white/60 p-4 shadow-sm overflow-hidden">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={e => { const p = projects.find(x => x.id === e.active.id); if (p) setActiveProject(p) }}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="flex overflow-x-auto pb-2 pt-1 -mx-1 px-1 gap-1">
+            {stages.map((stage, i) => (
+              <KanbanColumn
+                key={stage}
+                stage={stage}
+                index={i}
+                isLast={i === stages.length - 1}
+                projects={byStage(stage)}
+                onOpen={id => router.push(`/projects/${id}`)}
+                readOnly={readOnly}
+                holidays={holidays}
+              />
+            ))}
+          </div>
+          <DragOverlay>
+            {activeProject && (
+              <div className={cn(
+                CARD_BASE,
+                getTimelinessCardClassV2(getProjectTimeliness(activeProject, holidays).status),
+                'p-3.5 w-60 shadow-xl ring-2 ring-violet-200'
+              )}>
+                <p className="text-[15px] font-bold text-zinc-900 line-clamp-2">{activeProject.title}</p>
+                <p className="text-xs text-zinc-500 mt-1 font-medium">{activeProject.ip}</p>
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
+      </div>
+
+      <BoardFooter projects={projects} holidays={holidays} />
 
       {pending && (
         <StageChangeModal

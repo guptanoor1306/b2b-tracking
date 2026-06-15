@@ -30,19 +30,19 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 bg-zinc-900/40 backdrop-blur-sm" onClick={onClose} />
       <div className="flex min-h-full items-center justify-center p-4">
         <div
           className={cn(
-            'relative panel w-full p-6 border-indigo-500/15',
+            'relative w-full rounded-xl border border-zinc-200 bg-white p-6 shadow-xl',
             sizes[size]
           )}
           onClick={e => e.stopPropagation()}
         >
           {title && (
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-zinc-100">{title}</h2>
-              <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 transition-colors">
+              <h2 className="text-base font-semibold text-zinc-900">{title}</h2>
+              <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 transition-colors">
                 <X size={18} />
               </button>
             </div>

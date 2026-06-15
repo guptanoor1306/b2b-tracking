@@ -59,3 +59,23 @@ export async function updateUser(
   revalidatePath('/settings')
   return { success: true }
 }
+
+export async function deleteUser(id: string) {
+  const profile = await requireProfile(['Admin', 'Super Admin'])
+
+  if (profile.id === id) {
+    return { error: 'You cannot delete your own account' }
+  }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { error: 'SUPABASE_SERVICE_ROLE_KEY is required for user deletion' }
+  }
+
+  const admin = createAdminClient()
+  const { error } = await admin.auth.admin.deleteUser(id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/settings')
+  return { success: true }
+}

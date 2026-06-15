@@ -109,7 +109,7 @@ export function ProjectEditModal({ open, onClose, project, users, graphicsDesign
           </p>
         )}
         <Textarea label="Notes" value={form.notes} onChange={e => set('notes', e.target.value)} />
-        <div className="flex justify-end gap-2 pt-2 sticky bottom-0 bg-[#1a1a1a] pb-1">
+        <div className="flex justify-end gap-2 pt-2 sticky bottom-0 bg-white pb-1">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
           <Button loading={loading} onClick={handleSave}>Save</Button>
         </div>

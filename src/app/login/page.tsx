@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import { Zap } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -29,22 +28,23 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a] px-4 relative overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(99,102,241,0.15)_0%,_transparent_50%)]" />
-      <div className="w-full max-w-sm relative z-10">
+    <div className="min-h-screen flex items-center justify-center bg-zinc-100 px-4">
+      <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl mb-4 shadow-xl shadow-indigo-500/25">
-            <Zap size={26} className="text-white" />
+          <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-violet-600 mb-4">
+            <span className="text-lg font-bold text-white">V</span>
           </div>
-          <h1 className="text-xl font-bold text-zinc-100">Varsity</h1>
+          <h1 className="text-xl font-semibold text-zinc-900">Varsity</h1>
           <p className="text-sm text-zinc-500 mt-1">Production Tracker</p>
         </div>
 
-        <form onSubmit={handleLogin} className="panel p-6 space-y-4">
-          {error && <p className="text-sm text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-2 rounded-lg">{error}</p>}
+        <form onSubmit={handleLogin} className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm space-y-4">
+          {error && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">{error}</p>
+          )}
           <Input label="Email" type="email" required value={email} onChange={e => setEmail(e.target.value)} />
           <Input label="Password" type="password" required value={password} onChange={e => setPassword(e.target.value)} />
-          <Button type="submit" className="w-full" loading={loading}>Sign In</Button>
+          <Button type="submit" className="w-full" loading={loading}>Sign in</Button>
         </form>
       </div>
     </div>

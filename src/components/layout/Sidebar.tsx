@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import { useSidebar } from '@/context/SidebarContext'
 import {
-  LayoutDashboard, Columns2, LogOut, Zap,
+  LayoutDashboard, Columns2, LogOut,
   PanelLeftClose, PanelLeft, BarChart3, Settings,
 } from 'lucide-react'
 import { Role } from '@/lib/types'
@@ -33,23 +33,23 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'flex flex-col min-h-screen bg-[#111111] border-r border-white/[0.06] shrink-0 transition-all duration-300',
+        'flex flex-col min-h-screen bg-white border-r border-zinc-200 shrink-0 transition-all duration-300',
         collapsed ? 'w-[68px]' : 'w-56'
       )}
     >
-      <div className={cn('flex items-center gap-3 px-4 py-5 border-b border-white/[0.06]', collapsed && 'justify-center px-2')}>
-        <div className="p-2 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl shadow-lg shadow-indigo-500/20 shrink-0">
-          <Zap size={16} className="text-white" />
+      <div className={cn('flex items-center gap-3 px-4 py-5 border-b border-zinc-100', collapsed && 'justify-center px-2')}>
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-600 shrink-0">
+          <span className="text-sm font-bold text-white">V</span>
         </div>
         {!collapsed && (
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-zinc-100 truncate">Varsity</p>
-            <p className="text-[10px] text-zinc-500">Production Tracker</p>
+            <p className="text-sm font-semibold text-zinc-900 truncate">Varsity</p>
+            <p className="text-[11px] text-zinc-500">Production</p>
           </div>
         )}
       </div>
 
-      <nav className="flex-1 px-2 py-4 space-y-1">
+      <nav className="flex-1 px-2 py-4 space-y-0.5">
         {visible.map(item => {
           const Icon = item.icon
           const active = pathname === item.href || pathname.startsWith(item.href + '/')
@@ -59,31 +59,32 @@ export function Sidebar() {
               href={item.href}
               title={collapsed ? item.label : undefined}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all',
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
                 collapsed && 'justify-center px-2',
                 active
-                  ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/25 shadow-sm shadow-indigo-500/10'
-                  : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/5 border border-transparent'
+                  ? 'bg-zinc-100 text-zinc-900 font-medium'
+                  : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-50'
               )}
             >
-              <Icon size={18} className={cn(active && 'text-indigo-400')} />
-              {!collapsed && <span className="font-medium">{item.label}</span>}
+              <Icon size={18} className={cn(active ? 'text-violet-600' : 'text-zinc-400')} />
+              {!collapsed && <span>{item.label}</span>}
             </Link>
           )
         })}
       </nav>
 
-      <div className={cn('border-t border-white/[0.06] px-3 py-3 space-y-2', collapsed && 'px-2')}>
+      <div className={cn('border-t border-zinc-100 px-3 py-3 space-y-1', collapsed && 'px-2')}>
         {!collapsed && profile && (
-          <div className="px-2 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06]">
-            <p className="text-xs font-medium text-zinc-300 truncate">{profile.name}</p>
+          <div className="px-2 py-2 rounded-lg bg-zinc-50 border border-zinc-100 mb-1">
+            <p className="text-xs font-medium text-zinc-700 truncate">{profile.name}</p>
+            <p className="text-[10px] text-zinc-400 truncate">{profile.role}</p>
           </div>
         )}
         <button
           onClick={toggle}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className={cn(
-            'flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition-colors',
+            'flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-zinc-500 hover:text-zinc-700 hover:bg-zinc-50 transition-colors',
             collapsed && 'justify-center px-2'
           )}
         >
@@ -94,7 +95,7 @@ export function Sidebar() {
           onClick={signOut}
           title="Sign out"
           className={cn(
-            'flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-zinc-500 hover:text-rose-400 hover:bg-rose-500/5 transition-colors',
+            'flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-zinc-500 hover:text-red-600 hover:bg-red-50 transition-colors',
             collapsed && 'justify-center px-2'
           )}
         >

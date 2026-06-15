@@ -20,9 +20,9 @@ export function PipelineStatusBanner({ currentStage, since, externalView, compac
 
   if (pipeline.owner === 'none') {
     return (
-      <div className={`panel flex items-center gap-2 ${compact ? 'px-3 py-2' : 'p-4'} border-emerald-500/20 bg-emerald-500/[0.06]`}>
-        <CheckCircle2 size={compact ? 14 : 20} className="text-emerald-400 shrink-0" />
-        <p className={`${compact ? 'text-xs' : 'text-sm'} font-medium text-zinc-200`}>{pipeline.label}</p>
+      <div className={`rounded-lg border flex items-center gap-2 ${compact ? 'px-3 py-2' : 'p-4'} border-emerald-200 bg-emerald-50`}>
+        <CheckCircle2 size={compact ? 14 : 20} className="text-emerald-600 shrink-0" />
+        <p className={`${compact ? 'text-xs' : 'text-sm'} font-medium text-zinc-800`}>{pipeline.label}</p>
       </div>
     )
   }
@@ -32,44 +32,44 @@ export function PipelineStatusBanner({ currentStage, since, externalView, compac
 
   if (compact) {
     return (
-      <div className={`panel px-3 py-2 flex items-center gap-2 text-xs ${
-        isExternal ? 'border-amber-500/20 bg-amber-500/[0.04]' : 'border-indigo-500/20 bg-indigo-500/[0.04]'
+      <div className={`rounded-lg border px-3 py-2 flex items-center gap-2 text-xs ${
+        isExternal ? 'border-amber-200 bg-amber-50' : 'border-violet-200 bg-violet-50'
       }`}>
         {isExternal ? (
-          <Building2 size={13} className="text-amber-400 shrink-0" />
+          <Building2 size={13} className="text-amber-700 shrink-0" />
         ) : (
-          <Users size={13} className="text-indigo-400 shrink-0" />
+          <Users size={13} className="text-violet-700 shrink-0" />
         )}
         <span className="text-zinc-500">{externalView ? displayStage : `Waiting on ${ownerLabel}`}</span>
-        <span className="text-zinc-300 font-medium truncate">{pipeline.label}</span>
-        <span className="text-zinc-600 ml-auto shrink-0">{waiting}</span>
+        <span className="text-zinc-800 font-medium truncate">{pipeline.label}</span>
+        <span className="text-zinc-500 ml-auto shrink-0">{waiting}</span>
       </div>
     )
   }
 
   return (
     <div
-      className={`rounded-md border p-4 ${
+      className={`rounded-lg border p-4 ${
         isExternal
-          ? 'border-amber-500/20 bg-amber-500/[0.04]'
-          : 'border-indigo-500/20 bg-indigo-500/[0.04]'
+          ? 'border-amber-200 bg-amber-50'
+          : 'border-violet-200 bg-violet-50'
       }`}
     >
       <div className="flex items-start gap-3">
-        <div className={`p-2 rounded-md ${isExternal ? 'bg-amber-500/15' : 'bg-indigo-500/15'}`}>
+        <div className={`p-2 rounded-lg ${isExternal ? 'bg-amber-100' : 'bg-violet-100'}`}>
           {isExternal ? (
-            <Building2 size={16} className="text-amber-400" />
+            <Building2 size={16} className="text-amber-700" />
           ) : (
-            <Users size={16} className="text-indigo-400" />
+            <Users size={16} className="text-violet-700" />
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5">
+          <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5 font-medium">
             {externalView ? `Stage · ${displayStage}` : `Waiting on · ${ownerLabel}`}
           </p>
-          <p className="text-sm font-medium text-zinc-100">{pipeline.label}</p>
+          <p className="text-sm font-medium text-zinc-900">{pipeline.label}</p>
           <p className="text-xs text-zinc-500 mt-0.5">
-            In this stage for <span className="text-zinc-300">{waiting}</span>
+            In this stage for <span className="text-zinc-700 font-medium">{waiting}</span>
           </p>
         </div>
       </div>

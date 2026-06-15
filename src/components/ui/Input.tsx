@@ -9,19 +9,18 @@ type InputProps = InputHTMLAttributes<HTMLInputElement> & {
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ label, error, className, ...props }, ref) => (
     <div className="flex flex-col gap-1.5">
-      {label && <label className="text-xs font-medium text-zinc-500 uppercase tracking-wide">{label}</label>}
+      {label && <label className="text-sm font-medium text-zinc-600">{label}</label>}
       <input
         ref={ref}
         {...props}
         className={cn(
-          'block w-full rounded-md border border-white/[0.08] bg-[#141414] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600',
-          'focus:border-indigo-500/40 focus:outline-none focus:ring-1 focus:ring-indigo-500/20',
-          'disabled:opacity-50',
-          error && 'border-rose-500/50',
+          'block w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400',
+          'focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-500/10',
+          error && 'border-red-300',
           className
         )}
       />
-      {error && <p className="text-xs text-rose-400">{error}</p>}
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   )
 )

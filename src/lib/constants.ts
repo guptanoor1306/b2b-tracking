@@ -97,12 +97,12 @@ export const EXTERNAL_STAGE_ANCHORS: Record<string, string> = {
 }
 
 export const HEALTH_COLORS: Record<string, string> = {
-  'On track':     'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30',
-  'At risk':      'bg-amber-500/10 text-amber-400 border border-amber-500/30',
-  'Delayed':      'bg-rose-500/10 text-rose-400 border border-rose-500/30',
-  'On hold':      'bg-zinc-500/10 text-zinc-400 border border-zinc-500/25',
-  'Delivered':    'bg-sky-500/10 text-sky-400 border border-sky-500/30',
-  'In pipeline':  'bg-indigo-500/10 text-indigo-400 border border-indigo-500/30',
+  'On track':     'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  'At risk':      'bg-amber-50 text-amber-700 border border-amber-200',
+  'Delayed':      'bg-orange-50 text-orange-700 border border-orange-200',
+  'On hold':      'bg-zinc-100 text-zinc-600 border border-zinc-200',
+  'Delivered':    'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  'In pipeline':  'bg-violet-50 text-violet-700 border border-violet-200',
 }
 
 const STAGE_COLOR_PALETTE = [

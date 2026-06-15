@@ -52,7 +52,14 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   const boardKey = `${params.assignee ?? 'all'}-${params.ip ?? 'all'}`
 
   return (
-    <>
+    <div className="theme-v2 -mx-6 -mt-2 min-h-[calc(100vh-4rem)] px-6 pb-10 pt-2">
+      <div className="mb-5">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Production board</h1>
+        <p className="text-sm text-zinc-500 mt-1 font-medium">
+          {filtered.length} project{filtered.length !== 1 ? 's' : ''} · drag cards to update stages
+        </p>
+      </div>
+
       {canSeeBoardAssigneeFilter(profile.role) && (
         <Suspense fallback={null}>
           <BoardAssigneeFilter
@@ -75,6 +82,6 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         readOnly={!canChangeStages(profile.role)}
         externalView={!internal}
       />
-    </>
+    </div>
   )
 }

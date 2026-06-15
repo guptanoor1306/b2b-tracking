@@ -28,17 +28,19 @@ export function BoardAssigneeFilter({
   }
 
   return (
-    <div className="mb-4 space-y-2">
+    <div className="mb-4 rounded-xl border border-zinc-200/80 bg-white px-4 py-3 shadow-sm space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] text-zinc-600 uppercase tracking-wider mr-1">Assignee</span>
+        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mr-1">
+          Filter by member
+        </span>
         <button
           type="button"
           onClick={() => setAssignee('')}
           className={cn(
-            'h-8 px-3 rounded-full text-xs border transition-colors',
+            'h-8 px-3 rounded-full text-xs font-medium border transition-colors',
             !active
-              ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300'
-              : 'border-white/[0.08] text-zinc-500 hover:text-zinc-300'
+              ? 'bg-violet-600 border-violet-600 text-white'
+              : 'border-zinc-200 text-zinc-600 hover:border-violet-200 hover:text-violet-700 bg-white'
           )}
         >
           All
@@ -51,8 +53,8 @@ export function BoardAssigneeFilter({
             className={cn(
               'h-8 px-2.5 rounded-full text-[10px] font-semibold border transition-all inline-flex items-center gap-1.5',
               active === currentUserId
-                ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300 ring-2 ring-indigo-400 ring-offset-1 ring-offset-[#0a0a0a]'
-                : 'border-white/[0.08] text-zinc-500 hover:text-zinc-300'
+                ? 'bg-violet-600 border-violet-600 text-white'
+                : 'border-zinc-200 text-zinc-600 hover:border-violet-200 bg-white'
             )}
           >
             Me
@@ -64,9 +66,15 @@ export function BoardAssigneeFilter({
             type="button"
             title={u.name}
             onClick={() => setAssignee(u.id)}
-            className="rounded-full transition-opacity hover:opacity-100 opacity-80"
+            className="rounded-full transition-transform hover:scale-105"
           >
-            <AssigneeAvatar name={u.name} id={u.id} size="md" active={active === u.id} />
+            <AssigneeAvatar
+              name={u.name}
+              id={u.id}
+              size="md"
+              theme="light"
+              active={active === u.id}
+            />
           </button>
         ))}
       </div>

@@ -336,6 +336,29 @@ export async function addComment(projectId: string, comment: string, parentId?: 
   return { success: true }
 }
 
+export async function deleteComment(projectId: string, commentId: string) {
+  const profile = await getSessionProfile()
+  if (!profile) return { error: 'Unauthorized' }
+
+  const supabase = await createClient()
+  const { data: comment } = await supabase
+    .from('comments')
+    .select('id, project_id, created_by')
+    .eq('id', commentId)
+    .eq('project_id', projectId)
+    .single()
+
+  if (!comment) return { error: 'Comment not found' }
+  if (comment.created_by !== profile.id) return { error: 'Unauthorized' }
+
+  const { error } = await supabase.from('comments').delete().eq('id', commentId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/projects/${projectId}`)
+  return { success: true }
+}
+
 export async function sendStageReminder(projectId: string) {
   const profile = await getSessionProfile()
   if (!profile || !['Admin', 'Internal Team', 'Super Admin'].includes(profile.role)) {

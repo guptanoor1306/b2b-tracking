@@ -12,15 +12,15 @@ type Props = {
 }
 
 function qualityTone(score: number): string {
-  if (score >= 85) return 'text-emerald-400'
-  if (score >= 70) return 'text-amber-400'
-  return 'text-rose-400'
+  if (score >= 85) return 'text-emerald-700'
+  if (score >= 70) return 'text-amber-700'
+  return 'text-orange-700'
 }
 
 function DistributionBar({ pipeline, delivered, onHold }: { pipeline: number; delivered: number; onHold: number }) {
   const total = pipeline + delivered + onHold
   if (total === 0) {
-    return <div className="h-1.5 rounded-full bg-white/[0.04] w-full" />
+    return <div className="h-1.5 rounded-full bg-zinc-100 w-full" />
   }
 
   const pPct = (pipeline / total) * 100
@@ -28,19 +28,19 @@ function DistributionBar({ pipeline, delivered, onHold }: { pipeline: number; de
   const hPct = (onHold / total) * 100
 
   return (
-    <div className="h-1.5 rounded-full bg-white/[0.04] w-full overflow-hidden flex">
-      {pipeline > 0 && <div className="h-full bg-indigo-500/70" style={{ width: `${pPct}%` }} />}
-      {delivered > 0 && <div className="h-full bg-emerald-500/70" style={{ width: `${dPct}%` }} />}
-      {onHold > 0 && <div className="h-full bg-zinc-500/60" style={{ width: `${hPct}%` }} />}
+    <div className="h-1.5 rounded-full bg-zinc-100 w-full overflow-hidden flex">
+      {pipeline > 0 && <div className="h-full bg-violet-500" style={{ width: `${pPct}%` }} />}
+      {delivered > 0 && <div className="h-full bg-emerald-500" style={{ width: `${dPct}%` }} />}
+      {onHold > 0 && <div className="h-full bg-zinc-400" style={{ width: `${hPct}%` }} />}
     </div>
   )
 }
 
 const SUMMARY = [
-  { key: 'pipeline', label: 'In pipeline', icon: GitBranch, color: 'text-indigo-400' },
-  { key: 'delivered', label: 'Delivered', icon: CheckCircle2, color: 'text-emerald-400' },
-  { key: 'onHold', label: 'On hold', icon: PauseCircle, color: 'text-zinc-400' },
-  { key: 'quality', label: 'Avg quality', icon: Sparkles, color: 'text-violet-400' },
+  { key: 'pipeline', label: 'In pipeline', icon: GitBranch, color: 'text-violet-600', bg: 'bg-violet-50' },
+  { key: 'delivered', label: 'Delivered', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  { key: 'onHold', label: 'On hold', icon: PauseCircle, color: 'text-zinc-600', bg: 'bg-zinc-100' },
+  { key: 'quality', label: 'Avg quality', icon: Sparkles, color: 'text-violet-600', bg: 'bg-violet-50' },
 ] as const
 
 export function IpOverviewClient({ stats, period }: Props) {
@@ -65,22 +65,22 @@ export function IpOverviewClient({ stats, period }: Props) {
     <div className="space-y-6 max-w-5xl">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold text-zinc-100">IP Overview</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">
+          <h1 className="text-xl font-semibold text-zinc-900">IP Overview</h1>
+          <p className="text-sm text-zinc-500 mt-1">
             {periodLabel(period)} · {totals.totalProjects} projects across {stats.length} IPs
           </p>
         </div>
-        <div className="flex rounded-lg border border-white/[0.08] overflow-hidden bg-white/[0.02]">
+        <div className="flex rounded-lg border border-zinc-200 overflow-hidden bg-white">
           {(['week', 'month'] as const).map(p => (
             <button
               key={p}
               type="button"
               onClick={() => setPeriod(p)}
               className={cn(
-                'px-4 py-1.5 text-xs transition-colors',
+                'px-4 py-1.5 text-xs font-medium transition-colors',
                 period === p
-                  ? 'bg-white/[0.06] text-zinc-200'
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  ? 'bg-zinc-100 text-zinc-900'
+                  : 'text-zinc-500 hover:text-zinc-700'
               )}
             >
               {p === 'week' ? 'Weekly' : 'Monthly'}
@@ -89,53 +89,55 @@ export function IpOverviewClient({ stats, period }: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {SUMMARY.map(s => {
           const Icon = s.icon
           return (
-            <div key={s.key} className="panel px-4 py-3">
+            <div key={s.key} className="rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
               <div className="flex items-center gap-2 mb-1">
-                <Icon size={14} className={s.color} />
-                <span className="text-[11px] text-zinc-500">{s.label}</span>
+                <div className={cn('p-1 rounded-md', s.bg)}>
+                  <Icon size={14} className={s.color} />
+                </div>
+                <span className="text-[11px] text-zinc-500 font-medium">{s.label}</span>
               </div>
-              <p className="text-xl font-semibold text-zinc-100 tabular-nums">{summaryValues[s.key]}</p>
+              <p className="text-xl font-semibold text-zinc-900 tabular-nums">{summaryValues[s.key]}</p>
             </div>
           )
         })}
       </div>
 
-      <div className="panel overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
-          <p className="text-xs font-medium text-zinc-400">By intellectual property</p>
-          <div className="flex items-center gap-3 text-[10px] text-zinc-600">
-            <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500/70" /> Pipeline</span>
-            <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500/70" /> Delivered</span>
-            <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-500/60" /> Hold</span>
+      <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-zinc-100 flex items-center justify-between">
+          <p className="text-xs font-semibold text-zinc-700">By intellectual property</p>
+          <div className="flex items-center gap-3 text-[10px] text-zinc-500">
+            <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500" /> Pipeline</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Delivered</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-400" /> Hold</span>
           </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-[10px] text-zinc-600 uppercase border-b border-white/[0.04]">
-                <th className="px-4 py-2.5 text-left font-medium">IP</th>
-                <th className="px-3 py-2.5 text-right font-medium w-16">Active</th>
-                <th className="px-3 py-2.5 text-right font-medium w-16">Done</th>
-                <th className="px-3 py-2.5 text-right font-medium w-16">Hold</th>
-                <th className="px-3 py-2.5 text-right font-medium w-16">Quality</th>
-                <th className="px-4 py-2.5 text-left font-medium min-w-[140px]">Mix</th>
+              <tr className="text-[10px] text-zinc-500 uppercase border-b border-zinc-100 bg-zinc-50/80">
+                <th className="px-4 py-2.5 text-left font-semibold">IP</th>
+                <th className="px-3 py-2.5 text-right font-semibold w-16">Active</th>
+                <th className="px-3 py-2.5 text-right font-semibold w-16">Done</th>
+                <th className="px-3 py-2.5 text-right font-semibold w-16">Hold</th>
+                <th className="px-3 py-2.5 text-right font-semibold w-16">Quality</th>
+                <th className="px-4 py-2.5 text-left font-semibold min-w-[140px]">Mix</th>
                 <th className="px-3 py-2.5 w-10" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.04]">
+            <tbody className="divide-y divide-zinc-100">
               {stats.map(s => (
-                <tr key={s.ip} className="group hover:bg-white/[0.02] transition-colors">
+                <tr key={s.ip} className="group hover:bg-zinc-50 transition-colors">
                   <td className="px-4 py-3">
-                    <p className="text-sm text-zinc-200 font-medium">{s.ip}</p>
-                    <p className="text-[10px] text-zinc-600 mt-0.5">{s.total} total</p>
+                    <p className="text-sm text-zinc-900 font-medium">{s.ip}</p>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">{s.total} total</p>
                   </td>
-                  <td className="px-3 py-3 text-right tabular-nums text-zinc-300">{s.inPipeline}</td>
-                  <td className="px-3 py-3 text-right tabular-nums text-emerald-400/90">{s.delivered}</td>
+                  <td className="px-3 py-3 text-right tabular-nums text-zinc-700">{s.inPipeline}</td>
+                  <td className="px-3 py-3 text-right tabular-nums text-emerald-700">{s.delivered}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-zinc-500">{s.onHold}</td>
                   <td className={cn('px-3 py-3 text-right tabular-nums font-medium', qualityTone(s.avgQuality))}>
                     {s.avgQuality ? `${s.avgQuality}%` : '—'}
@@ -146,7 +148,7 @@ export function IpOverviewClient({ stats, period }: Props) {
                   <td className="px-3 py-3">
                     <Link
                       href={`/board?ip=${encodeURIComponent(s.ip)}`}
-                      className="inline-flex items-center justify-center w-7 h-7 rounded-md text-zinc-600 hover:text-indigo-400 hover:bg-indigo-500/10 opacity-0 group-hover:opacity-100 transition-all"
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-md text-zinc-400 hover:text-violet-600 hover:bg-violet-50 opacity-0 group-hover:opacity-100 transition-all"
                       title={`View ${s.ip} on board`}
                     >
                       <ArrowUpRight size={14} />
@@ -156,12 +158,12 @@ export function IpOverviewClient({ stats, period }: Props) {
               ))}
             </tbody>
             <tfoot>
-              <tr className="border-t border-white/[0.06] bg-white/[0.02] text-xs">
-                <td className="px-4 py-2.5 font-medium text-zinc-400">All IPs</td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-zinc-300">{totals.inPipeline}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-emerald-400/90">{totals.delivered}</td>
+              <tr className="border-t border-zinc-200 bg-zinc-50 text-xs">
+                <td className="px-4 py-2.5 font-semibold text-zinc-600">All IPs</td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-zinc-700">{totals.inPipeline}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700">{totals.delivered}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums text-zinc-500">{totals.onHold}</td>
-                <td className={cn('px-3 py-2.5 text-right tabular-nums font-medium', qualityTone(totals.avgQuality))}>
+                <td className={cn('px-3 py-2.5 text-right tabular-nums font-semibold', qualityTone(totals.avgQuality))}>
                   {totals.avgQuality ? `${totals.avgQuality}%` : '—'}
                 </td>
                 <td className="px-4 py-2.5">

@@ -2,12 +2,13 @@
 
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
+import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/ip-overview': 'IP Overview',
-  '/board':     'Board',
-  '/settings':  'Settings',
+  '/board': 'Board',
+  '/settings': 'Settings',
 }
 
 export function Topbar() {
@@ -16,17 +17,17 @@ export function Topbar() {
 
   const title = Object.entries(PAGE_TITLES).find(([key]) =>
     pathname === key || pathname.startsWith(key + '/')
-  )?.[1] ?? (pathname.startsWith('/projects/') ? 'Project Details' : 'Tracker')
+  )?.[1] ?? (pathname.startsWith('/projects/') ? 'Project' : 'Tracker')
 
   return (
-    <header className="h-12 bg-[#111111]/90 backdrop-blur-md border-b border-white/[0.06] flex items-center justify-between px-5 shrink-0">
-      <h1 className="text-sm font-semibold text-zinc-200 tracking-tight">{title}</h1>
-      <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-[10px] font-bold text-white">
-          {profile?.name?.slice(0, 2).toUpperCase() ?? '?'}
+    <header className="h-12 bg-white border-b border-zinc-200 flex items-center justify-between px-5 shrink-0">
+      <h1 className="text-sm font-semibold text-zinc-800 tracking-tight">{title}</h1>
+      {profile && (
+        <div className="flex items-center gap-2">
+          <AssigneeAvatar name={profile.name} id={profile.id} size="sm" theme="light" />
+          <span className="text-xs text-zinc-600 hidden sm:inline font-medium">{profile.name}</span>
         </div>
-        <span className="text-xs text-zinc-500 hidden sm:inline">{profile?.name}</span>
-      </div>
+      )}
     </header>
   )
 }

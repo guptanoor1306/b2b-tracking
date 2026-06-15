@@ -36,9 +36,9 @@ export function StageChangeModal({
   return (
     <Modal open={open} onClose={onClose} title="Confirm stage change" size="sm">
       <div className="space-y-4">
-        <p className="text-sm text-zinc-400">
-          Move from <strong className="text-zinc-200">{currentStage}</strong> →{' '}
-          <strong className="text-zinc-200">{targetStage}</strong>
+        <p className="text-sm text-zinc-600">
+          Move from <strong className="text-zinc-900">{currentStage}</strong> →{' '}
+          <strong className="text-zinc-900">{targetStage}</strong>
         </p>
         <UserSearchSelect
           label="Stage assignee"
@@ -86,7 +86,7 @@ export function StageSelectModal({
     <Modal open={open} onClose={onClose} title="Change stage" size="sm">
       <div className="space-y-4">
         <select
-          className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-zinc-200"
+          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900"
           value={stage}
           onChange={e => setStage(e.target.value)}
         >

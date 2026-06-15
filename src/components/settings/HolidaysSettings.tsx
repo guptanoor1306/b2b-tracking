@@ -45,23 +45,23 @@ export function HolidaysSettings({ holidays: initial }: Props) {
         <Input label="Date" type="date" value={date} onChange={e => setDate(e.target.value)} />
         <Input label="Name (optional)" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Diwali" />
       </div>
-      {error && <p className="text-xs text-rose-400">{error}</p>}
+      {error && <p className="text-xs text-red-600">{error}</p>}
       <Button size="sm" loading={loading} onClick={handleAdd}>Add holiday</Button>
 
       {initial.length === 0 ? (
-        <p className="text-xs text-zinc-600">No custom holidays configured.</p>
+        <p className="text-xs text-zinc-500">No custom holidays configured.</p>
       ) : (
-        <ul className="divide-y divide-white/[0.06] border border-white/[0.06] rounded-md overflow-hidden">
+        <ul className="divide-y divide-zinc-100 border border-zinc-200 rounded-lg overflow-hidden">
           {initial.map(h => (
-            <li key={h.id} className="flex items-center justify-between px-3 py-2 text-sm">
+            <li key={h.id} className="flex items-center justify-between px-3 py-2.5 text-sm bg-white">
               <div>
-                <span className="text-zinc-200">{formatDate(h.holiday_date)}</span>
+                <span className="text-zinc-800 font-medium">{formatDate(h.holiday_date)}</span>
                 {h.name && <span className="text-zinc-500 ml-2">{h.name}</span>}
               </div>
               <button
                 type="button"
                 onClick={() => handleRemove(h.id)}
-                className="text-zinc-600 hover:text-rose-400 p-1"
+                className="text-zinc-400 hover:text-red-600 p-1"
                 title="Remove"
               >
                 <Trash2 size={14} />

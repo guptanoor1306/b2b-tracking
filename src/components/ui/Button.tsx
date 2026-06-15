@@ -12,10 +12,10 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 }
 
 const variants: Record<Variant, string> = {
-  primary:   'bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/20 disabled:opacity-50',
-  secondary: 'bg-white/5 text-zinc-300 border border-white/10 hover:bg-white/10 hover:border-white/20',
-  ghost:     'text-zinc-400 hover:text-zinc-200 hover:bg-white/5',
-  danger:    'bg-rose-600 text-white hover:bg-rose-500',
+  primary:   'bg-violet-600 text-white hover:bg-violet-700 shadow-sm disabled:opacity-50',
+  secondary: 'bg-white text-zinc-700 border border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300',
+  ghost:     'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100',
+  danger:    'bg-red-600 text-white hover:bg-red-700',
 }
 
 const sizes: Record<Size, string> = {
@@ -38,7 +38,7 @@ export function Button({
       {...props}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex items-center justify-center gap-1.5 font-medium transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center gap-1.5 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500/30 disabled:cursor-not-allowed',
         variants[variant],
         sizes[size],
         className

@@ -19,16 +19,29 @@ export function assigneeColor(id: string): string {
   return PALETTE[hash]
 }
 
+const PALETTE_LIGHT = [
+  'bg-violet-100 text-violet-700 border-violet-200',
+  'bg-indigo-100 text-indigo-700 border-indigo-200',
+  'bg-sky-100 text-sky-700 border-sky-200',
+  'bg-emerald-100 text-emerald-700 border-emerald-200',
+  'bg-amber-100 text-amber-700 border-amber-200',
+  'bg-rose-100 text-rose-700 border-rose-200',
+]
+
 type Props = {
   name: string
   id?: string
   size?: 'sm' | 'md'
   active?: boolean
+  theme?: 'dark' | 'light'
   className?: string
 }
 
-export function AssigneeAvatar({ name, id, size = 'sm', active, className }: Props) {
-  const color = assigneeColor(id ?? name)
+export function AssigneeAvatar({ name, id, size = 'sm', active, theme = 'light', className }: Props) {
+  const palette = theme === 'light' ? PALETTE_LIGHT : PALETTE
+  let hash = 0
+  for (let i = 0; i < (id ?? name).length; i++) hash = (hash + (id ?? name).charCodeAt(i) * (i + 1)) % palette.length
+  const color = palette[hash]
   const dim = size === 'sm' ? 'h-6 w-6 text-[9px]' : 'h-8 w-8 text-[10px]'
 
   return (
@@ -38,7 +51,9 @@ export function AssigneeAvatar({ name, id, size = 'sm', active, className }: Pro
         'inline-flex items-center justify-center rounded-full border font-semibold shrink-0',
         dim,
         color,
-        active && 'ring-2 ring-indigo-400 ring-offset-1 ring-offset-[#0a0a0a]',
+        active && (theme === 'light'
+          ? 'ring-2 ring-violet-500 ring-offset-1 ring-offset-white'
+          : 'ring-2 ring-violet-400 ring-offset-1 ring-offset-zinc-100'),
         className
       )}
     >
