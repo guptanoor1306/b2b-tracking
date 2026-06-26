@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { DEFAULT_STAGE_SLA } from '@/lib/stage-sla'
+import { recalculateActiveProjectTargets } from '@/lib/recalculate-project-targets'
 
 async function logSettingsActivity(
   userId: string,
@@ -63,10 +64,13 @@ export async function updateStageSla(
     await logSettingsActivity(profile.id, `${stageName}.${k}`, oldVal, v != null ? String(v) : null)
   }
 
+  const recalc = await recalculateActiveProjectTargets(supabase)
+
   revalidatePath('/settings')
   revalidatePath('/board')
   revalidatePath('/dashboard')
-  return { success: true }
+  revalidatePath('/projects')
+  return { success: true, projectsUpdated: recalc.updated ?? 0 }
 }
 
 export async function seedStageSlaIfEmpty() {

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Project, Profile } from '@/lib/types'
 import { CONTENT_TYPES, LEVELS_OF_VIDEO, PRIORITIES, STAGES_INTERNAL, FIRST_CUT_STAGE } from '@/lib/constants'
-import { computeTargetReleaseDateString } from '@/lib/timelines'
+import { computeProjectTargetDate, isProjectTimelineLocked } from '@/lib/timelines'
 import { needsTeleprompterPrompt } from '@/components/projects/StageChangeModal'
 import { formatDate } from '@/lib/utils'
 import { Input } from '@/components/ui/Input'
@@ -58,9 +58,18 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
     uses_teleprompter: form.uses_teleprompter === 'yes' ? true : form.uses_teleprompter === 'no' ? false : null,
   }
 
-  const computedTarget = form.received_date
-    ? computeTargetReleaseDateString(form.received_date, holidays, form.level_of_video || null, teamCtx)
-    : project.target_delivery_date
+  const computedTarget = isProjectTimelineLocked(project)
+    ? project.target_delivery_date
+    : computeProjectTargetDate({
+        ...project,
+        received_date: form.received_date || null,
+        level_of_video: form.level_of_video || null,
+        editor_id: form.editor_id || null,
+        editor_2_id: form.editor_2_id || null,
+        designer_id: form.designer_id || null,
+        designer_2_id: form.designer_2_id || null,
+        uses_teleprompter: form.uses_teleprompter === 'yes' ? true : form.uses_teleprompter === 'no' ? false : null,
+      }, holidays)
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -162,7 +171,8 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
           <Input label="Start date" type="date" value={form.received_date} onChange={e => set('received_date', e.target.value)} />
           {computedTarget && (
             <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
-              Target release (auto): <span className="font-semibold text-zinc-800">{formatDate(computedTarget)}</span>
+              Target release {isProjectTimelineLocked(project) ? '(locked)' : '(auto)'}:{' '}
+              <span className="font-semibold text-zinc-800">{formatDate(computedTarget)}</span>
             </p>
           )}
         </SlideOverSection>

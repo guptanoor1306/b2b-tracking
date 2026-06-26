@@ -53,7 +53,7 @@ export function StageSlaSettings({ rows, activity }: Props) {
   return (
     <SettingsPanel
       title="Stage timelines"
-      description="Set SLA hours per pipeline stage. Level columns apply to Graphics & VD and Animation & VD. Parallel stages share one deadline bucket in target release calculations."
+      description="Set SLA hours per pipeline stage. Changes apply to active in-pipeline projects and all new projects. Delivered projects keep their original target dates."
       action={
         activity.length > 0 ? (
           <Button size="sm" variant="secondary" onClick={() => setShowLog(v => !v)}>

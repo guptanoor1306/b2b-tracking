@@ -19,7 +19,7 @@ import { ANIMATION_VD_STAGE, GRAPHICS_VD_STAGE } from '@/lib/constants'
 import { StageReminderButton } from '@/components/projects/StageReminderButton'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { updateStageHistoryDate } from '@/lib/actions/projects'
-import { isStageDurationOverSla, normalizeStage } from '@/lib/timelines'
+import { isStageDurationOverSla, normalizeStage, isProjectTimelineLocked } from '@/lib/timelines'
 import { cn } from '@/lib/utils'
 
 const LABEL_WIDTH = 220
@@ -27,7 +27,7 @@ const ROW_MIN_H = 56
 
 type Props = {
   history: StageHistory[]
-  project: Pick<Project, 'level_of_video' | 'editor_id' | 'editor_2_id' | 'designer_id' | 'designer_2_id' | 'uses_teleprompter' | 'is_on_hold'>
+  project: Pick<Project, 'level_of_video' | 'editor_id' | 'editor_2_id' | 'designer_id' | 'designer_2_id' | 'uses_teleprompter' | 'is_on_hold' | 'current_stage' | 'delivered_date'>
   holdPeriods?: HoldPeriod[]
   currentStage?: string
   projectId: string
@@ -325,6 +325,8 @@ export function StagePipelineGantt({
     [dateOverrides]
   )
 
+  const timelineLocked = isProjectTimelineLocked(project)
+
   const stageEntries = useMemo(() => stageHistoryEntries(history), [history])
 
   const durations = computeStageDurations(history, holidays, holdPeriods)
@@ -355,7 +357,7 @@ export function StagePipelineGantt({
       const start = startOfDay(parseISO(startIso))
       const endDate = next ? startOfDay(parseISO(endIso)) : startOfDay(new Date())
       const isCurrent = entry.new_stage === currentStage && !next
-      const overSla = isStageDurationOverSla(stage, d.startedAt, endIso, holidays, project.level_of_video, project, holdPeriods)
+      const overSla = isStageDurationOverSla(stage, d.startedAt, endIso, holidays, project.level_of_video, project, holdPeriods, timelineLocked)
 
       built.push({
         key: entry.id,
@@ -415,7 +417,8 @@ export function StagePipelineGantt({
               holidays,
               project.level_of_video,
               project,
-              holdPeriods
+              holdPeriods,
+              timelineLocked
             ),
             assigneeInfo: stageAssigneeMap.get(ANIMATION_VD_STAGE) ?? null,
             durationLabel: formatDuration(animDays, animHoursPart),

@@ -85,6 +85,62 @@ export function normalizeStage(stage: string): string {
   return LEGACY_STAGE_ALIASES[stage] ?? stage
 }
 
+/** Delivered projects keep their stored target date; SLA edits do not apply retroactively */
+export function isProjectTimelineLocked(project: {
+  current_stage?: string | null
+  delivered_date?: string | null
+}): boolean {
+  const stage = normalizeStage(project.current_stage ?? '')
+  return stage === FINAL_STAGE || !!project.delivered_date
+}
+
+export function projectTeamContext(project: {
+  level_of_video?: string | null
+  editor_id?: string | null
+  editor_2_id?: string | null
+  designer_id?: string | null
+  designer_2_id?: string | null
+  uses_teleprompter?: boolean | null
+}): ProjectTeamContext {
+  return {
+    level_of_video: project.level_of_video,
+    editor_id: project.editor_id,
+    editor_2_id: project.editor_2_id,
+    designer_id: project.designer_id,
+    designer_2_id: project.designer_2_id,
+    uses_teleprompter: project.uses_teleprompter,
+  }
+}
+
+export function computeProjectTargetDate(
+  project: {
+    target_delivery_date?: string | null
+    received_date?: string | null
+    level_of_video?: string | null
+    editor_id?: string | null
+    editor_2_id?: string | null
+    designer_id?: string | null
+    designer_2_id?: string | null
+    uses_teleprompter?: boolean | null
+    current_stage?: string | null
+    delivered_date?: string | null
+  },
+  holidays: string[] = []
+): string | null {
+  if (isProjectTimelineLocked(project)) {
+    return project.target_delivery_date ?? null
+  }
+  if (!project.received_date) {
+    return project.target_delivery_date ?? null
+  }
+  return computeTargetReleaseDateString(
+    project.received_date,
+    holidays,
+    project.level_of_video,
+    projectTeamContext(project)
+  )
+}
+
 export function totalPipelineHours(
   level?: string | null,
   project?: ProjectTeamContext
@@ -124,15 +180,12 @@ export function resolveTargetReleaseDate(
     designer_id?: string | null
     designer_2_id?: string | null
     uses_teleprompter?: boolean | null
+    current_stage?: string | null
+    delivered_date?: string | null
   },
   holidays: string[] = []
 ): string | null {
-  return project.target_delivery_date ?? computeTargetReleaseDateString(
-    project.received_date,
-    holidays,
-    project.level_of_video,
-    project
-  )
+  return computeProjectTargetDate(project, holidays)
 }
 
 export function formatSlaDuration(hours: number): string {
@@ -294,8 +347,10 @@ export function isStageDurationOverSla(
   holidays: string[] = [],
   level?: string | null,
   project?: ProjectTeamContext,
-  holdPeriods: HoldPeriod[] = []
+  holdPeriods: HoldPeriod[] = [],
+  timelineLocked = false
 ): boolean {
+  if (timelineLocked) return false
   const sla = getStageSlaHours(stage, level, project)
   if (sla == null) return false
   const end = typeof endedAt === 'string' ? parseISO(endedAt) : endedAt

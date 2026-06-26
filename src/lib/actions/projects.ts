@@ -10,6 +10,8 @@ import { normalizeStage } from '@/lib/timelines'
 import {
   computeTargetReleaseDateString,
   computeProjectHealth,
+  computeProjectTargetDate,
+  isProjectTimelineLocked,
 } from '@/lib/timelines'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 
@@ -194,7 +196,8 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
   }
 
   const startDate = input.received_date ?? existing.received_date
-  if (startDate && (
+  const timelineLocked = isProjectTimelineLocked(existing)
+  if (!timelineLocked && startDate && (
     input.received_date !== existing.received_date ||
     input.level_of_video !== undefined ||
     input.editor_id !== undefined ||
@@ -203,11 +206,17 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
     input.designer_2_id !== undefined ||
     input.uses_teleprompter !== undefined
   )) {
-    patch.target_delivery_date = computeTargetReleaseDateString(startDate, holidays, teamCtx.level_of_video, teamCtx)
+    patch.target_delivery_date = computeProjectTargetDate(
+      { ...existing, ...patch, received_date: startDate },
+      holidays
+    )
   }
 
-  if (input.received_date && input.received_date !== existing.received_date) {
-    patch.target_delivery_date = computeTargetReleaseDateString(input.received_date, holidays, teamCtx.level_of_video, teamCtx)
+  if (!timelineLocked && input.received_date && input.received_date !== existing.received_date) {
+    patch.target_delivery_date = computeProjectTargetDate(
+      { ...existing, ...patch, received_date: input.received_date },
+      holidays
+    )
   }
 
   const { error } = await supabase
@@ -269,16 +278,19 @@ export async function changeProjectStage(
     stage_assignee_id: resolvedAssignee,
   }
 
-  if (normalizeStage(newStage) === FIRST_CUT_STAGE && usesTeleprompter != null) {
+  if (
+    normalizeStage(newStage) === FIRST_CUT_STAGE
+    && usesTeleprompter != null
+    && !isProjectTimelineLocked(project)
+    && project.received_date
+  ) {
     updates.uses_teleprompter = usesTeleprompter
-    if (project.received_date) {
-      updates.target_delivery_date = computeTargetReleaseDateString(
-        project.received_date,
-        holidays,
-        project.level_of_video,
-        { ...project, uses_teleprompter: usesTeleprompter }
-      )
-    }
+    updates.target_delivery_date = computeProjectTargetDate(
+      { ...project, uses_teleprompter: usesTeleprompter },
+      holidays
+    )
+  } else if (normalizeStage(newStage) === FIRST_CUT_STAGE && usesTeleprompter != null) {
+    updates.uses_teleprompter = usesTeleprompter
   }
 
   if (newStage === FINAL_STAGE && !project.delivered_date) {
@@ -351,14 +363,12 @@ export async function updateStageHistoryDate(
   if (project) {
     const projectPatch: Record<string, unknown> = { updated_by: profile.id }
 
-    if (isFirst) {
+    if (isFirst && !isProjectTimelineLocked(project)) {
       projectPatch.received_date = dateStr
       projectPatch.picked_up_date = dateStr
-      projectPatch.target_delivery_date = computeTargetReleaseDateString(
-        dateStr,
-        holidays,
-        project.level_of_video,
-        project
+      projectPatch.target_delivery_date = computeProjectTargetDate(
+        { ...project, received_date: dateStr },
+        holidays
       )
     }
     if (isLast) {
