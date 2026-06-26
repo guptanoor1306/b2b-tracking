@@ -5,23 +5,18 @@ import {
 import { FINAL_STAGE, HEALTH_SCORES, STAGES_INTERNAL } from '@/lib/constants'
 
 const STAGE_ICON_MAP: Record<string, LucideIcon> = {
-  'Script Received': FileText,
-  'Visual Direction': Palette,
-  'Video Data Received': Film,
-  'Thumbnail Title Copy Received': Image,
-  'First Cut Received': Film,
-  'First Cut Review': MessageSquare,
+  'Video received': Film,
+  'First Cut': Scissors,
+  'First Cut sent for Review': MessageSquare,
+  'Thumbnail Copy + RP Cuts': Image,
   'First Cut Changes': Scissors,
   'Storyboard': Layers,
-  'Thumbnails': Image,
-  'Graphics Creation': Palette,
-  'Animation Completion': Sparkles,
-  'Sound': Music,
-  'Premiere': Film,
-  'Video 1st Draft': Film,
-  'Feedback from Zerodha': MessageSquare,
+  'Graphics & VD': Palette,
+  'Animation & VD': Sparkles,
+  'Video/Thumbnail Review': MessageSquare,
   'Final Changes': Scissors,
-  'Final Delivery Done': CheckCircle2,
+  'Sound': Music,
+  'Final Delivery': CheckCircle2,
 }
 
 const STAGE_ICON_BG = [
@@ -73,16 +68,18 @@ export function healthLabel(health: string): string {
 }
 
 export function getTimelinessCardClassV2(
-  status: 'on_time' | 'delayed' | 'delivered'
+  status: 'on_time' | 'delayed' | 'delivered' | 'on_hold'
 ): string {
+  if (status === 'on_hold') return 'border-zinc-300 bg-zinc-50 shadow-sm'
   if (status === 'delivered') return 'border-emerald-200 bg-white shadow-sm'
   if (status === 'delayed') return 'border-orange-200 bg-orange-50/30 shadow-sm'
   return 'border-emerald-200/80 bg-white shadow-sm'
 }
 
 export function getTimelinessTextClassV2(
-  status: 'on_time' | 'delayed' | 'delivered'
+  status: 'on_time' | 'delayed' | 'delivered' | 'on_hold'
 ): string {
+  if (status === 'on_hold') return 'text-zinc-600'
   if (status === 'delayed') return 'text-orange-600'
   if (status === 'delivered') return 'text-emerald-600'
   return 'text-zinc-500'

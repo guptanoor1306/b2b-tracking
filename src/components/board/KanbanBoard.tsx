@@ -11,10 +11,8 @@ import {
 import { Project, Profile } from '@/lib/types'
 import { cn, formatDate } from '@/lib/utils'
 import { changeProjectStage } from '@/lib/actions/projects'
-import { StageChangeModal } from '@/components/projects/StageChangeModal'
-import { QuickAddModal } from './QuickAddModal'
-import { Button } from '@/components/ui/Button'
-import { Plus, GripVertical, Clock, Layers, AlertTriangle } from 'lucide-react'
+import { StageChangeModal, needsTeleprompterPrompt } from '@/components/projects/StageChangeModal'
+import { GripVertical, Clock, Layers, AlertTriangle, Pause } from 'lucide-react'
 import { mapInternalToExternalStage } from '@/lib/views'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { getProjectTimeliness, resolveTargetReleaseDate } from '@/lib/timelines'
@@ -71,6 +69,11 @@ function KanbanCard({
               Delayed
             </span>
           )}
+          {project.is_on_hold && (
+            <span className="inline-block mb-1.5 ml-1 rounded-md bg-zinc-200 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-700">
+              On hold
+            </span>
+          )}
           <p className="text-[15px] font-bold text-zinc-900 line-clamp-2 leading-snug tracking-tight">
             {project.title}
           </p>
@@ -124,7 +127,7 @@ function KanbanCard({
 }
 
 function KanbanColumn({
-  stage, projects, onOpen, readOnly, holidays, index, isLast,
+  stage, projects, onOpen, readOnly, holidays, index, isLast, hideHeader,
 }: {
   stage: string
   projects: Project[]
@@ -133,6 +136,7 @@ function KanbanColumn({
   holidays: string[]
   index: number
   isLast: boolean
+  hideHeader?: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage, disabled: readOnly })
   const accent = getColumnAccent(index)
@@ -140,21 +144,23 @@ function KanbanColumn({
   return (
     <div
       className={cn(
-        'flex flex-col w-[268px] shrink-0',
+        'flex flex-col w-[268px] shrink-0 max-h-[520px]',
         !isLast && 'border-r border-zinc-200 pr-5 mr-1'
       )}
     >
-      <div className={cn('mb-3 pb-2 border-b-2', accent.border)}>
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', accent.dot)} />
-          <h3 className="text-sm font-bold text-zinc-900 truncate leading-tight">{stage}</h3>
-          <span className="text-sm font-normal text-zinc-400 shrink-0">({projects.length})</span>
+      {!hideHeader && (
+        <div className={cn('mb-3 pb-2 border-b-2', accent.border)}>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', accent.dot)} />
+            <h3 className="text-sm font-bold text-zinc-900 truncate leading-tight">{stage}</h3>
+            <span className="text-sm font-normal text-zinc-400 shrink-0">({projects.length})</span>
+          </div>
         </div>
-      </div>
+      )}
       <div
         ref={setNodeRef}
         className={cn(
-          'flex-1 min-h-[160px] space-y-3 p-2 rounded-xl transition-all',
+          'flex-1 min-h-[120px] max-h-[480px] overflow-y-auto space-y-3 p-2 rounded-xl transition-all',
           accent.bg,
           isOver && 'ring-2 ring-violet-300 ring-offset-2 ring-offset-[#f4f4f5] bg-violet-50/60'
         )}
@@ -181,7 +187,8 @@ function BoardFooter({ projects, holidays }: { projects: Project[]; holidays: st
     () => projects.filter(p => getProjectTimeliness(p, holidays).status === 'delayed').length,
     [projects, holidays]
   )
-  const inProgress = projects.filter(p => p.current_stage !== 'Final Delivery Done').length
+  const onHold = projects.filter(p => p.is_on_hold).length
+  const inProgress = projects.filter(p => p.current_stage !== 'Final Delivery').length
 
   return (
     <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200/80 bg-white px-4 py-3 shadow-sm">
@@ -193,6 +200,12 @@ function BoardFooter({ projects, holidays }: { projects: Project[]; holidays: st
         <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-600">
           {inProgress} in pipeline
         </span>
+        {onHold > 0 && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-700">
+            <Pause size={13} />
+            {onHold} on hold
+          </span>
+        )}
         {overdue > 0 && (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700">
             <AlertTriangle size={13} />
@@ -216,7 +229,6 @@ type Props = {
   users: Profile[]
   stages: readonly string[]
   holidays?: string[]
-  canAdd?: boolean
   readOnly?: boolean
   externalView?: boolean
 }
@@ -226,7 +238,6 @@ export function KanbanBoard({
   users,
   stages,
   holidays = [],
-  canAdd = true,
   readOnly = false,
   externalView = false,
 }: Props) {
@@ -234,7 +245,6 @@ export function KanbanBoard({
   const [projects, setProjects] = useState(initialProjects)
   const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [pending, setPending] = useState<{ project: Project; newStage: string } | null>(null)
-  const [addOpen, setAddOpen] = useState(false)
 
   useEffect(() => {
     setProjects(initialProjects)
@@ -245,21 +255,42 @@ export function KanbanBoard({
   const getDisplayStage = (project: Project) =>
     externalView ? mapInternalToExternalStage(project.current_stage) : project.current_stage
 
-  const handleDragEnd = (e: DragEndEvent) => {
+  const handleDragEnd = async (e: DragEndEvent) => {
     if (readOnly) return
     setActiveProject(null)
     const project = projects.find(p => p.id === e.active.id)
     const newStage = e.over?.id as string
     if (!project || !newStage || !stages.includes(newStage)) return
     if (project.current_stage === newStage) return
-    setPending({ project, newStage })
+
+    if (needsTeleprompterPrompt(project.current_stage, newStage)) {
+      setPending({ project, newStage })
+      return
+    }
+
+    const result = await changeProjectStage(project.id, newStage)
+    if (!result.error) {
+      setProjects(prev =>
+        prev.map(p =>
+          p.id === project.id
+            ? { ...p, current_stage: newStage, last_status_update_at: new Date().toISOString() }
+            : p
+        )
+      )
+      router.refresh()
+    }
   }
 
-  const handleConfirm = async (note: string, assigneeId: string | null) => {
+  const handleTeleprompterConfirm = async (usesTeleprompter: boolean) => {
     if (!pending) return
-    const result = await changeProjectStage(pending.project.id, pending.newStage, note, assigneeId)
+    const result = await changeProjectStage(
+      pending.project.id,
+      pending.newStage,
+      undefined,
+      undefined,
+      usesTeleprompter
+    )
     if (!result.error) {
-      const assignee = users.find(u => u.id === assigneeId) ?? null
       setProjects(prev =>
         prev.map(p =>
           p.id === pending.project.id
@@ -267,12 +298,12 @@ export function KanbanBoard({
                 ...p,
                 current_stage: pending.newStage,
                 last_status_update_at: new Date().toISOString(),
-                stage_assignee_id: assigneeId,
-                stage_assignee: assignee,
+                uses_teleprompter: usesTeleprompter,
               }
             : p
         )
       )
+      router.refresh()
     }
     setPending(null)
   }
@@ -282,34 +313,73 @@ export function KanbanBoard({
 
   return (
     <>
-      {canAdd && (
-        <div className="mb-4">
-          <Button size="sm" onClick={() => setAddOpen(true)} className="v2-btn-primary font-semibold">
-            <Plus size={14} /> Add project
-          </Button>
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-zinc-200/80 bg-white/60 p-4 shadow-sm overflow-hidden">
+      <div className="rounded-2xl border border-zinc-200/80 bg-white/60 shadow-sm overflow-hidden">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
           onDragStart={e => { const p = projects.find(x => x.id === e.active.id); if (p) setActiveProject(p) }}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex overflow-x-auto pb-2 pt-1 -mx-1 px-1 gap-1">
-            {stages.map((stage, i) => (
-              <KanbanColumn
-                key={stage}
-                stage={stage}
-                index={i}
-                isLast={i === stages.length - 1}
-                projects={byStage(stage)}
-                onOpen={id => router.push(`/projects/${id}`)}
-                readOnly={readOnly}
-                holidays={holidays}
-              />
-            ))}
+          <div className="max-h-[calc(100vh-14rem)] flex flex-col">
+            {/* Top horizontal scrollbar mirror */}
+            <div
+              id="board-scroll-top"
+              className="overflow-x-auto overflow-y-hidden shrink-0 border-b border-zinc-100 h-3"
+              onScroll={e => {
+                const main = document.getElementById('board-scroll-main')
+                if (main) main.scrollLeft = e.currentTarget.scrollLeft
+              }}
+            >
+              <div className="h-1" style={{ width: stages.length * 280 }} />
+            </div>
+
+            <div
+              id="board-scroll-main"
+              className="overflow-auto flex-1"
+              onScroll={e => {
+                const top = document.getElementById('board-scroll-top')
+                if (top) top.scrollLeft = e.currentTarget.scrollLeft
+              }}
+            >
+              <div className="flex min-w-max sticky top-0 z-20 bg-[#fafafa] border-b border-zinc-200 px-4 pt-3 pb-0">
+                {stages.map((stage, i) => {
+                  const accent = getColumnAccent(i)
+                  return (
+                    <div
+                      key={`head-${stage}`}
+                      className={cn(
+                        'w-[268px] shrink-0 mb-0',
+                        i < stages.length - 1 && 'border-r border-zinc-200 pr-5 mr-1'
+                      )}
+                    >
+                      <div className={cn('pb-2 border-b-2', accent.border)}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', accent.dot)} />
+                          <h3 className="text-sm font-bold text-zinc-900 truncate leading-tight">{stage}</h3>
+                          <span className="text-sm font-normal text-zinc-400 shrink-0">({byStage(stage).length})</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="flex px-4 pb-4 pt-2 gap-1 min-w-max">
+                {stages.map((stage, i) => (
+                  <KanbanColumn
+                    key={stage}
+                    stage={stage}
+                    index={i}
+                    isLast={i === stages.length - 1}
+                    projects={byStage(stage)}
+                    onOpen={id => router.push(`/projects/${id}`)}
+                    readOnly={readOnly}
+                    holidays={holidays}
+                    hideHeader
+                  />
+                ))}
+              </div>
+            </div>
           </div>
           <DragOverlay>
             {activeProject && (
@@ -334,17 +404,9 @@ export function KanbanBoard({
           onClose={() => setPending(null)}
           currentStage={pending.project.current_stage}
           targetStage={pending.newStage}
-          users={users}
-          onConfirm={handleConfirm}
+          onConfirm={handleTeleprompterConfirm}
         />
       )}
-
-      <QuickAddModal
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        users={users}
-        holidays={holidays}
-      />
     </>
   )
 }

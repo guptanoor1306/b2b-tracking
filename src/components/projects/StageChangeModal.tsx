@@ -3,63 +3,67 @@
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-import { Textarea } from '@/components/ui/Textarea'
-import { UserSearchSelect } from '@/components/ui/UserSearchSelect'
-import { Profile } from '@/lib/types'
-import { STAGES_INTERNAL } from '@/lib/constants'
+import { FIRST_CUT_STAGE, STAGES_INTERNAL } from '@/lib/constants'
+import { normalizeStage } from '@/lib/timelines'
 
 type Props = {
   open: boolean
   onClose: () => void
   currentStage: string
   targetStage: string
-  users: Profile[]
-  onConfirm: (note: string, assigneeId: string | null) => Promise<void>
+  onConfirm: (usesTeleprompter: boolean) => Promise<void>
 }
 
+/** Shown only when moving into First Cut — asks teleprompter question */
 export function StageChangeModal({
-  open, onClose, currentStage, targetStage, users, onConfirm,
+  open, onClose, currentStage, targetStage, onConfirm,
 }: Props) {
-  const [note, setNote] = useState('')
-  const [assigneeId, setAssigneeId] = useState('')
+  const [teleprompter, setTeleprompter] = useState<'yes' | 'no' | ''>('')
   const [loading, setLoading] = useState(false)
 
   const handleConfirm = async () => {
+    if (!teleprompter) return
     setLoading(true)
-    await onConfirm(note, assigneeId || null)
+    await onConfirm(teleprompter === 'yes')
     setLoading(false)
-    setNote('')
-    setAssigneeId('')
+    setTeleprompter('')
     onClose()
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Confirm stage change" size="sm">
-      <div className="space-y-4">
-        <p className="text-sm text-zinc-600">
-          Move from <strong className="text-zinc-900">{currentStage}</strong> →{' '}
-          <strong className="text-zinc-900">{targetStage}</strong>
-        </p>
-        <UserSearchSelect
-          label="Stage assignee"
-          users={users}
-          value={assigneeId}
-          onChange={setAssigneeId}
-          placeholder="Assign for reminders"
-        />
-        <Textarea
-          label="Note (optional)"
-          placeholder="e.g. Waiting for client feedback"
-          value={note}
-          onChange={e => setNote(e.target.value)}
-        />
+    <Modal open={open} onClose={onClose} title="Is Teleprompter Used" size="sm">
+      <div className="space-y-5">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setTeleprompter('yes')}
+            className={`flex-1 rounded-lg border px-4 py-3 text-sm font-medium transition-colors ${teleprompter === 'yes' ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'}`}
+          >
+            Yes
+          </button>
+          <button
+            type="button"
+            onClick={() => setTeleprompter('no')}
+            className={`flex-1 rounded-lg border px-4 py-3 text-sm font-medium transition-colors ${teleprompter === 'no' ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'}`}
+          >
+            No
+          </button>
+        </div>
+
         <div className="flex gap-2 justify-end">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button loading={loading} onClick={handleConfirm}>Confirm</Button>
+          <Button loading={loading} onClick={handleConfirm} disabled={!teleprompter}>
+            Move card
+          </Button>
         </div>
       </div>
     </Modal>
   )
+}
+
+export function needsTeleprompterPrompt(currentStage: string, targetStage: string): boolean {
+  return normalizeStage(targetStage) === FIRST_CUT_STAGE
+    && normalizeStage(currentStage) !== FIRST_CUT_STAGE
 }
 
 export function StageSelectModal({
@@ -92,7 +96,6 @@ export function StageSelectModal({
         >
           {STAGES_INTERNAL.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <Textarea label="Note (optional)" value={note} onChange={e => setNote(e.target.value)} />
         <div className="flex gap-2 justify-end">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
           <Button loading={loading} onClick={handleConfirm} disabled={stage === currentStage}>Update</Button>

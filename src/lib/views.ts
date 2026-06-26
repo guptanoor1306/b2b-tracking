@@ -12,6 +12,40 @@ import {
 } from '@/lib/constants'
 import { Role } from '@/lib/types'
 
+/** Pick reminder assignee from project team based on stage role */
+export function resolveStageAssigneeId(
+  project: {
+    editor_id?: string | null
+    designer_id?: string | null
+    writer_id?: string | null
+    sound_designer_id?: string | null
+    external_team_member_id?: string | null
+    stage_assignee_id?: string | null
+  },
+  stage: string
+): string | null {
+  const s = normalizeStage(stage)
+  switch (s) {
+    case 'First Cut':
+    case 'First Cut Changes':
+    case 'Animation & VD':
+    case 'Final Changes':
+      return project.editor_id ?? null
+    case 'Graphics & VD':
+      return project.designer_id ?? null
+    case 'Storyboard':
+      return project.writer_id ?? null
+    case 'Sound':
+      return project.sound_designer_id ?? null
+    case 'First Cut sent for Review':
+    case 'Thumbnail Copy + RP Cuts':
+    case 'Video/Thumbnail Review':
+      return project.external_team_member_id ?? null
+    default:
+      return project.stage_assignee_id ?? project.editor_id ?? null
+  }
+}
+
 export function isInternalRole(role: Role | string): boolean {
   return (INTERNAL_ROLES as readonly string[]).includes(role)
 }
@@ -87,7 +121,7 @@ export function isDelivered(stage: string): boolean {
 }
 
 export function isToBePicked(project: { current_stage: string; picked_up_date: string | null }): boolean {
-  return project.current_stage === 'Script Received' && !project.picked_up_date
+  return project.current_stage === 'Video received' && !project.picked_up_date
 }
 
 export function filterProjectsByAssignee<T extends { stage_assignee_id: string | null }>(

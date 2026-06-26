@@ -12,14 +12,15 @@ import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { formatDate, cn } from '@/lib/utils'
 import { UserPlus, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { SettingsPanel, SettingsCard, SettingsStat } from '@/components/settings/SettingsLayout'
 
-type Props = { users: Profile[]; currentUserId?: string }
+type Props = { users: Profile[]; currentUserId?: string; embedded?: boolean }
 
 type SortBy = 'name' | 'created'
 
 const PAGE_SIZE = 10
 
-export function UsersClient({ users, currentUserId }: Props) {
+export function UsersClient({ users, currentUserId, embedded = false }: Props) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null)
@@ -42,6 +43,7 @@ export function UsersClient({ users, currentUserId }: Props) {
     return list
   }, [users, sortBy])
 
+  const activeCount = users.filter(u => u.is_active).length
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
   const pageUsers = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
@@ -89,20 +91,26 @@ export function UsersClient({ users, currentUserId }: Props) {
     router.refresh()
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+  const content = (
+    <>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <SettingsStat label="Total users" value={users.length} />
+        <SettingsStat label="Active" value={activeCount} />
+        <SettingsStat label="Inactive" value={users.length - activeCount} />
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">Sort</span>
-          <div className="flex rounded-lg border border-zinc-200 overflow-hidden bg-white">
+          <span className="text-sm text-zinc-500">Sort by</span>
+          <div className="flex overflow-hidden rounded-lg border border-zinc-200 bg-white">
             <button
               type="button"
               onClick={() => setSort('created')}
               className={cn(
-                'px-3 py-1.5 text-xs font-medium transition-colors',
+                'px-3 py-1.5 text-sm font-medium transition-colors',
                 sortBy === 'created'
-                  ? 'bg-zinc-100 text-zinc-900'
-                  : 'text-zinc-500 hover:text-zinc-700'
+                  ? 'bg-violet-50 text-violet-800'
+                  : 'text-zinc-600 hover:bg-zinc-50'
               )}
             >
               Latest
@@ -111,10 +119,10 @@ export function UsersClient({ users, currentUserId }: Props) {
               type="button"
               onClick={() => setSort('name')}
               className={cn(
-                'px-3 py-1.5 text-xs font-medium transition-colors border-l border-zinc-200',
+                'border-l border-zinc-200 px-3 py-1.5 text-sm font-medium transition-colors',
                 sortBy === 'name'
-                  ? 'bg-zinc-100 text-zinc-900'
-                  : 'text-zinc-500 hover:text-zinc-700'
+                  ? 'bg-violet-50 text-violet-800'
+                  : 'text-zinc-600 hover:bg-zinc-50'
               )}
             >
               Name A–Z
@@ -126,84 +134,84 @@ export function UsersClient({ users, currentUserId }: Props) {
         </Button>
       </div>
 
-      <div className="rounded-xl border border-zinc-200 bg-white overflow-x-auto">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead>
-            <tr className="text-xs text-zinc-500 uppercase border-b border-zinc-100 bg-zinc-50/80">
-              <th className="px-4 py-3 text-left">Name</th>
-              <th className="px-4 py-3 text-left hidden md:table-cell">Email</th>
-              <th className="px-4 py-3 text-left">Role</th>
-              <th className="px-4 py-3 text-left hidden lg:table-cell">Organization</th>
-              <th className="px-4 py-3 text-left">Status</th>
-              <th className="px-4 py-3 text-left hidden sm:table-cell">Created</th>
-              <th className="px-4 py-3 text-left whitespace-nowrap">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-100">
-            {pageUsers.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-zinc-500">
-                  No users found.
-                </td>
+      <SettingsCard padding="none" className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-sm">
+            <thead>
+              <tr className="border-b border-zinc-100 bg-zinc-50/80">
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Name</th>
+                <th className="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 md:table-cell">Email</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Role</th>
+                <th className="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 lg:table-cell">Organization</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Status</th>
+                <th className="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:table-cell">Created</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Actions</th>
               </tr>
-            ) : (
-              pageUsers.map(u => (
-                <tr key={u.id} className="hover:bg-zinc-50/80">
-                  <td className="px-4 py-3 font-medium text-zinc-900">{u.name}</td>
-                  <td className="px-4 py-3 text-zinc-600 hidden md:table-cell">{u.email}</td>
-                  <td className="px-4 py-3">
-                    <select
-                      className="text-xs bg-white border border-zinc-200 rounded-lg px-2 py-1 text-zinc-700 max-w-[140px]"
-                      value={u.role}
-                      onChange={e => changeRole(u, e.target.value)}
-                    >
-                      {ROLES.map(r => (
-                        <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-500 hidden lg:table-cell">{u.organization ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      label={u.is_active ? 'Active' : 'Inactive'}
-                      variant="custom"
-                      className={u.is_active
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'bg-zinc-100 text-zinc-500 border-zinc-200'}
-                    />
-                  </td>
-                  <td className="px-4 py-3 text-zinc-600 text-xs hidden sm:table-cell">
-                    {formatDate(u.created_at)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" variant="ghost" onClick={() => toggleActive(u)}>
-                        {u.is_active ? 'Deactivate' : 'Activate'}
-                      </Button>
-                      {currentUserId !== u.id ? (
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          onClick={() => { setError(''); setDeleteTarget(u) }}
-                          className="shrink-0"
-                        >
-                          <Trash2 size={13} />
-                          Delete
-                        </Button>
-                      ) : (
-                        <span className="text-[10px] text-zinc-400">You</span>
-                      )}
-                    </div>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {pageUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-zinc-500">
+                    No users found.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : (
+                pageUsers.map(u => (
+                  <tr key={u.id} className="transition-colors hover:bg-zinc-50/60">
+                    <td className="px-4 py-3.5 font-medium text-zinc-900">{u.name}</td>
+                    <td className="hidden px-4 py-3.5 text-zinc-600 md:table-cell">{u.email}</td>
+                    <td className="px-4 py-3.5">
+                      <select
+                        className="max-w-[160px] rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-700"
+                        value={u.role}
+                        onChange={e => changeRole(u, e.target.value)}
+                      >
+                        {ROLES.map(r => (
+                          <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="hidden px-4 py-3.5 text-zinc-600 lg:table-cell">{u.organization ?? '—'}</td>
+                    <td className="px-4 py-3.5">
+                      <Badge
+                        label={u.is_active ? 'Active' : 'Inactive'}
+                        variant="custom"
+                        className={u.is_active
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                          : 'border-zinc-200 bg-zinc-100 text-zinc-500'}
+                      />
+                    </td>
+                    <td className="hidden px-4 py-3.5 text-sm text-zinc-600 sm:table-cell">
+                      {formatDate(u.created_at)}
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <Button size="sm" variant="ghost" onClick={() => toggleActive(u)}>
+                          {u.is_active ? 'Deactivate' : 'Activate'}
+                        </Button>
+                        {currentUserId !== u.id ? (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={() => { setError(''); setDeleteTarget(u) }}
+                          >
+                            <Trash2 size={13} />
+                          </Button>
+                        ) : (
+                          <span className="px-2 text-xs text-zinc-400">You</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </SettingsCard>
 
       {sorted.length > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-xs text-zinc-500">
+        <div className="flex items-center justify-between text-sm text-zinc-500">
           <span>
             {rangeStart}–{rangeEnd} of {sorted.length}
           </span>
@@ -213,11 +221,11 @@ export function UsersClient({ users, currentUserId }: Props) {
               variant="ghost"
               disabled={safePage <= 1}
               onClick={() => setPage(p => Math.max(1, p - 1))}
-              className="h-7 px-2"
+              className="h-8 px-2"
             >
-              <ChevronLeft size={14} />
+              <ChevronLeft size={16} />
             </Button>
-            <span className="tabular-nums px-2">
+            <span className="px-2 tabular-nums">
               {safePage} / {totalPages}
             </span>
             <Button
@@ -225,16 +233,16 @@ export function UsersClient({ users, currentUserId }: Props) {
               variant="ghost"
               disabled={safePage >= totalPages}
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              className="h-7 px-2"
+              className="h-8 px-2"
             >
-              <ChevronRight size={14} />
+              <ChevronRight size={16} />
             </Button>
           </div>
         </div>
       )}
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Create user">
-        <div className="space-y-3">
+        <div className="space-y-4">
           {error && !deleteTarget && <p className="text-sm text-red-600">{error}</p>}
           <Input label="Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
           <Input label="Email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
@@ -251,21 +259,21 @@ export function UsersClient({ users, currentUserId }: Props) {
             value={form.organization}
             onChange={e => setForm(f => ({ ...f, organization: e.target.value }))}
           />
-          <div className="flex gap-2 justify-end pt-2">
+          <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button loading={loading} onClick={handleCreate}>Create</Button>
+            <Button loading={loading} onClick={handleCreate}>Create user</Button>
           </div>
         </div>
       </Modal>
 
       <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete user">
         <div className="space-y-4">
-          <p className="text-sm text-zinc-600">
+          <p className="text-sm leading-relaxed text-zinc-600">
             Permanently delete <span className="font-semibold text-zinc-900">{deleteTarget?.name}</span>?
             This removes their account and cannot be undone.
           </p>
           {error && deleteTarget && <p className="text-sm text-red-600">{error}</p>}
-          <div className="flex gap-2 justify-end">
+          <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancel</Button>
             <Button loading={deleteLoading} onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
               Delete user
@@ -273,6 +281,19 @@ export function UsersClient({ users, currentUserId }: Props) {
           </div>
         </div>
       </Modal>
-    </div>
+    </>
   )
+
+  if (embedded) {
+    return (
+      <SettingsPanel
+        title="Team members"
+        description="Add users, assign roles, and control who can access the production tracker."
+      >
+        <div className="space-y-6">{content}</div>
+      </SettingsPanel>
+    )
+  }
+
+  return <div className="space-y-6">{content}</div>
 }

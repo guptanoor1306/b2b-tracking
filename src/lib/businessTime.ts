@@ -76,6 +76,52 @@ export function businessHoursBetween(start: Date, end: Date, holidays: string[] 
   return total
 }
 
+type ExcludePeriod = { start: Date; end: Date }
+
+/** Business hours between two dates, excluding hold/pause periods */
+export function businessHoursBetweenExcluding(
+  start: Date,
+  end: Date,
+  holidays: string[] = [],
+  exclude: ExcludePeriod[] = []
+): number {
+  if (end <= start) return 0
+  if (!exclude.length) return businessHoursBetween(start, end, holidays)
+
+  const sorted = [...exclude]
+    .filter(p => p.end > p.start)
+    .sort((a, b) => a.start.getTime() - b.start.getTime())
+
+  let total = 0
+  let cursor = new Date(start)
+
+  while (cursor < end) {
+    let segmentEnd = end
+    for (const p of sorted) {
+      if (p.end <= cursor) continue
+      if (p.start >= end) break
+      if (p.start > cursor && p.start < segmentEnd) {
+        segmentEnd = p.start
+        break
+      }
+      if (p.start <= cursor && p.end > cursor) {
+        cursor = p.end
+        segmentEnd = cursor
+        break
+      }
+    }
+    if (cursor >= end) break
+    if (segmentEnd > cursor) {
+      total += businessHoursBetween(cursor, segmentEnd, holidays)
+      cursor = segmentEnd
+    } else {
+      cursor = addHours(cursor, 1)
+    }
+  }
+
+  return total
+}
+
 export function businessDaysLate(targetDateStr: string, holidays: string[] = []): number {
   const target = parseISO(targetDateStr)
   if (!isValid(target)) return 0

@@ -1,8 +1,11 @@
 import { Suspense } from 'react'
 import { KanbanBoard } from '@/components/board/KanbanBoard'
 import { BoardAssigneeFilter } from '@/components/board/BoardAssigneeFilter'
+import { BoardHeaderActions } from '@/components/board/BoardHeaderActions'
 import { fetchProjects } from '@/lib/data/projects'
 import { fetchHolidayDates } from '@/lib/data/holidays'
+import { fetchStageSlaConfig } from '@/lib/data/stage-sla'
+import { setStageSlaCache } from '@/lib/timelines'
 import { createClient } from '@/lib/supabase/server'
 import { getSessionProfile } from '@/lib/auth'
 import { redirect } from 'next/navigation'
@@ -23,11 +26,13 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
 
   const params = await searchParams
   const supabase = await createClient()
-  const [projects, usersRes, holidays] = await Promise.all([
+  const [projects, usersRes, holidays, stageSla] = await Promise.all([
     fetchProjects(),
     supabase.from('profiles').select('*').eq('is_active', true).order('name'),
     fetchHolidayDates(),
+    fetchStageSlaConfig(),
   ])
+  setStageSlaCache(stageSla)
 
   const users = usersRes.data ?? []
   const internal = isInternalRole(profile.role)
@@ -53,11 +58,16 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
 
   return (
     <div className="theme-v2 -mx-6 -mt-2 min-h-[calc(100vh-4rem)] px-6 pb-10 pt-2">
-      <div className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Production board</h1>
-        <p className="text-sm text-zinc-500 mt-1 font-medium">
-          {filtered.length} project{filtered.length !== 1 ? 's' : ''} · drag cards to update stages
-        </p>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Production board</h1>
+          <p className="mt-1 text-sm font-medium text-zinc-500">
+            {filtered.length} project{filtered.length !== 1 ? 's' : ''} · drag cards to update stages
+          </p>
+        </div>
+        {canChangeStages(profile.role) && (
+          <BoardHeaderActions users={users} holidays={holidays} />
+        )}
       </div>
 
       {canSeeBoardAssigneeFilter(profile.role) && (
@@ -78,7 +88,6 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         users={users}
         holidays={holidays}
         stages={internal ? STAGES_INTERNAL : STAGES_EXTERNAL}
-        canAdd={canChangeStages(profile.role)}
         readOnly={!canChangeStages(profile.role)}
         externalView={!internal}
       />

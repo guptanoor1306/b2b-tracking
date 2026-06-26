@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation'
 import { getSessionProfile } from '@/lib/auth'
 import { fetchProjects } from '@/lib/data/projects'
 import { fetchHolidayDates } from '@/lib/data/holidays'
+import { fetchStageSlaConfig } from '@/lib/data/stage-sla'
+import { setStageSlaCache } from '@/lib/timelines'
 import { AdminDashboard } from '@/components/dashboard/AdminDashboard'
 import { ExternalDashboard } from '@/components/dashboard/ExternalDashboard'
 import { currentMonth, isDateInMonth } from '@/lib/utils'
@@ -22,10 +24,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
     redirect('/ip-overview')
   }
 
-  const [projects, holidays] = await Promise.all([
+  const [projects, holidays, stageSla] = await Promise.all([
     fetchProjects(),
     fetchHolidayDates(),
+    fetchStageSlaConfig(),
   ])
+  setStageSlaCache(stageSla)
 
   if (usesActionItemsDashboard(profile.role)) {
     return (

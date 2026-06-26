@@ -1,12 +1,13 @@
 'use client'
 
-import { Project, Profile, StageHistory, Comment } from '@/lib/types'
+import { Project, Profile, StageHistory, Comment, HoldPeriod } from '@/lib/types'
 import { Button } from '@/components/ui/Button'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { ProjectCopyLinks } from '@/components/projects/ProjectCopyLinks'
 import { ProjectEditModal } from '@/components/projects/ProjectEditModal'
 import { ExternalProjectEditModal } from '@/components/projects/ExternalProjectEditModal'
 import { DeleteProjectButton } from '@/components/projects/DeleteProjectButton'
+import { ProjectHoldButton } from '@/components/projects/ProjectHoldButton'
 import { CommentsSection } from '@/components/projects/CommentsSection'
 import { StagePipelineGantt } from '@/components/projects/StagePipelineGantt'
 import { resolveTargetReleaseDate } from '@/lib/timelines'
@@ -29,6 +30,7 @@ type Props = {
   users: Profile[]
   graphicsDesigners: Profile[]
   history: StageHistory[]
+  holdPeriods?: HoldPeriod[]
   comments: Comment[]
 }
 
@@ -59,7 +61,7 @@ function ClientAssetNudge({ project, onEdit }: { project: Project; onEdit: () =>
 
 export function ProjectDetailLayout({
   project, displayStage, internal, canEdit = true, canSendReminder = false,
-  holidays = [], users, graphicsDesigners, history, comments,
+  holidays = [], users, graphicsDesigners, history, holdPeriods = [], comments,
 }: Props) {
   const currentAssignee = project.stage_assignee?.name ?? null
   const assigneeId = project.stage_assignee?.id
@@ -98,8 +100,9 @@ export function ProjectDetailLayout({
                       {healthLabel(project.status_health)}
                     </span>
                   )}
-                  {canEdit && (
+                  {canEdit && internal && (
                     <>
+                      <ProjectHoldButton projectId={project.id} isOnHold={!!project.is_on_hold} />
                       <Button
                         variant="secondary"
                         size="sm"
@@ -188,6 +191,8 @@ export function ProjectDetailLayout({
             </div>
             <StagePipelineGantt
               history={history}
+              holdPeriods={holdPeriods}
+              project={project}
               currentStage={project.current_stage}
               projectId={project.id}
               currentAssignee={currentAssignee}
@@ -206,7 +211,6 @@ export function ProjectDetailLayout({
           onClose={() => setEditOpen(false)}
           project={project}
           users={users}
-          graphicsDesigners={graphicsDesigners}
           holidays={holidays}
         />
       ) : (

@@ -4,7 +4,9 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getSessionProfile } from '@/lib/auth'
 import { CHANNEL, FINAL_STAGE } from '@/lib/constants'
-import { isInternalRole } from '@/lib/views'
+import { isInternalRole, resolveStageAssigneeId } from '@/lib/views'
+import { FIRST_CUT_STAGE } from '@/lib/constants'
+import { normalizeStage } from '@/lib/timelines'
 import {
   computeTargetReleaseDateString,
   computeProjectHealth,
@@ -20,6 +22,14 @@ type ProjectInput = {
   picked_up_date?: string | null
   target_delivery_date?: string | null
   editor?: string | null
+  editor_id?: string | null
+  editor_2_id?: string | null
+  designer_id?: string | null
+  designer_2_id?: string | null
+  sound_designer_id?: string | null
+  writer_id?: string | null
+  external_team_member_id?: string | null
+  uses_teleprompter?: boolean | null
   department?: string | null
   graphic_designer_id?: string | null
   stage_assignee_id?: string | null
@@ -66,11 +76,23 @@ export async function createProject(input: ProjectInput) {
 
   const supabase = await createClient()
   const holidays = await fetchHolidayDates()
-  const initialStage = 'Script Received'
+  const initialStage = 'Video received'
   const now = new Date().toISOString()
+  const teamCtx = {
+    level_of_video: input.level_of_video,
+    editor_id: input.editor_id,
+    editor_2_id: input.editor_2_id,
+    designer_id: input.designer_id,
+    designer_2_id: input.designer_2_id,
+    uses_teleprompter: input.uses_teleprompter,
+  }
   const target_delivery_date = input.received_date
-    ? computeTargetReleaseDateString(input.received_date, holidays)
+    ? computeTargetReleaseDateString(input.received_date, holidays, input.level_of_video, teamCtx)
     : null
+
+  const editorName = input.editor_id
+    ? (await supabase.from('profiles').select('name').eq('id', input.editor_id).single()).data?.name
+    : input.editor
 
   const { data, error } = await supabase
     .from('projects')
@@ -80,9 +102,17 @@ export async function createProject(input: ProjectInput) {
       content_type: input.content_type || 'Long-Form',
       level_of_video: input.level_of_video ?? null,
       priority: input.priority || 'Medium',
-      editor: input.editor ?? null,
-      graphic_designer_id: null,
-      stage_assignee_id: input.stage_assignee_id ?? null,
+      editor: editorName ?? input.editor ?? null,
+      editor_id: input.editor_id ?? null,
+      editor_2_id: input.editor_2_id ?? null,
+      designer_id: input.designer_id ?? null,
+      designer_2_id: input.designer_2_id ?? null,
+      sound_designer_id: input.sound_designer_id ?? null,
+      writer_id: input.writer_id ?? null,
+      external_team_member_id: input.external_team_member_id ?? null,
+      uses_teleprompter: input.uses_teleprompter ?? null,
+      graphic_designer_id: input.designer_id ?? input.graphic_designer_id ?? null,
+      stage_assignee_id: input.stage_assignee_id ?? input.editor_id ?? null,
       received_date: input.received_date ?? null,
       picked_up_date: input.picked_up_date ?? input.received_date ?? null,
       target_delivery_date,
@@ -141,8 +171,43 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
 
   const patch: Partial<ProjectInput> = { ...input }
   const holidays = await fetchHolidayDates()
+
+  if (input.editor_id !== undefined) {
+    if (input.editor_id) {
+      const { data: ed } = await supabase.from('profiles').select('name').eq('id', input.editor_id).single()
+      patch.editor = ed?.name ?? existing.editor
+    } else {
+      patch.editor = null
+    }
+  }
+  if (input.designer_id !== undefined) {
+    patch.graphic_designer_id = input.designer_id
+  }
+
+  const teamCtx = {
+    level_of_video: (input.level_of_video ?? existing.level_of_video) as string | null,
+    editor_id: (input.editor_id ?? existing.editor_id) as string | null,
+    editor_2_id: (input.editor_2_id ?? existing.editor_2_id) as string | null,
+    designer_id: (input.designer_id ?? existing.designer_id) as string | null,
+    designer_2_id: (input.designer_2_id ?? existing.designer_2_id) as string | null,
+    uses_teleprompter: (input.uses_teleprompter ?? existing.uses_teleprompter) as boolean | null,
+  }
+
+  const startDate = input.received_date ?? existing.received_date
+  if (startDate && (
+    input.received_date !== existing.received_date ||
+    input.level_of_video !== undefined ||
+    input.editor_id !== undefined ||
+    input.editor_2_id !== undefined ||
+    input.designer_id !== undefined ||
+    input.designer_2_id !== undefined ||
+    input.uses_teleprompter !== undefined
+  )) {
+    patch.target_delivery_date = computeTargetReleaseDateString(startDate, holidays, teamCtx.level_of_video, teamCtx)
+  }
+
   if (input.received_date && input.received_date !== existing.received_date) {
-    patch.target_delivery_date = computeTargetReleaseDateString(input.received_date, holidays)
+    patch.target_delivery_date = computeTargetReleaseDateString(input.received_date, holidays, teamCtx.level_of_video, teamCtx)
   }
 
   const { error } = await supabase
@@ -171,7 +236,8 @@ export async function changeProjectStage(
   projectId: string,
   newStage: string,
   note?: string,
-  assigneeId?: string | null
+  assigneeId?: string | null,
+  usesTeleprompter?: boolean | null
 ) {
   const profile = await getSessionProfile()
   if (!profile || !['Admin', 'Internal Team'].includes(profile.role)) {
@@ -191,13 +257,28 @@ export async function changeProjectStage(
     target_delivery_date: project.target_delivery_date,
     received_date: project.received_date,
     last_status_update_at: new Date().toISOString(),
+    is_on_hold: project.is_on_hold,
+    level_of_video: project.level_of_video,
   }, holidays)
+  const resolvedAssignee = resolveStageAssigneeId(project, newStage)
   const updates: Record<string, unknown> = {
     current_stage: newStage,
     status_health,
     updated_by: profile.id,
     last_status_update_at: new Date().toISOString(),
-    stage_assignee_id: assigneeId ?? null,
+    stage_assignee_id: resolvedAssignee,
+  }
+
+  if (normalizeStage(newStage) === FIRST_CUT_STAGE && usesTeleprompter != null) {
+    updates.uses_teleprompter = usesTeleprompter
+    if (project.received_date) {
+      updates.target_delivery_date = computeTargetReleaseDateString(
+        project.received_date,
+        holidays,
+        project.level_of_video,
+        { ...project, uses_teleprompter: usesTeleprompter }
+      )
+    }
   }
 
   if (newStage === FINAL_STAGE && !project.delivered_date) {
@@ -212,7 +293,7 @@ export async function changeProjectStage(
     old_stage: oldStage,
     new_stage: newStage,
     changed_by: profile.id,
-    assignee_id: assigneeId ?? null,
+    assignee_id: resolvedAssignee,
     note: note ?? null,
     is_hold_event: false,
   })
@@ -273,7 +354,12 @@ export async function updateStageHistoryDate(
     if (isFirst) {
       projectPatch.received_date = dateStr
       projectPatch.picked_up_date = dateStr
-      projectPatch.target_delivery_date = computeTargetReleaseDateString(dateStr, holidays)
+      projectPatch.target_delivery_date = computeTargetReleaseDateString(
+        dateStr,
+        holidays,
+        project.level_of_video,
+        project
+      )
     }
     if (isLast) {
       projectPatch.last_status_update_at = changedAt
@@ -444,5 +530,86 @@ export async function deleteProject(projectId: string) {
   revalidatePath('/dashboard')
   revalidatePath('/board')
   revalidatePath('/projects')
+  return { success: true }
+}
+
+export async function toggleProjectHold(projectId: string, note?: string) {
+  const profile = await getSessionProfile()
+  if (!profile || !isInternalRole(profile.role)) {
+    return { error: 'Unauthorized' }
+  }
+
+  const supabase = await createClient()
+  const holidays = await fetchHolidayDates()
+  const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).single()
+  if (!project) return { error: 'Project not found' }
+
+  const now = new Date().toISOString()
+
+  if (project.is_on_hold) {
+    const { data: openHold } = await supabase
+      .from('project_hold_periods')
+      .select('id')
+      .eq('project_id', projectId)
+      .is('ended_at', null)
+      .maybeSingle()
+
+    if (openHold) {
+      await supabase.from('project_hold_periods').update({
+        ended_at: now,
+        ended_by: profile.id,
+      }).eq('id', openHold.id)
+    }
+
+    await supabase.from('projects').update({
+      is_on_hold: false,
+      on_hold_since: null,
+      status_health: computeProjectHealth({
+        ...project,
+        is_on_hold: false,
+      }, holidays),
+      updated_by: profile.id,
+    }).eq('id', projectId)
+
+    await supabase.from('stage_history').insert({
+      project_id: projectId,
+      old_stage: project.current_stage,
+      new_stage: project.current_stage,
+      changed_by: profile.id,
+      note: note ?? 'Project resumed',
+      is_hold_event: true,
+    })
+
+    await logActivity(projectId, profile.id, 'hold_resume', 'is_on_hold', 'true', 'false')
+  } else {
+    await supabase.from('project_hold_periods').insert({
+      project_id: projectId,
+      started_at: now,
+      started_by: profile.id,
+      note: note ?? 'Project put on hold',
+    })
+
+    await supabase.from('projects').update({
+      is_on_hold: true,
+      on_hold_since: now,
+      status_health: 'On hold',
+      updated_by: profile.id,
+    }).eq('id', projectId)
+
+    await supabase.from('stage_history').insert({
+      project_id: projectId,
+      old_stage: project.current_stage,
+      new_stage: project.current_stage,
+      changed_by: profile.id,
+      note: note ?? 'Project on hold',
+      is_hold_event: true,
+    })
+
+    await logActivity(projectId, profile.id, 'hold_start', 'is_on_hold', 'false', 'true')
+  }
+
+  revalidatePath(`/projects/${projectId}`)
+  revalidatePath('/board')
+  revalidatePath('/dashboard')
   return { success: true }
 }

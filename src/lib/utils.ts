@@ -1,9 +1,10 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { differenceInDays, differenceInHours, format, parseISO, isValid, startOfMonth, endOfMonth } from 'date-fns'
-import { StageHistory } from '@/lib/types'
+import { StageHistory, HoldPeriod } from '@/lib/types'
 import { FINAL_STAGE } from '@/lib/constants'
-import { businessHoursBetween, splitBusinessHours } from '@/lib/businessTime'
+import { businessHoursBetween, businessHoursBetweenExcluding, splitBusinessHours } from '@/lib/businessTime'
+import { effectiveStageStartIso } from '@/lib/pipeline-parallel'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -85,18 +86,27 @@ export type StageDuration = {
   hours: number
 }
 
-export function computeStageDurations(history: StageHistory[], holidays: string[] = []): StageDuration[] {
-  const sorted = [...history].sort(
-    (a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime()
-  )
+export function stageHistoryEntries(history: StageHistory[]): StageHistory[] {
+  return [...history]
+    .filter(h => !h.is_hold_event)
+    .sort((a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime())
+}
+
+export function computeStageDurations(history: StageHistory[], holidays: string[] = [], holdPeriods: HoldPeriod[] = []): StageDuration[] {
+  const sorted = stageHistoryEntries(history)
+  const exclude = holdPeriods.map(p => ({
+    start: parseISO(p.started_at),
+    end: p.ended_at ? parseISO(p.ended_at) : new Date(),
+  }))
   return sorted.map((item, i) => {
-    const start = parseISO(item.changed_at)
+    const startedAt = effectiveStageStartIso(sorted, item)
+    const start = parseISO(startedAt)
     const end = sorted[i + 1] ? parseISO(sorted[i + 1].changed_at) : new Date()
-    const totalHours = businessHoursBetween(start, end, holidays)
+    const totalHours = businessHoursBetweenExcluding(start, end, holidays, exclude)
     const { days, hours } = splitBusinessHours(totalHours)
     return {
       stage: item.new_stage,
-      startedAt: item.changed_at,
+      startedAt,
       endedAt: sorted[i + 1]?.changed_at ?? null,
       days,
       hours,

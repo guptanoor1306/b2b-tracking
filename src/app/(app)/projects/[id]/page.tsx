@@ -10,6 +10,8 @@ import {
   canSendStageReminder,
 } from '@/lib/views'
 import { fetchHolidayDates } from '@/lib/data/holidays'
+import { fetchStageSlaConfig, fetchProjectHoldPeriods } from '@/lib/data/stage-sla'
+import { setStageSlaCache } from '@/lib/timelines'
 import { Comment } from '@/lib/types'
 
 type Params = Promise<{ id: string }>
@@ -29,7 +31,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
   const supabase = await createClient()
   const internal = isInternalRole(profile.role)
 
-  const [historyRes, usersRes, commentsRes, holidays] = await Promise.all([
+  const [historyRes, usersRes, commentsRes, holidays, stageSla, holdPeriods] = await Promise.all([
     internal
       ? supabase
           .from('stage_history')
@@ -42,7 +44,10 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       : Promise.resolve({ data: [] }),
     supabase.from('comments').select('*, author:profiles!comments_created_by_fkey(id, name, email)').eq('project_id', id).order('created_at', { ascending: true }),
     fetchHolidayDates(),
+    fetchStageSlaConfig(),
+    internal ? fetchProjectHoldPeriods(id) : Promise.resolve([]),
   ])
+  setStageSlaCache(stageSla)
 
   const users = usersRes.data ?? []
   const graphicsDesigners = users.filter(u => u.name.toLowerCase().includes('amit'))
@@ -59,6 +64,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       users={users}
       graphicsDesigners={graphicsDesigners.length ? graphicsDesigners : users}
       history={historyRes.data ?? []}
+      holdPeriods={holdPeriods}
       comments={(commentsRes.data ?? []) as Comment[]}
     />
   )

@@ -45,6 +45,16 @@ export type Project = {
   target_delivery_date: string | null
   level_of_video: string | null
   editor: string | null
+  editor_id: string | null
+  editor_2_id: string | null
+  designer_id: string | null
+  designer_2_id: string | null
+  sound_designer_id: string | null
+  writer_id: string | null
+  external_team_member_id: string | null
+  uses_teleprompter: boolean | null
+  is_on_hold?: boolean
+  on_hold_since: string | null
   department: string | null
   graphic_designer_id: string | null
   stage_assignee_id: string | null
@@ -71,6 +81,13 @@ export type Project = {
   owner?: Profile | null
   graphic_designer?: Profile | null
   stage_assignee?: Profile | null
+  editor_profile?: Profile | null
+  editor_2_profile?: Profile | null
+  designer?: Profile | null
+  designer_2?: Profile | null
+  sound_designer?: Profile | null
+  writer?: Profile | null
+  external_team_member?: Profile | null
 }
 
 export type StageHistory = {
@@ -90,6 +107,27 @@ export type StageHistory = {
 export type ActivityLog = {
   id: string
   project_id: string
+  action_type: string
+  field_changed: string | null
+  old_value: string | null
+  new_value: string | null
+  updated_by: string | null
+  updated_at: string
+  updater?: Profile | null
+}
+
+export type HoldPeriod = {
+  id: string
+  project_id: string
+  started_at: string
+  ended_at: string | null
+  started_by: string | null
+  ended_by: string | null
+  note: string | null
+}
+
+export type SettingsActivityLog = {
+  id: string
   action_type: string
   field_changed: string | null
   old_value: string | null

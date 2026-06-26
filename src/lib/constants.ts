@@ -25,7 +25,6 @@ export const LEVELS_OF_VIDEO = [
   'Level 1',
   'Level 2',
   'Level 3',
-  'Level 4',
 ] as const
 
 export const PRIORITIES = ['High', 'Medium', 'Low'] as const
@@ -53,47 +52,51 @@ export const EXTERNAL_ROLES = ['Agency', 'Zerodha Viewer'] as const
 export const BOARD_FULL_ACCESS_ROLES = ['Admin', 'Internal Team', 'Super Admin'] as const
 
 export const STAGES_INTERNAL = [
-  'Script Received',
-  'Visual Direction',
-  'Video Data Received',
-  'Thumbnail Title Copy Received',
-  'First Cut Received',
-  'First Cut Review',
+  'Video received',
+  'First Cut',
+  'First Cut sent for Review',
+  'Thumbnail Copy + RP Cuts',
   'First Cut Changes',
   'Storyboard',
-  'Thumbnails',
-  'Graphics Creation',
-  'Animation Completion',
-  'Sound',
-  'Premiere',
-  'Video 1st Draft',
-  'Feedback from Zerodha',
+  'Graphics & VD',
+  'Animation & VD',
+  'Video/Thumbnail Review',
   'Final Changes',
-  'Final Delivery Done',
+  'Sound',
+  'Final Delivery',
 ] as const
 
 export const STAGES_EXTERNAL = [
-  'Script Received',
-  'Video Data Received',
-  'Thumbnail Title Copy Received',
-  'First Cut Review',
-  'First Cut Changes',
-  'Video 1st Draft',
-  'Feedback from Zerodha',
-  'Final Delivery Done',
+  'Video received',
+  'First Cut sent for Review',
+  'Thumbnail Copy + RP Cuts',
+  'Video/Thumbnail Review',
+  'Final Delivery',
 ] as const
 
 export const STAGES = STAGES_INTERNAL
 
 export const EXTERNAL_STAGE_ANCHORS: Record<string, string> = {
-  'Script Received': 'Script Received',
-  'Video Data Received': 'Video Data Received',
-  'Thumbnail Title Copy Received': 'Thumbnail Title Copy Received',
-  'First Cut Review': 'First Cut Review',
-  'First Cut Changes': 'First Cut Changes',
-  'Video 1st Draft': 'Video 1st Draft',
-  'Feedback from Zerodha': 'Feedback from Zerodha',
-  'Final Delivery Done': 'Final Delivery Done',
+  'Video received': 'Video received',
+  'First Cut sent for Review': 'First Cut sent for Review',
+  'Thumbnail Copy + RP Cuts': 'Thumbnail Copy + RP Cuts',
+  'Video/Thumbnail Review': 'Video/Thumbnail Review',
+  'Final Delivery': 'Final Delivery',
+}
+
+export const STAGE_ROLE_OWNER: Record<string, string> = {
+  'Video received': 'Internal',
+  'First Cut': 'Editor',
+  'First Cut sent for Review': 'External Team',
+  'Thumbnail Copy + RP Cuts': 'External Team',
+  'First Cut Changes': 'Editor',
+  'Storyboard': 'Writer',
+  'Graphics & VD': 'Designer',
+  'Animation & VD': 'Editor',
+  'Video/Thumbnail Review': 'External Team',
+  'Final Changes': 'Editor',
+  'Sound': 'Sound Designer',
+  'Final Delivery': 'Internal',
 }
 
 export const HEALTH_COLORS: Record<string, string> = {
@@ -118,9 +121,6 @@ const STAGE_COLOR_PALETTE = [
   'bg-lime-500/10 text-lime-400 border border-lime-500/25',
   'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25',
   'bg-teal-500/10 text-teal-400 border border-teal-500/25',
-  'bg-cyan-500/10 text-cyan-400 border border-cyan-500/25',
-  'bg-sky-500/10 text-sky-400 border border-sky-500/25',
-  'bg-blue-500/10 text-blue-400 border border-blue-500/25',
 ]
 
 export const STAGE_COLORS: Record<string, string> = Object.fromEntries(
@@ -130,26 +130,21 @@ export const STAGE_COLORS: Record<string, string> = Object.fromEntries(
 export type StageOwner = 'internal' | 'external' | 'none'
 
 export const STAGE_PIPELINE: Record<string, { owner: StageOwner; label: string }> = {
-  'Script Received':                  { owner: 'internal', label: 'Script intake' },
-  'Visual Direction':                 { owner: 'internal', label: 'Visual direction in progress' },
-  'Video Data Received':              { owner: 'internal', label: 'Video data received' },
-  'Thumbnail Title Copy Received':    { owner: 'internal', label: 'Thumbnail & title copy' },
-  'First Cut Received':               { owner: 'internal', label: 'First cut received' },
-  'First Cut Review':                 { owner: 'external', label: 'First cut review with client' },
+  'Video received':                   { owner: 'internal', label: 'Video received' },
+  'First Cut':                        { owner: 'internal', label: 'First cut in progress' },
+  'First Cut sent for Review':        { owner: 'external', label: 'First cut sent for review' },
+  'Thumbnail Copy + RP Cuts':         { owner: 'external', label: 'Thumbnail copy & RP cuts' },
   'First Cut Changes':                { owner: 'internal', label: 'First cut changes' },
   'Storyboard':                       { owner: 'internal', label: 'Storyboard in progress' },
-  'Thumbnails':                       { owner: 'internal', label: 'Thumbnails in progress' },
-  'Graphics Creation':                { owner: 'internal', label: 'Graphics creation' },
-  'Animation Completion':             { owner: 'internal', label: 'Animation in progress' },
-  'Sound':                            { owner: 'internal', label: 'Sound design & mix' },
-  'Premiere':                         { owner: 'internal', label: 'Premiere export' },
-  'Video 1st Draft':                  { owner: 'internal', label: 'Video 1st draft ready' },
-  'Feedback from Zerodha':            { owner: 'external', label: 'Awaiting client feedback' },
-  'Final Changes':                    { owner: 'internal', label: 'Final changes in progress' },
-  'Final Delivery Done':              { owner: 'none',     label: 'Delivered' },
+  'Graphics & VD':                    { owner: 'internal', label: 'Graphics & visual direction' },
+  'Animation & VD':                   { owner: 'internal', label: 'Animation & visual direction' },
+  'Video/Thumbnail Review':           { owner: 'external', label: 'Video/thumbnail review' },
+  'Final Changes':                    { owner: 'internal', label: 'Final changes' },
+  'Sound':                            { owner: 'internal', label: 'Sound design' },
+  'Final Delivery':                   { owner: 'none',     label: 'Delivered' },
 }
 
-export const FINAL_STAGE = 'Final Delivery Done'
+export const FINAL_STAGE = 'Final Delivery'
 
 export const HEALTH_SCORES: Record<string, number> = {
   'On track': 100,
@@ -165,3 +160,10 @@ export const IP_COLORS: Record<string, string> = Object.fromEntries(
     STAGE_COLOR_PALETTE[i % STAGE_COLOR_PALETTE.length],
   ])
 )
+
+export const DUAL_ASSIGNEE_STAGES = ['Graphics & VD', 'Animation & VD'] as const
+export const FIRST_CUT_STAGE = 'First Cut'
+export const STORYBOARD_STAGE = 'Storyboard'
+export const GRAPHICS_VD_STAGE = 'Graphics & VD'
+export const ANIMATION_VD_STAGE = 'Animation & VD'
+export const VD_PARALLEL_GROUP = 'vd_bundle'

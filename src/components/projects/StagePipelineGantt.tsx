@@ -6,8 +6,16 @@ import {
   addDays, differenceInCalendarDays, eachDayOfInterval, format, isToday, parseISO, startOfDay,
 } from 'date-fns'
 import { CheckCircle2 } from 'lucide-react'
-import { StageHistory } from '@/lib/types'
-import { computeStageDurations, formatDuration, daysInStage } from '@/lib/utils'
+import { StageHistory, HoldPeriod, Project } from '@/lib/types'
+import { computeStageDurations, formatDuration, daysInStage, stageHistoryEntries } from '@/lib/utils'
+import { businessHoursBetweenExcluding, splitBusinessHours } from '@/lib/businessTime'
+import {
+  effectiveStageStartIso,
+  shouldShowParallelAnimationRow,
+  vdParallelStartIso,
+  vdParallelAnchorEntry,
+} from '@/lib/pipeline-parallel'
+import { ANIMATION_VD_STAGE, GRAPHICS_VD_STAGE } from '@/lib/constants'
 import { StageReminderButton } from '@/components/projects/StageReminderButton'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { updateStageHistoryDate } from '@/lib/actions/projects'
@@ -19,6 +27,8 @@ const ROW_MIN_H = 56
 
 type Props = {
   history: StageHistory[]
+  project: Pick<Project, 'level_of_video' | 'editor_id' | 'editor_2_id' | 'designer_id' | 'designer_2_id' | 'uses_teleprompter' | 'is_on_hold'>
+  holdPeriods?: HoldPeriod[]
   currentStage?: string
   projectId: string
   currentAssignee?: string | null
@@ -90,11 +100,54 @@ function barGeometry(start: Date, end: Date, rangeStart: Date, totalDays: number
   return { leftPct, widthPct: Math.min(widthPct, 100 - leftPct) }
 }
 
+function computeBarSegments(
+  barStart: Date,
+  barEnd: Date,
+  holdPeriods: HoldPeriod[],
+): { type: 'active' | 'hold'; start: Date; end: Date }[] {
+  const holds = holdPeriods
+    .map(hp => ({
+      start: parseISO(hp.started_at),
+      end: hp.ended_at ? parseISO(hp.ended_at) : new Date(),
+    }))
+    .filter(h => h.end > barStart && h.start < barEnd)
+    .map(h => ({
+      start: h.start < barStart ? barStart : h.start,
+      end: h.end > barEnd ? barEnd : h.end,
+    }))
+    .sort((a, b) => a.start.getTime() - b.start.getTime())
+
+  if (holds.length === 0) {
+    return [{ type: 'active', start: barStart, end: barEnd }]
+  }
+
+  const segments: { type: 'active' | 'hold'; start: Date; end: Date }[] = []
+  let cursor = barStart
+  for (const hold of holds) {
+    if (hold.start > cursor) {
+      segments.push({ type: 'active', start: cursor, end: hold.start })
+    }
+    segments.push({ type: 'hold', start: hold.start, end: hold.end })
+    cursor = hold.end > cursor ? hold.end : cursor
+  }
+  if (cursor < barEnd) {
+    segments.push({ type: 'active', start: cursor, end: barEnd })
+  }
+  return segments.filter(s => s.end > s.start)
+}
+
+function segmentWidthPct(segStart: Date, segEnd: Date, barStart: Date, barEnd: Date): number {
+  const total = barEnd.getTime() - barStart.getTime()
+  if (total <= 0) return 100
+  return ((segEnd.getTime() - segStart.getTime()) / total) * 100
+}
+
 function GanttBar({
   row,
   canEdit,
   rangeStart,
   totalDays,
+  holdPeriods,
   onSaveStart,
   onSaveEnd,
 }: {
@@ -102,6 +155,7 @@ function GanttBar({
   canEdit: boolean
   rangeStart: Date
   totalDays: number
+  holdPeriods: HoldPeriod[]
   onSaveStart: (dateStr: string) => void
   onSaveEnd: (dateStr: string) => void
 }) {
@@ -118,6 +172,9 @@ function GanttBar({
     : row.isCurrent
       ? 'border-[3px] border-violet-500'
       : 'border-[3px] border-emerald-500'
+
+  const segments = computeBarSegments(displayStart, displayEnd, holdPeriods)
+  const hasHoldGap = segments.some(s => s.type === 'hold')
 
   const startDrag = (mode: DragMode, clientX: number) => {
     if (!canEdit || !trackRef.current) return
@@ -187,8 +244,24 @@ function GanttBar({
           row.isCurrent && !row.overSla && 'ring-1 ring-violet-200'
         )}
         style={{ left: `${leftPct}%`, width: `${Math.max(widthPct, 2)}%` }}
-        title={`${format(displayStart, 'dd MMM')} – ${format(displayEnd, 'dd MMM')} · ${row.durationLabel} · ${statusLabel}`}
+        title={`${format(displayStart, 'dd MMM')} – ${format(displayEnd, 'dd MMM')} · ${row.durationLabel} · ${statusLabel}${hasHoldGap ? ' · includes hold' : ''}`}
       >
+        <div className="absolute inset-0 flex overflow-hidden rounded-[3px]">
+          {segments.map((seg, si) => (
+            <div
+              key={si}
+              className={cn(
+                'h-full shrink-0',
+                seg.type === 'hold'
+                  ? 'bg-zinc-300/70 border-x border-zinc-400/40'
+                  : 'bg-white'
+              )}
+              style={{ width: `${segmentWidthPct(seg.start, seg.end, displayStart, displayEnd)}%` }}
+              title={seg.type === 'hold' ? 'On hold' : undefined}
+            />
+          ))}
+        </div>
+
         {canEdit && (
           <div
             className="absolute inset-y-0 left-0 z-10 w-2 cursor-ew-resize rounded-l-md hover:bg-zinc-200/60"
@@ -198,7 +271,7 @@ function GanttBar({
 
         <div
           className={cn(
-            'flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2',
+            'relative z-[1] flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2',
             canEdit && 'cursor-grab active:cursor-grabbing'
           )}
           onMouseDown={e => {
@@ -234,6 +307,8 @@ function GanttBar({
 
 export function StagePipelineGantt({
   history,
+  project,
+  holdPeriods = [],
   currentStage,
   projectId,
   currentAssignee,
@@ -250,38 +325,37 @@ export function StagePipelineGantt({
     [dateOverrides]
   )
 
-  const sorted = useMemo(
-    () => [...history].sort(
-      (a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime()
-    ),
-    [history]
-  )
+  const stageEntries = useMemo(() => stageHistoryEntries(history), [history])
 
-  const durations = computeStageDurations(history, holidays)
+  const durations = computeStageDurations(history, holidays, holdPeriods)
 
   const stageAssigneeMap = useMemo(() => {
     const map = new Map<string, { name: string; id?: string }>()
-    for (const h of history) {
+    for (const h of stageEntries) {
       if (h.assignee?.name) map.set(h.new_stage, { name: h.assignee.name, id: h.assignee.id })
     }
     return map
-  }, [history])
+  }, [stageEntries])
 
   const { rangeStart, rangeEnd, days, todayOffset, rows, ticks, totalDays } = useMemo(() => {
     const built: Omit<StageRow, 'leftPct' | 'widthPct'>[] = []
 
-    sorted.forEach((entry, i) => {
-      const next = sorted[i + 1]
+    stageEntries.forEach((entry, i) => {
+      const next = stageEntries[i + 1]
       const d = durations[i]
       if (!d) return
 
-      const startIso = resolveDate(entry.id, entry.changed_at)
+      const stage = normalizeStage(entry.new_stage)
+      const effectiveStart = effectiveStageStartIso(stageEntries, entry)
+      const parallelAnchorEntry = stage === ANIMATION_VD_STAGE ? vdParallelAnchorEntry(stageEntries) : null
+      const startIso = parallelAnchorEntry
+        ? resolveDate(parallelAnchorEntry.id, effectiveStart)
+        : resolveDate(entry.id, effectiveStart)
       const endIso = next ? resolveDate(next.id, next.changed_at) : new Date().toISOString()
       const start = startOfDay(parseISO(startIso))
       const endDate = next ? startOfDay(parseISO(endIso)) : startOfDay(new Date())
-      const stage = normalizeStage(entry.new_stage)
       const isCurrent = entry.new_stage === currentStage && !next
-      const overSla = isStageDurationOverSla(stage, d.startedAt, endIso, holidays)
+      const overSla = isStageDurationOverSla(stage, d.startedAt, endIso, holidays, project.level_of_video, project, holdPeriods)
 
       built.push({
         key: entry.id,
@@ -302,6 +376,52 @@ export function StagePipelineGantt({
         ),
         durationLabel: formatDuration(d.days, d.hours),
       })
+
+      if (
+        stage === GRAPHICS_VD_STAGE
+        && shouldShowParallelAnimationRow(stageEntries, currentStage)
+      ) {
+        const parallelStart = vdParallelStartIso(stageEntries)
+        const anchorEntry = vdParallelAnchorEntry(stageEntries)
+        if (parallelStart && anchorEntry) {
+          const animStartIso = resolveDate(anchorEntry.id, parallelStart)
+          const animEndIso = new Date().toISOString()
+          const exclude = holdPeriods.map(p => ({
+            start: parseISO(p.started_at),
+            end: p.ended_at ? parseISO(p.ended_at) : new Date(),
+          }))
+          const animHours = businessHoursBetweenExcluding(
+            parseISO(animStartIso),
+            parseISO(animEndIso),
+            holidays,
+            exclude
+          )
+          const { days: animDays, hours: animHoursPart } = splitBusinessHours(animHours)
+
+          built.push({
+            key: `${entry.id}-parallel-animation`,
+            entryId: anchorEntry.id,
+            startIso: animStartIso,
+            endIso: animEndIso,
+            stage: ANIMATION_VD_STAGE,
+            start: startOfDay(parseISO(animStartIso)),
+            end: startOfDay(new Date()),
+            isCurrent: true,
+            isComplete: false,
+            overSla: isStageDurationOverSla(
+              ANIMATION_VD_STAGE,
+              animStartIso,
+              animEndIso,
+              holidays,
+              project.level_of_video,
+              project,
+              holdPeriods
+            ),
+            assigneeInfo: stageAssigneeMap.get(ANIMATION_VD_STAGE) ?? null,
+            durationLabel: formatDuration(animDays, animHoursPart),
+          })
+        }
+      }
     })
 
     if (built.length === 0) {
@@ -346,9 +466,9 @@ export function StagePipelineGantt({
       ticks: axisTicks(days),
       totalDays,
     }
-  }, [sorted, durations, resolveDate, currentStage, currentAssignee, currentAssigneeId, stageAssigneeMap, holidays])
+  }, [stageEntries, durations, resolveDate, currentStage, currentAssignee, currentAssigneeId, stageAssigneeMap, holidays, project, holdPeriods])
 
-  const latestHistory = sorted[sorted.length - 1]
+  const latestHistory = stageEntries[stageEntries.length - 1]
   const currentStageDays = daysInStage(latestHistory?.changed_at)
   const gridCols = `${LABEL_WIDTH}px minmax(0, 1fr)`
 
@@ -461,6 +581,7 @@ export function StagePipelineGantt({
               canEdit={canEdit}
               rangeStart={rangeStart}
               totalDays={totalDays}
+              holdPeriods={holdPeriods}
               onSaveStart={d => saveDate(row.entryId, d)}
               onSaveEnd={d => row.endEntryId && saveDate(row.endEntryId, d)}
             />
@@ -484,6 +605,11 @@ export function StagePipelineGantt({
             <span className="h-4 w-0.5 bg-violet-600" /> Today
           </span>
           {canEdit && <span className="text-zinc-400">Drag bar to move · edges to resize</span>}
+          {holdPeriods.length > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-4 w-6 rounded bg-zinc-400/30 border border-zinc-400/50" /> Hold
+            </span>
+          )}
         </div>
         {rows.some(r => r.isCurrent) && (
           <StageReminderButton
