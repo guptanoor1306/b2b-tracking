@@ -17,10 +17,11 @@ import { mapInternalToExternalStage } from '@/lib/views'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { getProjectTimeliness, resolveTargetReleaseDate } from '@/lib/timelines'
 import {
-  getTimelinessCardClassV2,
   getTimelinessTextClassV2,
   pipelineProgressPercent,
   getColumnAccent,
+  getIpCardBorderClass,
+  getIpAccent,
 } from '@/lib/design/theme-v2'
 
 const CARD_BASE = 'rounded-xl border bg-white transition-all hover:shadow-md'
@@ -43,14 +44,15 @@ function KanbanCard({
   const t = getProjectTimeliness(project, holidays)
   const target = resolveTargetReleaseDate(project, holidays)
   const progress = pipelineProgressPercent(project.current_stage)
-  const cardClass = getTimelinessCardClassV2(t.status)
+  const cardClass = getIpCardBorderClass(project.ip, project.is_on_hold)
+  const ipAccent = getIpAccent(project.ip)
   const delayClass = getTimelinessTextClassV2(t.status)
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={cn(CARD_BASE, cardClass, 'p-3.5', isDragging && 'opacity-60 scale-[0.98] shadow-lg ring-2 ring-violet-200')}
+      className={cn(CARD_BASE, cardClass, 'p-3.5', isDragging && cn('opacity-60 scale-[0.98] shadow-lg ring-2', ipAccent.ring))}
     >
       <div className="flex gap-2">
         {!readOnly && (
@@ -77,7 +79,10 @@ function KanbanCard({
           <p className="text-[15px] font-bold text-zinc-900 line-clamp-2 leading-snug tracking-tight">
             {project.title}
           </p>
-          <p className="text-xs text-zinc-500 mt-1 truncate font-medium">{project.ip}</p>
+          <p className="text-xs text-zinc-500 mt-1 truncate font-medium inline-flex items-center gap-1.5">
+            <span className={cn('h-2 w-2 shrink-0 rounded-full', ipAccent.bg)} />
+            {project.ip}
+          </p>
 
           <div className="mt-3">
             <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
@@ -385,8 +390,9 @@ export function KanbanBoard({
             {activeProject && (
               <div className={cn(
                 CARD_BASE,
-                getTimelinessCardClassV2(getProjectTimeliness(activeProject, holidays).status),
-                'p-3.5 w-60 shadow-xl ring-2 ring-violet-200'
+                getIpCardBorderClass(activeProject.ip, activeProject.is_on_hold),
+                'p-3.5 w-60 shadow-xl ring-2',
+                getIpAccent(activeProject.ip).ring
               )}>
                 <p className="text-[15px] font-bold text-zinc-900 line-clamp-2">{activeProject.title}</p>
                 <p className="text-xs text-zinc-500 mt-1 font-medium">{activeProject.ip}</p>

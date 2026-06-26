@@ -2,7 +2,8 @@ import {
   FileText, Palette, Film, Image, Music, Scissors, MessageSquare,
   Sparkles, Layers, CheckCircle2, type LucideIcon,
 } from 'lucide-react'
-import { FINAL_STAGE, HEALTH_SCORES, STAGES_INTERNAL } from '@/lib/constants'
+import { FINAL_STAGE, HEALTH_SCORES, STAGES_INTERNAL, VARSITY_IPS } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 
 const STAGE_ICON_MAP: Record<string, LucideIcon> = {
   'Video received': Film,
@@ -99,4 +100,47 @@ export function getColumnAccent(index: number) {
 export function welcomeFirstName(name: string): string {
   const first = name.trim().split(/\s+/)[0]
   return first || name
+}
+
+/** Solid accent colors for IP identification on board cards */
+const IP_ACCENT_PALETTE = [
+  { border: 'border-violet-500', bg: 'bg-violet-500', ring: 'ring-violet-200', pill: 'bg-violet-600 border-violet-600' },
+  { border: 'border-purple-500', bg: 'bg-purple-500', ring: 'ring-purple-200', pill: 'bg-purple-600 border-purple-600' },
+  { border: 'border-pink-500', bg: 'bg-pink-500', ring: 'ring-pink-200', pill: 'bg-pink-600 border-pink-600' },
+  { border: 'border-fuchsia-500', bg: 'bg-fuchsia-500', ring: 'ring-fuchsia-200', pill: 'bg-fuchsia-600 border-fuchsia-600' },
+  { border: 'border-rose-500', bg: 'bg-rose-500', ring: 'ring-rose-200', pill: 'bg-rose-600 border-rose-600' },
+  { border: 'border-orange-500', bg: 'bg-orange-500', ring: 'ring-orange-200', pill: 'bg-orange-600 border-orange-600' },
+  { border: 'border-amber-500', bg: 'bg-amber-500', ring: 'ring-amber-200', pill: 'bg-amber-600 border-amber-600' },
+  { border: 'border-lime-500', bg: 'bg-lime-500', ring: 'ring-lime-200', pill: 'bg-lime-600 border-lime-600' },
+  { border: 'border-emerald-500', bg: 'bg-emerald-500', ring: 'ring-emerald-200', pill: 'bg-emerald-600 border-emerald-600' },
+  { border: 'border-teal-500', bg: 'bg-teal-500', ring: 'ring-teal-200', pill: 'bg-teal-600 border-teal-600' },
+  { border: 'border-cyan-500', bg: 'bg-cyan-500', ring: 'ring-cyan-200', pill: 'bg-cyan-600 border-cyan-600' },
+  { border: 'border-indigo-500', bg: 'bg-indigo-500', ring: 'ring-indigo-200', pill: 'bg-indigo-600 border-indigo-600' },
+] as const
+
+function ipColorIndex(ip: string): number {
+  const known = VARSITY_IPS.indexOf(ip as typeof VARSITY_IPS[number])
+  if (known >= 0) return known % IP_ACCENT_PALETTE.length
+  let hash = 0
+  for (let i = 0; i < ip.length; i++) hash = (hash + ip.charCodeAt(i) * 17) % IP_ACCENT_PALETTE.length
+  return hash
+}
+
+export function getIpAccent(ip: string) {
+  return IP_ACCENT_PALETTE[ipColorIndex(ip)]
+}
+
+export function getIpCardBorderClass(ip: string, muted = false): string {
+  const accent = getIpAccent(ip)
+  return cn(
+    'border-[3px] bg-white shadow-sm',
+    accent.border,
+    muted && 'opacity-90 bg-zinc-50/40'
+  )
+}
+
+export function getIpPillClass(ip: string, active: boolean): string {
+  const accent = getIpAccent(ip)
+  if (active) return cn('text-white', accent.pill)
+  return 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300'
 }

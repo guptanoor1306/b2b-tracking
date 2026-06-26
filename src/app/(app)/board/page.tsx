@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { KanbanBoard } from '@/components/board/KanbanBoard'
 import { BoardAssigneeFilter } from '@/components/board/BoardAssigneeFilter'
+import { BoardIpFilter } from '@/components/board/BoardIpFilter'
 import { BoardHeaderActions } from '@/components/board/BoardHeaderActions'
 import { fetchProjects } from '@/lib/data/projects'
 import { fetchHolidayDates } from '@/lib/data/holidays'
@@ -42,6 +43,8 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   )
   const assigneeUsers = users.filter(u => assigneeIds.has(u.id))
 
+  const boardIps = [...new Set(projects.map(p => p.ip).filter(ip => ip && ip !== '—'))].sort()
+
   let filtered = projects
 
   if (shouldFilterBoardToSelf(profile.role)) {
@@ -69,6 +72,10 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
           <BoardHeaderActions users={users} holidays={holidays} />
         )}
       </div>
+
+      <Suspense fallback={null}>
+        <BoardIpFilter ips={boardIps} matchCount={filtered.length} />
+      </Suspense>
 
       {canSeeBoardAssigneeFilter(profile.role) && (
         <Suspense fallback={null}>
