@@ -1,7 +1,6 @@
 import { Suspense } from 'react'
 import { KanbanBoard } from '@/components/board/KanbanBoard'
-import { BoardAssigneeFilter } from '@/components/board/BoardAssigneeFilter'
-import { BoardIpFilter } from '@/components/board/BoardIpFilter'
+import { BoardFiltersBar } from '@/components/board/BoardFiltersBar'
 import { BoardHeaderActions } from '@/components/board/BoardHeaderActions'
 import { fetchProjects } from '@/lib/data/projects'
 import { fetchHolidayDates } from '@/lib/data/holidays'
@@ -74,18 +73,14 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
       </div>
 
       <Suspense fallback={null}>
-        <BoardIpFilter ips={boardIps} matchCount={filtered.length} />
+        <BoardFiltersBar
+          ips={boardIps}
+          users={assigneeUsers}
+          currentUserId={profile.id}
+          showAssigneeFilter={canSeeBoardAssigneeFilter(profile.role)}
+          matchCount={filtered.length}
+        />
       </Suspense>
-
-      {canSeeBoardAssigneeFilter(profile.role) && (
-        <Suspense fallback={null}>
-          <BoardAssigneeFilter
-            users={assigneeUsers}
-            currentUserId={profile.id}
-            matchCount={filtered.length}
-          />
-        </Suspense>
-      )}
       {shouldFilterBoardToSelf(profile.role) && (
         <p className="text-xs text-zinc-500 mb-3">Showing projects assigned to you</p>
       )}

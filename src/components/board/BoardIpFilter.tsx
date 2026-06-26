@@ -7,9 +7,10 @@ import { getIpAccent, getIpPillClass } from '@/lib/design/theme-v2'
 type Props = {
   ips: string[]
   matchCount?: number
+  embedded?: boolean
 }
 
-export function BoardIpFilter({ ips, matchCount }: Props) {
+export function BoardIpFilter({ ips, matchCount, embedded = false }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const active = searchParams.get('ip') ?? ''
@@ -23,10 +24,10 @@ export function BoardIpFilter({ ips, matchCount }: Props) {
 
   if (ips.length === 0) return null
 
-  return (
-    <div className="mb-4 rounded-xl border border-zinc-200/80 bg-white px-4 py-3 shadow-sm space-y-2">
+  const content = (
+    <>
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mr-1">
+        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mr-1 shrink-0">
           Filter by IP
         </span>
         <button
@@ -61,12 +62,24 @@ export function BoardIpFilter({ ips, matchCount }: Props) {
           )
         })}
       </div>
-      {active && (
+      {!embedded && active && (
         <p className="text-xs text-zinc-500">
           Showing {matchCount ?? 0} project{(matchCount ?? 0) !== 1 ? 's' : ''} in{' '}
           <span className="font-medium text-zinc-700">{active}</span>
         </p>
       )}
+    </>
+  )
+
+  if (embedded) {
+    return ips.length === 0 ? null : (
+      <div className="min-w-0 flex-1 space-y-2">{content}</div>
+    )
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-zinc-200/80 bg-white px-4 py-3 shadow-sm space-y-2">
+      {content}
     </div>
   )
 }

@@ -10,10 +10,12 @@ type Props = {
   currentUserId: string
   showMeShortcut?: boolean
   matchCount?: number
+  embedded?: boolean
+  showDivider?: boolean
 }
 
 export function BoardAssigneeFilter({
-  users, currentUserId, showMeShortcut = true, matchCount,
+  users, currentUserId, showMeShortcut = true, matchCount, embedded = false, showDivider = false,
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -27,10 +29,10 @@ export function BoardAssigneeFilter({
     router.push(`/board?${params.toString()}`)
   }
 
-  return (
-    <div className="mb-4 rounded-xl border border-zinc-200/80 bg-white px-4 py-3 shadow-sm space-y-2">
+  const content = (
+    <>
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mr-1">
+        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mr-1 shrink-0">
           Filter by member
         </span>
         <button
@@ -78,12 +80,29 @@ export function BoardAssigneeFilter({
           </button>
         ))}
       </div>
-      {active && (
+      {!embedded && active && (
         <p className="text-xs text-zinc-500">
           Showing {matchCount ?? 0} project{(matchCount ?? 0) !== 1 ? 's' : ''}
           {activeUser ? ` assigned to ${activeUser.name}` : ''}
         </p>
       )}
+    </>
+  )
+
+  if (embedded) {
+    return (
+      <div className={cn(
+        'min-w-0 flex-1 space-y-2',
+        showDivider && 'lg:border-l lg:border-zinc-100 lg:pl-6'
+      )}>
+        {content}
+      </div>
+    )
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-zinc-200/80 bg-white px-4 py-3 shadow-sm space-y-2">
+      {content}
     </div>
   )
 }
