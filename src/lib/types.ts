@@ -121,6 +121,17 @@ export type ActivityLog = {
   updater?: Profile | null
 }
 
+export type RpCut = {
+  id: string
+  project_id: string
+  sort_order: number
+  timestamps: string | null
+  thumbnail: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type HoldPeriod = {
   id: string
   project_id: string

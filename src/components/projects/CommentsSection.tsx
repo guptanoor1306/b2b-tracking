@@ -24,7 +24,7 @@ function buildTree(comments: Comment[]): CommentNode[] {
   }))
 }
 
-type Props = { projectId: string; comments: Comment[]; canAdd?: boolean; variant?: 'dark' | 'light' }
+type Props = { projectId: string; comments: Comment[]; canAdd?: boolean; variant?: 'dark' | 'light'; compact?: boolean }
 
 function ReplyForm({
   projectId, parentId, onDone, light = false,
@@ -151,7 +151,7 @@ function CommentItem({
   )
 }
 
-export function CommentsSection({ projectId, comments, canAdd = true, variant = 'light' }: Props) {
+export function CommentsSection({ projectId, comments, canAdd = true, variant = 'light', compact = false }: Props) {
   const router = useRouter()
   const { profile } = useAuth()
   const [text, setText] = useState('')
@@ -171,13 +171,16 @@ export function CommentsSection({ projectId, comments, canAdd = true, variant = 
   return (
     <div className="min-w-0 space-y-3">
       {tree.length === 0 && (
-        <div className={cn('flex items-center gap-2 py-4', light ? 'text-zinc-400' : 'text-zinc-600')}>
+        <div className={cn('flex items-center gap-2 py-2', light ? 'text-zinc-400' : 'text-zinc-600')}>
           <MessageSquare size={14} />
-          <p className="text-xs">No comments yet. Start the conversation below.</p>
+          <p className="text-xs">No comments yet.</p>
         </div>
       )}
       {tree.length > 0 && (
-        <div className="max-h-[min(28rem,50vh)] overflow-y-auto overflow-x-hidden pr-1 min-w-0">
+        <div className={cn(
+          'overflow-x-hidden pr-1 min-w-0',
+          compact ? 'space-y-2' : 'max-h-[min(28rem,50vh)] overflow-y-auto',
+        )}>
           <div className="space-y-2 min-w-0">
             {tree.map(node => (
               <CommentItem
@@ -198,7 +201,7 @@ export function CommentsSection({ projectId, comments, canAdd = true, variant = 
             placeholder="Add a comment…"
             value={text}
             onChange={e => setText(e.target.value)}
-            className={cn('min-h-[72px] w-full', light && 'v2-textarea')}
+            className={cn(compact ? 'min-h-[56px]' : 'min-h-[72px]', 'w-full', light && 'v2-textarea')}
           />
           <Button size="sm" loading={loading} onClick={handleAdd} className={cn('h-8', light && 'v2-btn-primary')}>
             Post comment

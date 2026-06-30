@@ -19,6 +19,12 @@
 body {
   background: var(--bg-base);
   color: var(--text-primary);
+  min-width: 0;
+  overflow-x: clip;
+}
+
+html {
+  min-width: 0;
 }
 
 .glow-card {

@@ -1,21 +1,19 @@
 'use client'
 
-import { Project, Profile, StageHistory, Comment, HoldPeriod } from '@/lib/types'
+import { Project, Profile, StageHistory, Comment, HoldPeriod, RpCut } from '@/lib/types'
 import { Button } from '@/components/ui/Button'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
-import { ProjectCopyLinks } from '@/components/projects/ProjectCopyLinks'
+import { ProjectSectionsGrid, pendingContentCount } from '@/components/projects/ProjectSectionsGrid'
 import { ProjectEditModal } from '@/components/projects/ProjectEditModal'
-import { ExternalProjectEditModal } from '@/components/projects/ExternalProjectEditModal'
 import { DeleteProjectButton } from '@/components/projects/DeleteProjectButton'
 import { ProjectHoldButton } from '@/components/projects/ProjectHoldButton'
-import { CommentsSection } from '@/components/projects/CommentsSection'
 import { StagePipelineGantt } from '@/components/projects/StagePipelineGantt'
 import { resolveTargetReleaseDate } from '@/lib/timelines'
 import { formatDate } from '@/lib/utils'
 import {
   healthLabel, HEALTH_PILL_V2, pipelineProgressPercent,
 } from '@/lib/design/theme-v2'
-import { Pencil, AlertCircle, Calendar, Layers, Tag, User } from 'lucide-react'
+import { Pencil } from 'lucide-react'
 import { useState } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -25,6 +23,10 @@ type Props = {
   displayStage: string
   internal: boolean
   canEdit?: boolean
+  canEditLinks?: boolean
+  canEditCopy?: boolean
+  canViewRpCuts?: boolean
+  canEditRpCuts?: boolean
   canSendReminder?: boolean
   holidays?: string[]
   users: Profile[]
@@ -32,36 +34,15 @@ type Props = {
   history: StageHistory[]
   holdPeriods?: HoldPeriod[]
   comments: Comment[]
-}
-
-function ClientAssetNudge({ project, onEdit }: { project: Project; onEdit: () => void }) {
-  const missing = [
-    !project.assets_link?.trim(),
-    !project.title_copy?.trim(),
-    !project.thumbnail_copy?.trim(),
-    !(project.drive_link || project.final_file_link)?.trim(),
-  ].filter(Boolean).length
-
-  if (missing === 0) return null
-
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-      <div className="flex min-w-0 items-start gap-2">
-        <AlertCircle size={16} className="mt-0.5 shrink-0 text-amber-600" />
-        <p className="text-sm text-amber-800">
-          {missing} item{missing !== 1 ? 's' : ''} pending — add links or copy
-        </p>
-      </div>
-      <Button size="sm" variant="secondary" onClick={onEdit} className="v2-btn-secondary shrink-0">
-        Add now
-      </Button>
-    </div>
-  )
+  rpCuts?: RpCut[]
 }
 
 export function ProjectDetailLayout({
-  project, displayStage, internal, canEdit = true, canSendReminder = false,
-  holidays = [], users, graphicsDesigners, history, holdPeriods = [], comments,
+  project, displayStage, internal, canEdit = true,
+  canEditLinks = false, canEditCopy = false,
+  canViewRpCuts = false, canEditRpCuts = false,
+  canSendReminder = false,
+  holidays = [], users, graphicsDesigners, history, holdPeriods = [], comments, rpCuts = [],
 }: Props) {
   const currentAssignee = project.stage_assignee?.name ?? null
   const assigneeId = project.stage_assignee?.id
@@ -70,142 +51,125 @@ export function ProjectDetailLayout({
   const progress = pipelineProgressPercent(project.current_stage)
   const healthPill = HEALTH_PILL_V2[project.status_health] ?? 'bg-zinc-100 text-zinc-600 border-zinc-200'
 
+  const pendingLinks = pendingContentCount(project, { checkLinks: canEditLinks, checkCopy: false })
+  const pendingCopy = pendingContentCount(project, { checkLinks: false, checkCopy: canEditCopy })
+  const showTimeline = history.length > 0
+
   return (
-    <div className="theme-v2 -mx-6 -mt-2 min-h-[calc(100vh-4rem)] w-[calc(100%+3rem)] px-6 pb-10 pt-2">
-      <div className="w-full max-w-none space-y-5">
-        <Link
-          href="/board"
-          className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-violet-600 transition-colors"
-        >
-          ← Back to board
-        </Link>
+    <div className="theme-v2 min-h-0 max-w-full space-y-4 pb-8 pt-1">
+      <Link
+        href="/board"
+        className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-violet-600 transition-colors"
+      >
+        ← Board
+      </Link>
 
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">
-          <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm min-w-0">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                    {project.content_id}
-                  </p>
-                  <h1 className="mt-1 text-xl font-bold tracking-tight text-zinc-900 leading-snug">
-                    {project.title}
-                  </h1>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {internal && (
-                    <span className={cn(
-                      'rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-wide',
-                      healthPill
-                    )}>
-                      {healthLabel(project.status_health)}
-                    </span>
-                  )}
-                  {canEdit && internal && (
-                    <>
-                      <ProjectHoldButton projectId={project.id} isOnHold={!!project.is_on_hold} />
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setEditOpen(true)}
-                        className="v2-btn-secondary h-8"
-                      >
-                        <Pencil size={12} /> Edit
-                      </Button>
-                      {internal && (
-                        <DeleteProjectButton projectId={project.id} projectTitle={project.title} />
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-                <MetaCell label="Assignee" icon={User}>
-                  {currentAssignee && assigneeId ? (
-                    <span className="flex items-center gap-1.5">
-                      <AssigneeAvatar name={currentAssignee} id={assigneeId} size="sm" theme="light" />
-                      <span className="truncate">{currentAssignee}</span>
-                    </span>
-                  ) : 'Unassigned'}
-                </MetaCell>
-                <MetaCell label="Target release" icon={Calendar}>
-                  {targetRelease ? formatDate(targetRelease, 'dd MMM yyyy') : '—'}
-                </MetaCell>
-                <MetaCell label="Current stage" icon={Layers}>
-                  {displayStage}
-                </MetaCell>
-                <MetaCell label="IP · Type" icon={Tag}>
-                  {[project.ip, project.content_type].filter(Boolean).join(' · ') || '—'}
-                </MetaCell>
-                {internal && (
-                  <>
-                    <MetaCell label="Editor">{project.editor ?? '—'}</MetaCell>
-                    <MetaCell label="Start">{formatDate(project.received_date)}</MetaCell>
-                  </>
-                )}
-              </div>
-
-              {internal && (
-                <div className="mt-4 border-t border-zinc-100 pt-3">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-zinc-500">Pipeline progress</span>
-                    <span className="text-xs font-bold text-zinc-900">{progress}%</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
-                    <div
-                      className="h-full rounded-full bg-violet-600"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-          <ProjectCopyLinks project={project} />
-        </div>
-
-        {!internal && (
-          <ClientAssetNudge project={project} onEdit={() => setEditOpen(true)} />
-        )}
-
-        <div className="min-w-0 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-zinc-900">
-              {internal ? 'Activity' : 'Feedback & comments'}
-            </h2>
-            {comments.length > 0 && (
-              <span className="shrink-0 text-xs text-zinc-400">{comments.length} comment{comments.length !== 1 ? 's' : ''}</span>
+      {/* Compact header */}
+      <div className="rounded-xl border border-zinc-200/80 bg-white px-4 py-3 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+              {project.content_id}
+            </span>
+            <h1 className="text-base font-bold leading-snug text-zinc-900 sm:text-lg break-words">
+              {project.title}
+            </h1>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+            {internal && (
+              <span className={cn(
+                'rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+                healthPill,
+              )}>
+                {healthLabel(project.status_health)}
+              </span>
+            )}
+            {canEdit && internal && (
+              <>
+                <ProjectHoldButton projectId={project.id} isOnHold={!!project.is_on_hold} />
+                <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)} className="v2-btn-secondary h-7 text-xs px-2">
+                  <Pencil size={11} /> Edit
+                </Button>
+                <DeleteProjectButton projectId={project.id} projectTitle={project.title} />
+              </>
             )}
           </div>
-          <CommentsSection projectId={project.id} comments={comments} canAdd variant="light" />
         </div>
 
-        {internal && history.length > 0 && (
-          <section className="w-full min-w-0">
-            <div className="mb-4">
-              <h2 className="text-lg font-semibold text-zinc-900">Pipeline timeline</h2>
-              <p className="mt-1 text-sm text-zinc-500">
-                Duration and status on each bar
-                {canEdit && internal ? ' · drag to move dates, edges to resize' : ''}
-              </p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-zinc-400">Assignee</span>
+            {currentAssignee && assigneeId ? (
+              <>
+                <AssigneeAvatar name={currentAssignee} id={assigneeId} size="sm" theme="light" />
+                <span className="font-medium text-zinc-800">{currentAssignee}</span>
+              </>
+            ) : (
+              <span className="text-zinc-400">—</span>
+            )}
+          </span>
+          <span><span className="text-zinc-400">Stage</span> <span className="font-medium text-zinc-800">{displayStage}</span></span>
+          <span><span className="text-zinc-400">Release</span> <span className="font-medium text-zinc-800">{targetRelease ? formatDate(targetRelease, 'dd MMM yyyy') : '—'}</span></span>
+          <span><span className="text-zinc-400">IP</span> <span className="font-medium text-zinc-800">{project.ip}{project.content_type ? ` · ${project.content_type}` : ''}</span></span>
+          {internal && project.editor && (
+            <span><span className="text-zinc-400">Editor</span> <span className="font-medium text-zinc-800">{project.editor}</span></span>
+          )}
+        </div>
+
+        {internal && (
+          <div className="mt-2.5 flex items-center gap-3">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-100">
+              <div className="h-full rounded-full bg-violet-600 transition-all" style={{ width: `${progress}%` }} />
             </div>
-            <StagePipelineGantt
-              history={history}
-              holdPeriods={holdPeriods}
-              project={project}
-              currentStage={project.current_stage}
-              projectId={project.id}
-              currentAssignee={currentAssignee}
-              currentAssigneeId={assigneeId}
-              canSendReminder={canSendReminder && internal}
-              canEdit={canEdit && internal}
-              holidays={holidays}
-            />
-          </section>
+            <span className="shrink-0 text-[10px] font-semibold tabular-nums text-zinc-500">{progress}%</span>
+          </div>
+        )}
+
+        {(pendingLinks > 0 || pendingCopy > 0) && (
+          <p className="mt-2 text-[11px] text-amber-700">
+            {pendingLinks + pendingCopy} field{pendingLinks + pendingCopy !== 1 ? 's' : ''} pending below
+          </p>
         )}
       </div>
 
-      {internal ? (
+      <ProjectSectionsGrid
+        project={project}
+        comments={comments}
+        rpCuts={rpCuts}
+        canEditLinks={canEditLinks}
+        canEditCopy={canEditCopy}
+        canViewRpCuts={canViewRpCuts}
+        canEditRpCuts={canEditRpCuts}
+      />
+
+      {showTimeline && (
+        <section className="w-full min-w-0 overflow-x-auto">
+          <div className="mb-3">
+            <h2 className="text-base font-semibold text-zinc-900">Pipeline timeline</h2>
+            {!internal && (
+              <p className="mt-0.5 text-xs text-zinc-500">Your view of production stages</p>
+            )}
+            {internal && canEdit && (
+              <p className="mt-0.5 text-xs text-zinc-500">Drag to move dates · resize edges</p>
+            )}
+          </div>
+          <StagePipelineGantt
+            history={history}
+            holdPeriods={holdPeriods}
+            project={project}
+            currentStage={project.current_stage}
+            projectId={project.id}
+            currentAssignee={currentAssignee}
+            currentAssigneeId={assigneeId}
+            canSendReminder={canSendReminder && internal}
+            canEdit={canEdit && internal}
+            holidays={holidays}
+            externalView={!internal}
+          />
+        </section>
+      )}
+
+      {internal && (
         <ProjectEditModal
           open={editOpen}
           onClose={() => setEditOpen(false)}
@@ -213,33 +177,7 @@ export function ProjectDetailLayout({
           users={users}
           holidays={holidays}
         />
-      ) : (
-        <ExternalProjectEditModal
-          open={editOpen}
-          onClose={() => setEditOpen(false)}
-          project={project}
-        />
       )}
-    </div>
-  )
-}
-
-function MetaCell({
-  label,
-  children,
-  icon: Icon,
-}: {
-  label: string
-  children: React.ReactNode
-  icon?: typeof Calendar
-}) {
-  return (
-    <div>
-      <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
-        {Icon && <Icon size={10} />}
-        {label}
-      </p>
-      <div className="mt-0.5 text-xs font-medium text-zinc-800">{children}</div>
     </div>
   )
 }

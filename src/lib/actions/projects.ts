@@ -13,6 +13,7 @@ import {
   canChangeStages,
   canSendStageReminder,
   isChannelAdmin,
+  canEditRpCuts,
 } from '@/lib/views'
 import { FIRST_CUT_STAGE } from '@/lib/constants'
 import { normalizeStage } from '@/lib/timelines'
@@ -187,13 +188,15 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
   if (!existing) return { error: 'Project not found' }
 
   const isInternal = isInternalRole(session.role)
-  const isExternal = !isInternal
 
-  if (isExternal) {
-    const allowed = [
-      'drive_link', 'assets_link', 'thumbnail_copy', 'title_copy',
-      'final_file_link', 'notes', 'blocker', 'next_action', 'next_action_due_date',
-    ]
+  if (!isInternal) {
+    const shared = ['notes', 'blocker', 'next_action', 'next_action_due_date']
+    const allowed =
+      session.role === 'Agency'
+        ? ['drive_link', 'assets_link', 'final_file_link', ...shared]
+        : session.role === 'Zerodha Viewer'
+          ? ['thumbnail_copy', 'title_copy', ...shared]
+          : []
     const keys = Object.keys(input)
     if (keys.some(k => !allowed.includes(k))) return { error: 'Cannot edit this field' }
   }
@@ -657,5 +660,54 @@ export async function toggleProjectHold(projectId: string, note?: string) {
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/board')
   revalidatePath('/dashboard')
+  return { success: true }
+}
+
+export type RpCutInput = { id?: string; timestamps: string; thumbnail: string }
+
+export async function saveRpCuts(projectId: string, cuts: RpCutInput[]) {
+  const session = await getSessionEffectiveRole()
+  if (!session || !canEditRpCuts(session.role)) {
+    return { error: 'Unauthorized' }
+  }
+  if (cuts.length > 10) return { error: 'Maximum 10 RP cuts allowed' }
+
+  const supabase = await createClient()
+  const { profile } = session
+
+  const { data: existing } = await supabase
+    .from('project_rp_cuts')
+    .select('id')
+    .eq('project_id', projectId)
+
+  const existingIds = new Set((existing ?? []).map(r => r.id))
+  const keptIds = new Set(cuts.filter(c => c.id).map(c => c.id!))
+
+  const toDelete = [...existingIds].filter(id => !keptIds.has(id))
+  if (toDelete.length) {
+    await supabase.from('project_rp_cuts').delete().in('id', toDelete)
+  }
+
+  for (let i = 0; i < cuts.length; i++) {
+    const cut = cuts[i]
+    const row = {
+      project_id: projectId,
+      sort_order: i,
+      timestamps: cut.timestamps.trim() || null,
+      thumbnail: cut.thumbnail.trim() || null,
+      updated_at: new Date().toISOString(),
+    }
+
+    if (cut.id && existingIds.has(cut.id)) {
+      await supabase.from('project_rp_cuts').update(row).eq('id', cut.id)
+    } else {
+      await supabase.from('project_rp_cuts').insert({
+        ...row,
+        created_by: profile.id,
+      })
+    }
+  }
+
+  revalidatePath(`/projects/${projectId}`)
   return { success: true }
 }

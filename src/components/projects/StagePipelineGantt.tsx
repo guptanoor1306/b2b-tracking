@@ -20,6 +20,7 @@ import { StageReminderButton } from '@/components/projects/StageReminderButton'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { updateStageHistoryDate } from '@/lib/actions/projects'
 import { isStageDurationOverSla, normalizeStage, isProjectTimelineLocked } from '@/lib/timelines'
+import { mapInternalToExternalStage } from '@/lib/views'
 import { cn } from '@/lib/utils'
 
 const LABEL_WIDTH = 220
@@ -36,6 +37,7 @@ type Props = {
   canSendReminder?: boolean
   canEdit?: boolean
   holidays?: string[]
+  externalView?: boolean
 }
 
 type StageRow = {
@@ -305,6 +307,37 @@ function GanttBar({
   )
 }
 
+function collapseRowsForExternalView(
+  rows: Omit<StageRow, 'leftPct' | 'widthPct'>[],
+  currentStage: string | undefined,
+): Omit<StageRow, 'leftPct' | 'widthPct'>[] {
+  const filtered = rows.filter(r => !r.key.includes('-parallel-animation'))
+  const currentExt = currentStage ? mapInternalToExternalStage(currentStage) : ''
+  const collapsed: Omit<StageRow, 'leftPct' | 'widthPct'>[] = []
+
+  for (const row of filtered) {
+    const extStage = mapInternalToExternalStage(row.stage)
+    const last = collapsed[collapsed.length - 1]
+    if (last && last.stage === extStage) {
+      if (row.end > last.end) {
+        last.end = row.end
+        last.endIso = row.endIso
+        last.endEntryId = row.endEntryId
+      }
+      last.isComplete = last.isComplete && row.isComplete
+      last.overSla = last.overSla || row.overSla
+      if (row.isCurrent) last.isCurrent = true
+    } else {
+      collapsed.push({ ...row, stage: extStage, isCurrent: false })
+    }
+  }
+
+  for (const row of collapsed) {
+    row.isCurrent = row.stage === currentExt
+  }
+  return collapsed
+}
+
 export function StagePipelineGantt({
   history,
   project,
@@ -316,6 +349,7 @@ export function StagePipelineGantt({
   canSendReminder,
   canEdit = false,
   holidays = [],
+  externalView = false,
 }: Props) {
   const router = useRouter()
   const [dateOverrides, setDateOverrides] = useState<Record<string, string>>({})
@@ -427,7 +461,11 @@ export function StagePipelineGantt({
       }
     })
 
-    if (built.length === 0) {
+    const finalBuilt = externalView
+      ? collapseRowsForExternalView(built, currentStage)
+      : built
+
+    if (finalBuilt.length === 0) {
       const today = startOfDay(new Date())
       return {
         rangeStart: today,
@@ -440,9 +478,9 @@ export function StagePipelineGantt({
       }
     }
 
-    let min = built[0].start
-    let max = built[0].end
-    for (const r of built) {
+    let min = finalBuilt[0].start
+    let max = finalBuilt[0].end
+    for (const r of finalBuilt) {
       if (r.start < min) min = r.start
       if (r.end > max) max = r.end
     }
@@ -455,7 +493,7 @@ export function StagePipelineGantt({
     const todayIdx = differenceInCalendarDays(today, rangeStart)
     const todayOffset = todayIdx >= 0 && todayIdx < totalDays ? (todayIdx / totalDays) * 100 : null
 
-    const rows: StageRow[] = built.map(r => {
+    const rows: StageRow[] = finalBuilt.map(r => {
       const { leftPct, widthPct } = barGeometry(r.start, r.end, rangeStart, totalDays)
       return { ...r, leftPct, widthPct }
     })
@@ -469,7 +507,7 @@ export function StagePipelineGantt({
       ticks: axisTicks(days),
       totalDays,
     }
-  }, [stageEntries, durations, resolveDate, currentStage, currentAssignee, currentAssigneeId, stageAssigneeMap, holidays, project, holdPeriods])
+  }, [stageEntries, durations, resolveDate, currentStage, currentAssignee, currentAssigneeId, stageAssigneeMap, holidays, project, holdPeriods, externalView, timelineLocked])
 
   const latestHistory = stageEntries[stageEntries.length - 1]
   const currentStageDays = daysInStage(latestHistory?.changed_at)

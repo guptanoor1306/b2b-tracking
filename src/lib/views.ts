@@ -112,6 +112,22 @@ export function canSendStageReminder(role: Role | string): boolean {
   return role === 'Channel Admin' || role === 'Channel Team' || isSuperAdmin(role)
 }
 
+export function canEditProjectLinks(role: Role | string): boolean {
+  return isInternalRole(role) || role === 'Agency'
+}
+
+export function canEditProjectCopy(role: Role | string): boolean {
+  return role === 'Zerodha Viewer'
+}
+
+export function canViewRpCuts(role: Role | string): boolean {
+  return isInternalRole(role) || role === 'Agency' || role === 'Zerodha Viewer'
+}
+
+export function canEditRpCuts(role: Role | string): boolean {
+  return role === 'Zerodha Viewer'
+}
+
 export function canSeeBoardAssigneeFilter(role: Role | string): boolean {
   return (BOARD_FULL_ACCESS_ROLES as readonly string[]).includes(role)
 }
