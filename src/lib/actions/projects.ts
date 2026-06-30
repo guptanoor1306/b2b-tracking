@@ -26,6 +26,7 @@ import {
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { notifyProjectTeamOnCreate, notifyStageActionable } from '@/lib/email/notifications'
 import { isEmailConfigured, sendEmail } from '@/lib/email/send'
+import { insertStageHistoryRecord } from '@/lib/data/stage-history'
 import { Project } from '@/lib/types'
 
 async function getSessionEffectiveRole() {
@@ -158,7 +159,7 @@ export async function createProject(input: ProjectInput) {
 
   if (error) return { error: error.message }
 
-  await supabase.from('stage_history').insert({
+  const historyResult = await insertStageHistoryRecord({
     project_id: data.id,
     old_stage: null,
     new_stage: initialStage,
@@ -167,6 +168,9 @@ export async function createProject(input: ProjectInput) {
     note: 'Project created',
     is_hold_event: false,
   })
+  if (historyResult.error) {
+    console.error('stage_history insert failed:', historyResult.error)
+  }
 
   const { data: created } = await supabase.from('projects').select('*').eq('id', data.id).single()
   if (created) {
@@ -332,7 +336,7 @@ export async function changeProjectStage(
   const { error } = await supabase.from('projects').update(updates).eq('id', projectId)
   if (error) return { error: error.message }
 
-  await supabase.from('stage_history').insert({
+  const historyResult = await insertStageHistoryRecord({
     project_id: projectId,
     old_stage: oldStage,
     new_stage: newStage,
@@ -341,6 +345,7 @@ export async function changeProjectStage(
     note: note ?? null,
     is_hold_event: false,
   })
+  if (historyResult.error) return { error: `Stage history failed: ${historyResult.error}` }
 
   await logActivity(projectId, profile.id, 'stage_change', 'current_stage', oldStage, newStage)
 
@@ -611,7 +616,7 @@ export async function toggleProjectHold(projectId: string, note?: string) {
       updated_by: profile.id,
     }).eq('id', projectId)
 
-    await supabase.from('stage_history').insert({
+    await insertStageHistoryRecord({
       project_id: projectId,
       old_stage: project.current_stage,
       new_stage: project.current_stage,
@@ -636,7 +641,7 @@ export async function toggleProjectHold(projectId: string, note?: string) {
       updated_by: profile.id,
     }).eq('id', projectId)
 
-    await supabase.from('stage_history').insert({
+    await insertStageHistoryRecord({
       project_id: projectId,
       old_stage: project.current_stage,
       new_stage: project.current_stage,

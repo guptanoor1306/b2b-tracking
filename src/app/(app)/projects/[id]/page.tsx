@@ -18,6 +18,7 @@ import {
 } from '@/lib/views'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig, fetchProjectHoldPeriods } from '@/lib/data/stage-sla'
+import { fetchProjectStageHistory } from '@/lib/data/stage-history'
 import { setStageSlaCache } from '@/lib/timelines'
 import { Comment } from '@/lib/types'
 
@@ -40,12 +41,8 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
   const role = effectiveRoleForChannel(channelRole, profile.role)
   const internal = isInternalRole(role)
 
-  const [historyRes, usersRes, commentsRes, holidays, stageSla, holdPeriods, rpCuts] = await Promise.all([
-    supabase
-      .from('stage_history')
-      .select('*, assignee:profiles!stage_history_assignee_id_fkey(id, name, email)')
-      .eq('project_id', id)
-      .order('changed_at', { ascending: true }),
+  const [history, usersRes, commentsRes, holidays, stageSla, holdPeriods, rpCuts] = await Promise.all([
+    fetchProjectStageHistory(id, project),
     internal
       ? supabase.from('profiles').select('*').eq('is_active', true).order('name')
       : Promise.resolve({ data: [] }),
@@ -75,7 +72,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       holidays={holidays}
       users={users}
       graphicsDesigners={graphicsDesigners.length ? graphicsDesigners : users}
-      history={historyRes.data ?? []}
+      history={history}
       holdPeriods={holdPeriods}
       comments={(commentsRes.data ?? []) as Comment[]}
       rpCuts={rpCuts}

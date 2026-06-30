@@ -53,7 +53,6 @@ export function ProjectDetailLayout({
 
   const pendingLinks = pendingContentCount(project, { checkLinks: canEditLinks, checkCopy: false })
   const pendingCopy = pendingContentCount(project, { checkLinks: false, checkCopy: canEditCopy })
-  const showTimeline = history.length > 0
 
   return (
     <div className="theme-v2 min-h-0 max-w-full space-y-4 pb-8 pt-1">
@@ -142,8 +141,7 @@ export function ProjectDetailLayout({
         canEditRpCuts={canEditRpCuts}
       />
 
-      {showTimeline && (
-        <section className="w-full min-w-0 overflow-x-auto">
+      <section className="w-full min-w-0 overflow-x-auto">
           <div className="mb-3">
             <h2 className="text-base font-semibold text-zinc-900">Pipeline timeline</h2>
             {!internal && (
@@ -167,7 +165,6 @@ export function ProjectDetailLayout({
             externalView={!internal}
           />
         </section>
-      )}
 
       {internal && (
         <ProjectEditModal
