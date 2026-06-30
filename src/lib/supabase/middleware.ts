@@ -36,7 +36,12 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   const publicPaths = ['/login']
-  if (!user && !publicPaths.includes(pathname)) {
+  const publicPrefixes = ['/api/cron/', '/api/dev/']
+  const isPublic =
+    publicPaths.includes(pathname) ||
+    publicPrefixes.some(prefix => pathname.startsWith(prefix))
+
+  if (!user && !isPublic) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

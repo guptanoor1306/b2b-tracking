@@ -25,6 +25,7 @@ import {
 } from '@/lib/timelines'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { notifyProjectTeamOnCreate, notifyStageActionable } from '@/lib/email/notifications'
+import { isEmailConfigured, sendEmail } from '@/lib/email/send'
 import { Project } from '@/lib/types'
 
 async function getSessionEffectiveRole() {
@@ -520,27 +521,17 @@ export async function sendStageReminder(projectId: string) {
   const body = `Hi ${assignee.name},\n\nYour work on "${project.title}" at stage "${project.current_stage}" has been pending for ${waitingDays} day(s).\n\nPlease review: ${process.env.NEXT_PUBLIC_APP_URL ?? ''}/projects/${projectId}\n`
 
   let emailSent = false
-  const resendKey = process.env.RESEND_API_KEY
-  const fromEmail = process.env.REMINDER_FROM_EMAIL ?? 'learnappstudios@learnapp.com'
 
-  if (resendKey) {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: assignee.email,
-        subject,
-        text: body,
-      }),
+  if (isEmailConfigured()) {
+    const result = await sendEmail({
+      to: assignee.email,
+      subject,
+      text: body,
+      html: body.replace(/\n/g, '<br>'),
     })
-    emailSent = res.ok
-    if (!res.ok) {
-      const err = await res.text()
-      return { error: `Email failed: ${err}` }
+    emailSent = result.sent
+    if (!result.sent) {
+      return { error: `Email failed: ${result.error ?? 'unknown error'}` }
     }
   }
 
@@ -559,7 +550,7 @@ export async function sendStageReminder(projectId: string) {
     emailSent,
     message: emailSent
       ? `Reminder emailed to ${assignee.name}`
-      : `Reminder logged for ${assignee.name} (set RESEND_API_KEY to enable email)`,
+      : `Reminder logged for ${assignee.name} (set SENDGRID_API_KEY or RESEND_API_KEY to enable email)`,
   }
 }
 
