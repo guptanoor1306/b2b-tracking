@@ -30,26 +30,39 @@ export const LEVELS_OF_VIDEO = [
 export const PRIORITIES = ['High', 'Medium', 'Low'] as const
 
 export const ROLES = [
-  'Admin',
-  'Internal Team',
+  'Channel Admin',
+  'Channel Team',
   'Agency',
   'Zerodha Viewer',
   'Super Admin',
 ] as const
 
+/** Roles assignable per channel (not Super Admin) */
+export const CHANNEL_MEMBER_ROLES = [
+  'Channel Admin',
+  'Channel Team',
+  'Agency',
+  'Zerodha Viewer',
+] as const
+
+export const GLOBAL_ROLES = ['Super Admin', 'Member'] as const
+
 export const ROLE_LABELS: Record<string, string> = {
-  'Admin': 'LearnApp Admin',
-  'Internal Team': 'LearnApp Team',
+  'Channel Admin': 'Channel Admin',
+  'Channel Team': 'Channel Team',
   'Agency': 'External Agency',
   'Zerodha Viewer': 'External Client',
-  'Super Admin': 'LearnApp Super Admin',
+  'Super Admin': 'Super Admin',
+  'Member': 'Member',
 }
 
 export const SUPER_ADMIN_ROLES = ['Super Admin'] as const
-export const ADMIN_ROLES = ['Admin', 'Super Admin'] as const
-export const INTERNAL_ROLES = ['Admin', 'Internal Team', 'Super Admin'] as const
+export const CHANNEL_ADMIN_ROLES = ['Channel Admin', 'Super Admin'] as const
+/** @deprecated use CHANNEL_ADMIN_ROLES */
+export const ADMIN_ROLES = CHANNEL_ADMIN_ROLES
+export const INTERNAL_ROLES = ['Channel Admin', 'Channel Team', 'Super Admin'] as const
 export const EXTERNAL_ROLES = ['Agency', 'Zerodha Viewer'] as const
-export const BOARD_FULL_ACCESS_ROLES = ['Admin', 'Internal Team', 'Super Admin'] as const
+export const BOARD_FULL_ACCESS_ROLES = ['Channel Admin', 'Channel Team', 'Super Admin'] as const
 
 export const STAGES_INTERNAL = [
   'Video received',

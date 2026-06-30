@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getSessionProfile } from '@/lib/auth'
+import { getActiveChannelRole } from '@/lib/channel-context'
 import { fetchProjects } from '@/lib/data/projects'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig } from '@/lib/data/stage-sla'
@@ -9,9 +10,8 @@ import { ExternalDashboard } from '@/components/dashboard/ExternalDashboard'
 import { currentMonth, isDateInMonth } from '@/lib/utils'
 import { FINAL_STAGE } from '@/lib/constants'
 import {
-  usesActionItemsDashboard,
-  usesFullAdminDashboard,
-  usesIpOverviewDashboard,
+  usesActionItemsDashboardForChannel,
+  usesFullAdminDashboardForChannel,
 } from '@/lib/views'
 
 type SearchParams = Promise<Record<string, string | undefined>>
@@ -20,10 +20,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const profile = await getSessionProfile()
   if (!profile) redirect('/login')
 
-  if (usesIpOverviewDashboard(profile.role)) {
-    redirect('/ip-overview')
-  }
-
   const [projects, holidays, stageSla] = await Promise.all([
     fetchProjects(),
     fetchHolidayDates(),
@@ -31,7 +27,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   ])
   setStageSlaCache(stageSla)
 
-  if (usesActionItemsDashboard(profile.role)) {
+  const channelRole = await getActiveChannelRole(profile)
+
+  if (usesActionItemsDashboardForChannel(channelRole)) {
     return (
       <ExternalDashboard
         projects={projects}
@@ -42,7 +40,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
     )
   }
 
-  if (!usesFullAdminDashboard(profile.role)) {
+  if (!usesFullAdminDashboardForChannel(channelRole, profile.role)) {
     redirect('/board')
   }
 

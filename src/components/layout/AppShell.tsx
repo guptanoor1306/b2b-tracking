@@ -1,11 +1,16 @@
 'use client'
 
 import { useAuth } from '@/context/AuthContext'
+import { ChannelProvider } from '@/context/ChannelContext'
 import { SidebarProvider } from '@/context/SidebarContext'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
+import { StudioChannel } from '@/lib/channels'
+import { ChannelMemberRole } from '@/lib/types'
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children, activeChannel, channelRole,
+}: { children: React.ReactNode; activeChannel: StudioChannel; channelRole: ChannelMemberRole | null }) {
   const { loading } = useAuth()
 
   if (loading) {
@@ -20,14 +25,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <SidebarProvider>
-      <div className="flex h-screen overflow-hidden bg-zinc-100">
-        <Sidebar />
-        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <Topbar />
-          <main className="flex-1 overflow-y-auto p-6 bg-zinc-100">{children}</main>
+    <ChannelProvider channel={activeChannel} channelRole={channelRole}>
+      <SidebarProvider>
+        <div className="flex h-screen overflow-hidden bg-zinc-100">
+          <Sidebar />
+          <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+            <Topbar />
+            <main className="flex-1 overflow-y-auto p-6 bg-zinc-100">{children}</main>
+          </div>
         </div>
-      </div>
-    </SidebarProvider>
+      </SidebarProvider>
+    </ChannelProvider>
   )
 }

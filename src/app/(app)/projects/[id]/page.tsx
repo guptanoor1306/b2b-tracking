@@ -2,12 +2,14 @@ import { notFound, redirect } from 'next/navigation'
 import { fetchProjectById } from '@/lib/data/projects'
 import { createClient } from '@/lib/supabase/server'
 import { getSessionProfile } from '@/lib/auth'
+import { getActiveChannelRole } from '@/lib/channel-context'
 import { ProjectDetailLayout } from '@/components/projects/ProjectDetailLayout'
 import {
   isInternalRole,
   mapInternalToExternalStage,
   canEditProjects,
   canSendStageReminder,
+  effectiveRoleForChannel,
 } from '@/lib/views'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig, fetchProjectHoldPeriods } from '@/lib/data/stage-sla'
@@ -29,7 +31,9 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
   }
 
   const supabase = await createClient()
-  const internal = isInternalRole(profile.role)
+  const channelRole = await getActiveChannelRole(profile)
+  const role = effectiveRoleForChannel(channelRole, profile.role)
+  const internal = isInternalRole(role)
 
   const [historyRes, usersRes, commentsRes, holidays, stageSla, holdPeriods] = await Promise.all([
     internal
@@ -58,8 +62,8 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       project={project}
       displayStage={displayStage}
       internal={internal}
-      canEdit={canEditProjects(profile.role)}
-      canSendReminder={canSendStageReminder(profile.role)}
+      canEdit={canEditProjects(role)}
+      canSendReminder={canSendStageReminder(role)}
       holidays={holidays}
       users={users}
       graphicsDesigners={graphicsDesigners.length ? graphicsDesigners : users}

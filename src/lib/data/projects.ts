@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { Project, Profile } from '@/lib/types'
 import { calcHealth } from '@/lib/utils'
-import { CHANNEL, FINAL_STAGE } from '@/lib/constants'
+import { FINAL_STAGE } from '@/lib/constants'
+import { getActiveChannelDbName } from '@/lib/channel-context'
 import { computeProjectHealth } from '@/lib/timelines'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 
@@ -24,12 +25,24 @@ const PROJECT_SELECT = `
   stage_assignee:profiles!projects_stage_assignee_id_fkey(id, name, email)
 `
 
+export async function fetchAllProjects(): Promise<Project[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('projects')
+    .select(PROJECT_SELECT)
+    .order('updated_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as Project[]
+}
+
 export async function fetchProjects(filters: ProjectFilters = {}): Promise<Project[]> {
   const supabase = await createClient()
+  const channel = await getActiveChannelDbName()
   let query = supabase
     .from('projects')
     .select(PROJECT_SELECT)
-    .eq('channel', CHANNEL)
+    .eq('channel', channel)
     .order('updated_at', { ascending: false })
 
   if (filters.ip) query = query.eq('ip', filters.ip)
@@ -65,10 +78,12 @@ export async function fetchProjects(filters: ProjectFilters = {}): Promise<Proje
 
 export async function fetchProjectById(id: string) {
   const supabase = await createClient()
+  const channel = await getActiveChannelDbName()
   const { data, error } = await supabase
     .from('projects')
     .select(PROJECT_SELECT)
     .eq('id', id)
+    .eq('channel', channel)
     .single()
   if (error) throw error
   return data as Project

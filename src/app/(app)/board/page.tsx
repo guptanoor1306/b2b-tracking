@@ -8,6 +8,7 @@ import { fetchStageSlaConfig } from '@/lib/data/stage-sla'
 import { setStageSlaCache } from '@/lib/timelines'
 import { createClient } from '@/lib/supabase/server'
 import { getSessionProfile } from '@/lib/auth'
+import { getActiveChannelRole } from '@/lib/channel-context'
 import { redirect } from 'next/navigation'
 import { STAGES_INTERNAL, STAGES_EXTERNAL } from '@/lib/constants'
 import {
@@ -16,7 +17,9 @@ import {
   shouldFilterBoardToSelf,
   filterProjectsByAssignee,
   canChangeStages,
+  effectiveRoleForChannel,
 } from '@/lib/views'
+import { filterProjectsByTeamMembership } from '@/lib/projects/team'
 
 type SearchParams = Promise<Record<string, string | undefined>>
 
@@ -34,8 +37,10 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   ])
   setStageSlaCache(stageSla)
 
+  const channelRole = await getActiveChannelRole(profile)
+  const role = effectiveRoleForChannel(channelRole, profile.role)
   const users = usersRes.data ?? []
-  const internal = isInternalRole(profile.role)
+  const internal = isInternalRole(role)
 
   const assigneeIds = new Set(
     projects.map(p => p.stage_assignee_id).filter((id): id is string => Boolean(id))
@@ -45,9 +50,10 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   const boardIps = [...new Set(projects.map(p => p.ip).filter(ip => ip && ip !== '—'))].sort()
 
   let filtered = projects
+  const teamBoard = shouldFilterBoardToSelf(role)
 
-  if (shouldFilterBoardToSelf(profile.role)) {
-    filtered = filterProjectsByAssignee(filtered, profile.id)
+  if (teamBoard) {
+    filtered = filterProjectsByTeamMembership(filtered, profile.id)
   } else if (params.assignee) {
     filtered = filterProjectsByAssignee(filtered, params.assignee)
   }
@@ -67,7 +73,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
             {filtered.length} project{filtered.length !== 1 ? 's' : ''} · drag cards to update stages
           </p>
         </div>
-        {canChangeStages(profile.role) && (
+        {canChangeStages(role) && (
           <BoardHeaderActions users={users} holidays={holidays} />
         )}
       </div>
@@ -77,12 +83,12 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
           ips={boardIps}
           users={assigneeUsers}
           currentUserId={profile.id}
-          showAssigneeFilter={canSeeBoardAssigneeFilter(profile.role)}
+          showAssigneeFilter={canSeeBoardAssigneeFilter(role)}
           matchCount={filtered.length}
         />
       </Suspense>
-      {shouldFilterBoardToSelf(profile.role) && (
-        <p className="text-xs text-zinc-500 mb-3">Showing projects assigned to you</p>
+      {teamBoard && (
+        <p className="text-xs text-zinc-500 mb-3">Showing projects you&apos;re assigned to</p>
       )}
       <KanbanBoard
         key={boardKey}
@@ -90,8 +96,10 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         users={users}
         holidays={holidays}
         stages={internal ? STAGES_INTERNAL : STAGES_EXTERNAL}
-        readOnly={!canChangeStages(profile.role)}
+        readOnly={!canChangeStages(role)}
         externalView={!internal}
+        viewerUserId={profile.id}
+        teamBoardView={teamBoard}
       />
     </div>
   )

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Profile } from '@/lib/types'
+import { ChannelMember } from '@/lib/types'
 import { OrgHoliday } from '@/lib/data/holidays'
 import { UsersClient } from '@/components/users/UsersClient'
 import { HolidaysSettings } from '@/components/settings/HolidaysSettings'
@@ -14,9 +14,12 @@ import { SettingsActivityLog } from '@/lib/types'
 type Tab = 'users' | 'holidays' | 'timelines'
 
 type Props = {
-  users: Profile[]
+  members: ChannelMember[]
+  channelSlug: string
+  channelName: string
   holidays: OrgHoliday[]
   currentUserId: string
+  canManageRoles: boolean
   stageSla: StageSlaRow[]
   slaActivity: SettingsActivityLog[]
 }
@@ -47,7 +50,9 @@ const TABS: {
   },
 ]
 
-export function SettingsClient({ users, holidays, currentUserId, stageSla, slaActivity }: Props) {
+export function SettingsClient({
+  members, channelSlug, channelName, holidays, currentUserId, canManageRoles, stageSla, slaActivity,
+}: Props) {
   const [tab, setTab] = useState<Tab>('users')
   const activeTab = TABS.find(t => t.id === tab)!
 
@@ -57,7 +62,7 @@ export function SettingsClient({ users, holidays, currentUserId, stageSla, slaAc
         <header className="mb-8">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Settings</h1>
           <p className="mt-1 text-sm font-medium text-zinc-500">
-            Manage workspace configuration and production timelines
+            {channelName} · workspace configuration and production timelines
           </p>
         </header>
 
@@ -92,7 +97,14 @@ export function SettingsClient({ users, holidays, currentUserId, stageSla, slaAc
           </p>
 
           {tab === 'users' && (
-            <UsersClient users={users} currentUserId={currentUserId} embedded />
+            <UsersClient
+              members={members}
+              channelSlug={channelSlug}
+              channelName={channelName}
+              currentUserId={currentUserId}
+              canManageRoles={canManageRoles}
+              embedded
+            />
           )}
           {tab === 'holidays' && <HolidaysSettings holidays={holidays} />}
           {tab === 'timelines' && (

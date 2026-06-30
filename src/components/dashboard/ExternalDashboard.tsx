@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { isUserOnProjectTeam } from '@/lib/projects/team'
 import { Project } from '@/lib/types'
 import { formatWaitingSince, formatDate } from '@/lib/utils'
 import { resolveTargetReleaseDate } from '@/lib/timelines'
@@ -17,8 +18,13 @@ type Props = {
 }
 
 export function ExternalDashboard({ projects, userId, userName, holidays = [] }: Props) {
-  const inPipeline = projects.filter(p => p.current_stage !== FINAL_STAGE)
-  const delivered = projects.filter(p => p.current_stage === FINAL_STAGE)
+  const myProjects = projects.filter(
+    p => isUserOnProjectTeam(p, userId) && p.current_stage !== FINAL_STAGE
+  )
+  const inPipeline = myProjects
+  const delivered = projects.filter(
+    p => isUserOnProjectTeam(p, userId) && p.current_stage === FINAL_STAGE
+  )
   const actionItems = projects.filter(
     p => p.stage_assignee_id === userId && p.current_stage !== FINAL_STAGE
   )

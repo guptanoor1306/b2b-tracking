@@ -3,8 +3,17 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getSessionProfile } from '@/lib/auth'
-import { CHANNEL, FINAL_STAGE } from '@/lib/constants'
-import { isInternalRole, resolveStageAssigneeId } from '@/lib/views'
+import { getActiveChannelRole } from '@/lib/channel-context'
+import { FINAL_STAGE } from '@/lib/constants'
+import { getActiveChannelDbName } from '@/lib/channel-context'
+import {
+  isInternalRole,
+  resolveStageAssigneeId,
+  effectiveRoleForChannel,
+  canChangeStages,
+  canSendStageReminder,
+  isChannelAdmin,
+} from '@/lib/views'
 import { FIRST_CUT_STAGE } from '@/lib/constants'
 import { normalizeStage } from '@/lib/timelines'
 import {
@@ -14,6 +23,15 @@ import {
   isProjectTimelineLocked,
 } from '@/lib/timelines'
 import { fetchHolidayDates } from '@/lib/data/holidays'
+import { notifyProjectTeamOnCreate, notifyStageActionable } from '@/lib/email/notifications'
+import { Project } from '@/lib/types'
+
+async function getSessionEffectiveRole() {
+  const profile = await getSessionProfile()
+  if (!profile) return null
+  const channelRole = await getActiveChannelRole(profile)
+  return { profile, role: effectiveRoleForChannel(channelRole, profile.role) }
+}
 
 type ProjectInput = {
   ip?: string
@@ -71,10 +89,11 @@ async function logActivity(
 }
 
 export async function createProject(input: ProjectInput) {
-  const profile = await getSessionProfile()
-  if (!profile || !isInternalRole(profile.role)) {
+  const session = await getSessionEffectiveRole()
+  if (!session || !isInternalRole(session.role)) {
     return { error: 'Unauthorized' }
   }
+  const { profile } = session
 
   const supabase = await createClient()
   const holidays = await fetchHolidayDates()
@@ -95,6 +114,8 @@ export async function createProject(input: ProjectInput) {
   const editorName = input.editor_id
     ? (await supabase.from('profiles').select('name').eq('id', input.editor_id).single()).data?.name
     : input.editor
+
+  const channelName = await getActiveChannelDbName()
 
   const { data, error } = await supabase
     .from('projects')
@@ -118,7 +139,7 @@ export async function createProject(input: ProjectInput) {
       received_date: input.received_date ?? null,
       picked_up_date: input.picked_up_date ?? input.received_date ?? null,
       target_delivery_date,
-      channel: CHANNEL,
+      channel: channelName,
       current_stage: initialStage,
       status_health: computeProjectHealth({
         current_stage: initialStage,
@@ -145,6 +166,11 @@ export async function createProject(input: ProjectInput) {
     is_hold_event: false,
   })
 
+  const { data: created } = await supabase.from('projects').select('*').eq('id', data.id).single()
+  if (created) {
+    void notifyProjectTeamOnCreate(created as Project).catch(() => {})
+  }
+
   revalidatePath('/dashboard')
   revalidatePath('/projects')
   revalidatePath('/board')
@@ -152,14 +178,15 @@ export async function createProject(input: ProjectInput) {
 }
 
 export async function updateProject(id: string, input: Partial<ProjectInput>) {
-  const profile = await getSessionProfile()
-  if (!profile) return { error: 'Unauthorized' }
+  const session = await getSessionEffectiveRole()
+  if (!session) return { error: 'Unauthorized' }
+  const { profile } = session
 
   const supabase = await createClient()
   const { data: existing } = await supabase.from('projects').select('*').eq('id', id).single()
   if (!existing) return { error: 'Project not found' }
 
-  const isInternal = isInternalRole(profile.role)
+  const isInternal = isInternalRole(session.role)
   const isExternal = !isInternal
 
   if (isExternal) {
@@ -248,10 +275,11 @@ export async function changeProjectStage(
   assigneeId?: string | null,
   usesTeleprompter?: boolean | null
 ) {
-  const profile = await getSessionProfile()
-  if (!profile || !['Admin', 'Internal Team'].includes(profile.role)) {
+  const session = await getSessionEffectiveRole()
+  if (!session || !canChangeStages(session.role)) {
     return { error: 'Unauthorized' }
   }
+  const { profile } = session
 
   const supabase = await createClient()
   const holidays = await fetchHolidayDates()
@@ -312,6 +340,9 @@ export async function changeProjectStage(
 
   await logActivity(projectId, profile.id, 'stage_change', 'current_stage', oldStage, newStage)
 
+  const updatedProject = { ...project, ...updates, current_stage: newStage, stage_assignee_id: resolvedAssignee } as Project
+  void notifyStageActionable(updatedProject, newStage, resolvedAssignee).catch(() => {})
+
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/dashboard')
   revalidatePath('/board')
@@ -324,10 +355,11 @@ export async function updateStageHistoryDate(
   historyId: string,
   dateStr: string
 ) {
-  const profile = await getSessionProfile()
-  if (!profile || !['Admin', 'Internal Team'].includes(profile.role)) {
+  const session = await getSessionEffectiveRole()
+  if (!session || !canChangeStages(session.role)) {
     return { error: 'Unauthorized' }
   }
+  const { profile } = session
   if (!dateStr) return { error: 'Date required' }
 
   const supabase = await createClient()
@@ -393,10 +425,11 @@ export async function updateStageHistoryDate(
 }
 
 export async function updateStageAssignee(projectId: string, assigneeId: string | null) {
-  const profile = await getSessionProfile()
-  if (!profile || !isInternalRole(profile.role)) {
+  const session = await getSessionEffectiveRole()
+  if (!session || !isInternalRole(session.role)) {
     return { error: 'Unauthorized' }
   }
+  const { profile } = session
 
   const supabase = await createClient()
   const { error } = await supabase
@@ -456,10 +489,11 @@ export async function deleteComment(projectId: string, commentId: string) {
 }
 
 export async function sendStageReminder(projectId: string) {
-  const profile = await getSessionProfile()
-  if (!profile || !['Admin', 'Internal Team', 'Super Admin'].includes(profile.role)) {
+  const session = await getSessionEffectiveRole()
+  if (!session || !canSendStageReminder(session.role)) {
     return { error: 'Unauthorized' }
   }
+  const { profile } = session
 
   const supabase = await createClient()
   const { data: project } = await supabase
@@ -484,7 +518,7 @@ export async function sendStageReminder(projectId: string) {
 
   let emailSent = false
   const resendKey = process.env.RESEND_API_KEY
-  const fromEmail = process.env.REMINDER_FROM_EMAIL ?? 'reminders@learnapp.in'
+  const fromEmail = process.env.REMINDER_FROM_EMAIL ?? 'learnappstudios@learnapp.com'
 
   if (resendKey) {
     const res = await fetch('https://api.resend.com/emails', {
@@ -527,10 +561,11 @@ export async function sendStageReminder(projectId: string) {
 }
 
 export async function deleteProject(projectId: string) {
-  const profile = await getSessionProfile()
-  if (!profile || profile.role !== 'Admin') {
+  const session = await getSessionEffectiveRole()
+  if (!session || !isChannelAdmin(session.role)) {
     return { error: 'Unauthorized' }
   }
+  const { profile } = session
 
   const supabase = await createClient()
   const { error } = await supabase.from('projects').delete().eq('id', projectId)
@@ -544,10 +579,11 @@ export async function deleteProject(projectId: string) {
 }
 
 export async function toggleProjectHold(projectId: string, note?: string) {
-  const profile = await getSessionProfile()
-  if (!profile || !isInternalRole(profile.role)) {
+  const session = await getSessionEffectiveRole()
+  if (!session || !isInternalRole(session.role)) {
     return { error: 'Unauthorized' }
   }
+  const { profile } = session
 
   const supabase = await createClient()
   const holidays = await fetchHolidayDates()

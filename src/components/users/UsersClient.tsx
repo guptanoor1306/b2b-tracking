@@ -2,9 +2,14 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Profile } from '@/lib/types'
-import { ROLES, ROLE_LABELS } from '@/lib/constants'
-import { createUser, updateUser, deleteUser } from '@/lib/actions/users'
+import { ChannelMember } from '@/lib/types'
+import { CHANNEL_MEMBER_ROLES, ROLE_LABELS } from '@/lib/constants'
+import {
+  createChannelUser,
+  updateChannelMember,
+  removeChannelMemberFromChannel,
+  deleteUser,
+} from '@/lib/actions/users'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
@@ -14,36 +19,45 @@ import { formatDate, cn } from '@/lib/utils'
 import { UserPlus, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import { SettingsPanel, SettingsCard, SettingsStat } from '@/components/settings/SettingsLayout'
 
-type Props = { users: Profile[]; currentUserId?: string; embedded?: boolean }
+type Props = {
+  members: ChannelMember[]
+  channelSlug: string
+  channelName: string
+  currentUserId?: string
+  canManageRoles?: boolean
+  embedded?: boolean
+}
 
 type SortBy = 'name' | 'created'
 
 const PAGE_SIZE = 10
 
-export function UsersClient({ users, currentUserId, embedded = false }: Props) {
+export function UsersClient({
+  members, channelSlug, channelName, currentUserId, canManageRoles = false, embedded = false,
+}: Props) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ChannelMember | null>(null)
   const [loading, setLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [error, setError] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('created')
   const [page, setPage] = useState(1)
   const [form, setForm] = useState({
-    name: '', email: '', password: '', role: 'Internal Team', organization: '',
+    name: '', email: '', password: '', role: 'Channel Team', organization: '',
   })
 
   const sorted = useMemo(() => {
-    const list = [...users]
+    const list = [...members]
     if (sortBy === 'name') {
       list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
     } else {
       list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     }
     return list
-  }, [users, sortBy])
+  }, [members, sortBy])
 
-  const activeCount = users.filter(u => u.is_active).length
+  const activeCount = members.filter(u => u.is_active).length
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
   const pageUsers = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
@@ -58,30 +72,32 @@ export function UsersClient({ users, currentUserId, embedded = false }: Props) {
   const handleCreate = async () => {
     setLoading(true)
     setError('')
-    const result = await createUser(form)
+    const result = await createChannelUser(form, form.role as ChannelMember['channel_role'])
     setLoading(false)
     if (result.error) { setError(result.error); return }
     setCreateOpen(false)
-    setForm({ name: '', email: '', password: '', role: 'Internal Team', organization: '' })
+    setForm({ name: '', email: '', password: '', role: 'Channel Team', organization: '' })
     setPage(1)
     router.refresh()
   }
 
-  const toggleActive = async (user: Profile) => {
-    await updateUser(user.id, { is_active: !user.is_active })
+  const toggleActive = async (user: ChannelMember) => {
+    await updateChannelMember(user.id, channelSlug, { is_active: !user.is_active })
     router.refresh()
   }
 
-  const changeRole = async (user: Profile, role: string) => {
-    await updateUser(user.id, { role })
+  const changeRole = async (user: ChannelMember, channelRole: string) => {
+    await updateChannelMember(user.id, channelSlug, { channel_role: channelRole as ChannelMember['channel_role'] })
     router.refresh()
   }
 
-  const handleDelete = async () => {
+  const handleRemove = async () => {
     if (!deleteTarget) return
     setDeleteLoading(true)
     setError('')
-    const result = await deleteUser(deleteTarget.id)
+    const result = canManageRoles
+      ? await deleteUser(deleteTarget.id)
+      : await removeChannelMemberFromChannel(deleteTarget.id, channelSlug)
     setDeleteLoading(false)
     if (result.error) {
       setError(result.error)
@@ -94,9 +110,9 @@ export function UsersClient({ users, currentUserId, embedded = false }: Props) {
   const content = (
     <>
       <div className="grid gap-3 sm:grid-cols-3">
-        <SettingsStat label="Total users" value={users.length} />
+        <SettingsStat label="Total users" value={members.length} />
         <SettingsStat label="Active" value={activeCount} />
-        <SettingsStat label="Inactive" value={users.length - activeCount} />
+        <SettingsStat label="Inactive" value={members.length - activeCount} />
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -163,10 +179,10 @@ export function UsersClient({ users, currentUserId, embedded = false }: Props) {
                     <td className="px-4 py-3.5">
                       <select
                         className="max-w-[160px] rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-700"
-                        value={u.role}
+                        value={u.channel_role}
                         onChange={e => changeRole(u, e.target.value)}
                       >
-                        {ROLES.map(r => (
+                        {CHANNEL_MEMBER_ROLES.map(r => (
                           <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
                         ))}
                       </select>
@@ -248,8 +264,8 @@ export function UsersClient({ users, currentUserId, embedded = false }: Props) {
           <Input label="Email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
           <Input label="Password" type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
           <Select
-            label="Role"
-            options={ROLES.map(r => ({ value: r, label: ROLE_LABELS[r] ?? r }))}
+            label="Role in this channel"
+            options={CHANNEL_MEMBER_ROLES.map(r => ({ value: r, label: ROLE_LABELS[r] ?? r }))}
             value={form.role}
             onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
           />
@@ -266,17 +282,20 @@ export function UsersClient({ users, currentUserId, embedded = false }: Props) {
         </div>
       </Modal>
 
-      <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete user">
+      <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title={canManageRoles ? 'Delete user' : 'Remove from channel'}>
         <div className="space-y-4">
           <p className="text-sm leading-relaxed text-zinc-600">
-            Permanently delete <span className="font-semibold text-zinc-900">{deleteTarget?.name}</span>?
-            This removes their account and cannot be undone.
+            {canManageRoles ? (
+              <>Permanently delete <span className="font-semibold text-zinc-900">{deleteTarget?.name}</span>? This removes their account entirely.</>
+            ) : (
+              <>Remove <span className="font-semibold text-zinc-900">{deleteTarget?.name}</span> from {channelName}? Their account stays active in other channels.</>
+            )}
           </p>
           {error && deleteTarget && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button loading={deleteLoading} onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-              Delete user
+            <Button loading={deleteLoading} onClick={handleRemove} className="bg-red-600 hover:bg-red-700">
+              {canManageRoles ? 'Delete user' : 'Remove from channel'}
             </Button>
           </div>
         </div>
@@ -287,8 +306,8 @@ export function UsersClient({ users, currentUserId, embedded = false }: Props) {
   if (embedded) {
     return (
       <SettingsPanel
-        title="Team members"
-        description="Add users, assign roles, and control who can access the production tracker."
+        title={`${channelName} members`}
+        description="People with access to this channel and their role here."
       >
         <div className="space-y-6">{content}</div>
       </SettingsPanel>

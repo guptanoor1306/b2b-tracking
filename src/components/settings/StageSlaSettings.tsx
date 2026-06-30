@@ -75,7 +75,7 @@ export function StageSlaSettings({ rows, activity }: Props) {
           <ul className="max-h-52 space-y-2 overflow-y-auto">
             {activity.map(a => (
               <li key={a.id} className="rounded-lg border border-zinc-100 bg-white px-3 py-2.5 text-sm">
-                <span className="font-medium text-zinc-900">{a.updater?.name ?? 'Admin'}</span>
+                <span className="font-medium text-zinc-900">{a.updater?.name ?? 'Channel Admin'}</span>
                 <span className="text-zinc-500"> updated </span>
                 <span className="font-medium text-zinc-800">{a.field_changed}</span>
                 <span className="text-zinc-500">: {a.old_value ?? '—'} → {a.new_value ?? '—'}</span>

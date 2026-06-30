@@ -7,10 +7,11 @@ import {
   EXTERNAL_ROLES,
   BOARD_FULL_ACCESS_ROLES,
   SUPER_ADMIN_ROLES,
-  ADMIN_ROLES,
+  CHANNEL_ADMIN_ROLES,
   FINAL_STAGE,
 } from '@/lib/constants'
 import { Role } from '@/lib/types'
+import { isUserOnProjectTeam } from '@/lib/projects/team'
 
 /** Pick reminder assignee from project team based on stage role */
 export function resolveStageAssigneeId(
@@ -58,16 +59,37 @@ export function isSuperAdmin(role: Role | string): boolean {
   return (SUPER_ADMIN_ROLES as readonly string[]).includes(role)
 }
 
-export function isAdminRole(role: Role | string): boolean {
-  return role === 'Admin'
+export function effectiveRoleForChannel(
+  channelRole: string | null,
+  globalRole?: Role | string,
+): string {
+  if (globalRole && isSuperAdmin(globalRole)) return 'Channel Admin'
+  return channelRole ?? 'Member'
+}
+
+export function isChannelAdmin(role: Role | string): boolean {
+  return role === 'Channel Admin'
 }
 
 export function usesActionItemsDashboard(role: Role | string): boolean {
-  return isExternalRole(role) || role === 'Internal Team'
+  return isExternalRole(role) || role === 'Channel Team'
+}
+
+export function usesActionItemsDashboardForChannel(channelRole: string | null): boolean {
+  if (!channelRole) return false
+  return isExternalRole(channelRole) || channelRole === 'Channel Team'
 }
 
 export function usesFullAdminDashboard(role: Role | string): boolean {
-  return role === 'Admin'
+  return isChannelAdmin(role) || isSuperAdmin(role)
+}
+
+export function usesFullAdminDashboardForChannel(
+  channelRole: string | null,
+  globalRole?: Role | string,
+): boolean {
+  if (globalRole && isSuperAdmin(globalRole)) return true
+  return channelRole === 'Channel Admin'
 }
 
 export function usesIpOverviewDashboard(role: Role | string): boolean {
@@ -75,19 +97,19 @@ export function usesIpOverviewDashboard(role: Role | string): boolean {
 }
 
 export function canManageUsers(role: Role | string): boolean {
-  return (ADMIN_ROLES as readonly string[]).includes(role)
+  return (CHANNEL_ADMIN_ROLES as readonly string[]).includes(role)
 }
 
 export function canEditProjects(role: Role | string): boolean {
-  return role === 'Admin' || role === 'Internal Team'
+  return role === 'Channel Admin' || role === 'Channel Team'
 }
 
 export function canChangeStages(role: Role | string): boolean {
-  return role === 'Admin' || role === 'Internal Team'
+  return role === 'Channel Admin' || role === 'Channel Team'
 }
 
 export function canSendStageReminder(role: Role | string): boolean {
-  return role === 'Admin' || role === 'Internal Team' || isSuperAdmin(role)
+  return role === 'Channel Admin' || role === 'Channel Team' || isSuperAdmin(role)
 }
 
 export function canSeeBoardAssigneeFilter(role: Role | string): boolean {
@@ -95,7 +117,26 @@ export function canSeeBoardAssigneeFilter(role: Role | string): boolean {
 }
 
 export function shouldFilterBoardToSelf(role: Role | string): boolean {
-  return isExternalRole(role)
+  return isExternalRole(role) || role === 'Channel Team'
+}
+
+/** @deprecated use shouldFilterBoardToSelf */
+export const shouldFilterBoardToTeam = shouldFilterBoardToSelf
+
+export function getBoardDisplayStage(
+  project: { current_stage: string } & Parameters<typeof resolveStageAssigneeId>[0],
+  options: { externalView: boolean; viewerUserId?: string; teamBoardView?: boolean },
+): string {
+  if (options.externalView) {
+    return mapInternalToExternalStage(project.current_stage)
+  }
+  if (options.teamBoardView && options.viewerUserId) {
+    const assignee = resolveStageAssigneeId(project, project.current_stage)
+    if (assignee !== options.viewerUserId && isUserOnProjectTeam(project, options.viewerUserId)) {
+      return STAGES_INTERNAL[0]
+    }
+  }
+  return project.current_stage
 }
 
 export function getStagesForRole(role: Role | string): readonly string[] {

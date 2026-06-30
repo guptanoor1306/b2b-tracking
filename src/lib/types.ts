@@ -1,4 +1,9 @@
-export type Role = 'Admin' | 'Internal Team' | 'Agency' | 'Zerodha Viewer' | 'Super Admin'
+export type Role = 'Super Admin' | 'Member' | 'Channel Admin' | 'Channel Team' | 'Agency' | 'Zerodha Viewer'
+export type ChannelMemberRole = 'Channel Admin' | 'Channel Team' | 'Agency' | 'Zerodha Viewer'
+
+export type ChannelMember = Profile & {
+  channel_role: ChannelMemberRole
+}
 export type StatusHealth = 'On track' | 'At risk' | 'Delayed' | 'On hold' | 'Delivered'
 export type Priority = 'Low' | 'Medium' | 'High'
 

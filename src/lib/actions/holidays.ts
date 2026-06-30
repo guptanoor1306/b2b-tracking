@@ -1,11 +1,11 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { requireProfile } from '@/lib/auth'
+import { requireChannelAdmin } from '@/lib/channel-context'
 import { createClient } from '@/lib/supabase/server'
 
 export async function addHoliday(holidayDate: string, name?: string) {
-  await requireProfile(['Admin', 'Super Admin'])
+  await requireChannelAdmin()
 
   const supabase = await createClient()
   const { error } = await supabase.from('org_holidays').insert({
@@ -22,7 +22,7 @@ export async function addHoliday(holidayDate: string, name?: string) {
 }
 
 export async function removeHoliday(id: string) {
-  await requireProfile(['Admin', 'Super Admin'])
+  await requireChannelAdmin()
 
   const supabase = await createClient()
   const { error } = await supabase.from('org_holidays').delete().eq('id', id)

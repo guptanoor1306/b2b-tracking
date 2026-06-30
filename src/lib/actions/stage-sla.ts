@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { requireProfile } from '@/lib/auth'
+import { requireChannelAdmin } from '@/lib/channel-context'
 import { createClient } from '@/lib/supabase/server'
 import { DEFAULT_STAGE_SLA } from '@/lib/stage-sla'
 import { recalculateActiveProjectTargets } from '@/lib/recalculate-project-targets'
@@ -31,7 +31,7 @@ export async function updateStageSla(
     level_3_hours?: number | null
   }
 ) {
-  const profile = await requireProfile(['Admin', 'Super Admin'])
+  const { profile } = await requireChannelAdmin()
   const supabase = await createClient()
 
   const { data: existing } = await supabase
@@ -74,7 +74,7 @@ export async function updateStageSla(
 }
 
 export async function seedStageSlaIfEmpty() {
-  await requireProfile(['Admin', 'Super Admin'])
+  await requireChannelAdmin()
   const supabase = await createClient()
   const { count } = await supabase.from('settings_stage_sla').select('*', { count: 'exact', head: true })
   if (count && count > 0) return { success: true }

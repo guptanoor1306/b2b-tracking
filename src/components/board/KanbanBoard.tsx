@@ -13,7 +13,7 @@ import { cn, formatDate } from '@/lib/utils'
 import { changeProjectStage } from '@/lib/actions/projects'
 import { StageChangeModal, needsTeleprompterPrompt } from '@/components/projects/StageChangeModal'
 import { GripVertical, Clock, Layers, AlertTriangle, Pause } from 'lucide-react'
-import { mapInternalToExternalStage } from '@/lib/views'
+import { getBoardDisplayStage } from '@/lib/views'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { getProjectTimeliness, resolveTargetReleaseDate } from '@/lib/timelines'
 import {
@@ -236,6 +236,8 @@ type Props = {
   holidays?: string[]
   readOnly?: boolean
   externalView?: boolean
+  viewerUserId?: string
+  teamBoardView?: boolean
 }
 
 export function KanbanBoard({
@@ -245,6 +247,8 @@ export function KanbanBoard({
   holidays = [],
   readOnly = false,
   externalView = false,
+  viewerUserId,
+  teamBoardView = false,
 }: Props) {
   const router = useRouter()
   const [projects, setProjects] = useState(initialProjects)
@@ -258,7 +262,7 @@ export function KanbanBoard({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   const getDisplayStage = (project: Project) =>
-    externalView ? mapInternalToExternalStage(project.current_stage) : project.current_stage
+    getBoardDisplayStage(project, { externalView, viewerUserId, teamBoardView })
 
   const handleDragEnd = async (e: DragEndEvent) => {
     if (readOnly) return
