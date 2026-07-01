@@ -1,20 +1,12 @@
 'use client'
 
 import { LogOut } from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/context/AuthContext'
 
 type Props = { email: string }
 
 export function MissingProfileNotice({ email }: Props) {
-  const router = useRouter()
-
-  const signOut = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
+  const { signOut } = useAuth()
 
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center px-6 py-16 text-center">

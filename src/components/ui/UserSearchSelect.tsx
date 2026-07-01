@@ -12,10 +12,13 @@ type Props = {
   onChange: (userId: string) => void
   placeholder?: string
   allowClear?: boolean
+  clearLabel?: string
+  showEmail?: boolean
 }
 
 export function UserSearchSelect({
   label, users, value, onChange, placeholder = 'Select assignee', allowClear = true,
+  clearLabel = 'No assignee', showEmail = false,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -72,7 +75,7 @@ export function UserSearchSelect({
                   onClick={() => { onChange(''); setOpen(false); setQuery('') }}
                   className="w-full px-3 py-2 text-left text-sm text-zinc-500 hover:bg-zinc-50"
                 >
-                  No assignee
+                  {clearLabel}
                 </button>
               </li>
             )}
@@ -86,7 +89,10 @@ export function UserSearchSelect({
                     u.id === value ? 'text-violet-700 bg-violet-50 font-medium' : 'text-zinc-700'
                   )}
                 >
-                  {u.name}
+                  <span>{u.name}</span>
+                  {showEmail && (
+                    <span className="block text-xs font-normal text-zinc-400">{u.email}</span>
+                  )}
                 </button>
               </li>
             ))}

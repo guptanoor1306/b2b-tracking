@@ -4,10 +4,9 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
-  ArrowUpRight, GitBranch, CheckCircle2, PauseCircle, Sparkles, Lock, Settings, LogOut,
+  ArrowUpRight, GitBranch, CheckCircle2, PauseCircle, Sparkles, Lock,
 } from 'lucide-react'
 import { ChannelStats, computeOverviewTotals, periodLabel } from '@/lib/data/channel-stats'
-import { createClient } from '@/lib/supabase/client'
 
 type Props = {
   stats: ChannelStats[]
@@ -68,13 +67,6 @@ export function ChannelOverviewClient({
     router.push(`/studios?${params.toString()}`)
   }
 
-  const signOut = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
-
   const summaryValues: Record<string, string | number> = {
     pipeline: totals.inPipeline,
     delivered: totals.delivered,
@@ -118,23 +110,6 @@ export function ChannelOverviewClient({
               </button>
             ))}
           </div>
-          {isSuperAdmin && (
-            <Link
-              href="/studios/settings"
-              className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50"
-            >
-              <Settings size={16} />
-              Channel settings
-            </Link>
-          )}
-          <button
-            type="button"
-            onClick={signOut}
-            className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-600 shadow-sm hover:bg-zinc-50"
-          >
-            <LogOut size={16} />
-            Sign out
-          </button>
         </div>
       </div>
 

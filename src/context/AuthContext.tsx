@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { Profile } from '@/lib/types'
+import { signOutAndRedirect } from '@/lib/auth-client'
 
 type AuthContextType = {
   user: User | null
@@ -55,10 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const signOut = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
     setUser(null)
     setProfile(null)
+    await signOutAndRedirect()
   }
 
   return (

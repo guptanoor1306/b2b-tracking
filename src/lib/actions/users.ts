@@ -8,7 +8,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { ChannelMemberRole } from '@/lib/types'
 import { isSuperAdmin } from '@/lib/views'
-import { notifyChannelAccess } from '@/lib/email/notifications'
+import { notifyChannelAccess, notifyUserWelcome } from '@/lib/email/notifications'
+import { saveInitialPasswordHint } from '@/lib/actions/account'
 
 type CreateUserInput = {
   name: string
@@ -50,7 +51,8 @@ export async function createChannelUser(input: CreateUserInput, channelRole: Cha
   const userId = authData.user.id
 
   const { data: existing } = await admin.from('profiles').select('id').eq('id', userId).maybeSingle()
-  if (!existing) {
+  const isNewUser = !existing
+  if (isNewUser) {
     const { error: profileError } = await admin.from('profiles').insert({
       id: userId,
       name: input.name,
@@ -69,6 +71,19 @@ export async function createChannelUser(input: CreateUserInput, channelRole: Cha
   }, { onConflict: 'profile_id,channel_slug' })
 
   if (memberError) return { error: memberError.message }
+
+  await saveInitialPasswordHint(userId, input.password)
+
+  if (isNewUser) {
+    void notifyUserWelcome({
+      profileId: userId,
+      name: input.name,
+      email: input.email,
+      password: input.password,
+      channelSlug: slug,
+      channelRole,
+    }).catch(() => {})
+  }
 
   void notifyChannelAccess({ profileId: userId, channelSlug: slug, channelRole }).catch(() => {})
 

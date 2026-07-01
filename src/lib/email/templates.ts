@@ -1,5 +1,4 @@
-import { projectUrl, boardUrl, channelEnterUrl, studiosUrl } from '@/lib/email/send'
-import { ROLE_LABELS } from '@/lib/constants'
+import { projectUrl, boardUrl, channelEnterUrl, studiosUrl, loginUrl, accountUrl } from '@/lib/email/send'
 
 function ctaButton(href: string, label: string): string {
   return `<p style="margin:24px 0"><a href="${href}" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">${label}</a></p>`
@@ -115,11 +114,10 @@ export function channelAccessEmail(opts: {
   channelRole: string
 }) {
   const enterUrl = channelEnterUrl(opts.channelSlug)
-  const roleLabel = ROLE_LABELS[opts.channelRole] ?? opts.channelRole
   const subject = `[LearnApp Studios] You now have access to ${opts.channelName}`
   const text = `Hi ${opts.recipientName},
 
-You've been given access to ${opts.channelName} as ${roleLabel}.
+You've been given access to ${opts.channelName}.
 
 Enter channel: ${enterUrl}
 Studios hub: ${studiosUrl()}
@@ -128,9 +126,49 @@ Studios hub: ${studiosUrl()}
 
   const html = emailShell('Channel access granted', `
 <p>Hi ${opts.recipientName},</p>
-<p>You've been given access to <strong>${opts.channelName}</strong> as <strong>${roleLabel}</strong>.</p>
+<p>You've been given access to <strong>${opts.channelName}</strong>.</p>
 ${ctaButton(enterUrl, `Enter ${opts.channelName}`)}
 <p style="font-size:14px;color:#71717a">Or visit the <a href="${studiosUrl()}">Studios hub</a> to switch channels.</p>
+`)
+
+  return { subject, text, html }
+}
+
+export function userWelcomeEmail(opts: {
+  recipientName: string
+  email: string
+  password: string
+  channelName: string
+  channelRole: string
+}) {
+  const signInUrl = loginUrl()
+  const accountSettingsUrl = accountUrl()
+  const subject = `[LearnApp Studios] Your account is ready`
+
+  const text = `Hi ${opts.recipientName},
+
+Your LearnApp Studios account has been created. You've been given access to ${opts.channelName}.
+
+Sign in with:
+Email: ${opts.email}
+Password: ${opts.password}
+
+Open the tool: ${signInUrl}
+
+After you sign in, change your password from Account in the sidebar (${accountSettingsUrl}). Your new password will be the only one that works going forward.
+
+— LearnApp Studios`
+
+  const html = emailShell('Welcome to LearnApp Studios', `
+<p>Hi ${opts.recipientName},</p>
+<p>Your account has been created. You've been given access to <strong>${opts.channelName}</strong>.</p>
+<div style="background:#f4f4f5;border-radius:8px;padding:16px;margin:16px 0">
+  <p style="margin:0 0 8px;font-size:14px"><strong>Email:</strong> ${opts.email}</p>
+  <p style="margin:0;font-size:14px"><strong>Temporary password:</strong> <code style="background:#fff;padding:2px 6px;border-radius:4px">${opts.password}</code></p>
+</div>
+${ctaButton(signInUrl, 'Open LearnApp Studios')}
+<p style="font-size:14px;color:#71717a">After signing in, go to <strong>Account</strong> in the sidebar to change your password. Only your new password will work once you update it.</p>
+<p style="font-size:14px;color:#71717a"><a href="${accountSettingsUrl}">Account settings</a></p>
 `)
 
   return { subject, text, html }

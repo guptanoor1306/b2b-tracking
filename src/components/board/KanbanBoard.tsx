@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useMemo, useCallback, memo } from 'react'
 import Link from 'next/link'
 import {
   DndContext, DragEndEvent, DragOverlay, DragStartEvent,
-  PointerSensor, useSensor, useSensors, closestCorners,
-  useDraggable, useDroppable,
+  PointerSensor, TouchSensor, useSensor, useSensors, closestCorners,
+  useDraggable, useDroppable, defaultDropAnimationSideEffects,
 } from '@dnd-kit/core'
+import { CSS } from '@dnd-kit/utilities'
 import { Project, Profile } from '@/lib/types'
 import { cn, formatDate } from '@/lib/utils'
 import { changeProjectStage } from '@/lib/actions/projects'
@@ -24,13 +24,18 @@ import {
   getIpAccent,
 } from '@/lib/design/theme-v2'
 
-const CARD_BASE = 'rounded-xl border bg-white transition-all hover:shadow-md'
+const CARD_BASE = 'rounded-xl border bg-white transition-[box-shadow,opacity] hover:shadow-md'
 
-function KanbanCard({
-  project, onOpen, readOnly, holidays,
+const dropAnimation = {
+  sideEffects: defaultDropAnimationSideEffects({
+    styles: { active: { opacity: '0.35' } },
+  }),
+}
+
+const KanbanCard = memo(function KanbanCard({
+  project, readOnly, holidays,
 }: {
   project: Project
-  onOpen: () => void
   readOnly?: boolean
   holidays: string[]
 }) {
@@ -40,7 +45,11 @@ function KanbanCard({
     disabled: readOnly,
   })
 
-  const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined
+  const style: React.CSSProperties | undefined = isDragging
+    ? { opacity: 0.35 }
+    : transform
+      ? { transform: CSS.Translate.toString(transform) }
+      : undefined
   const t = getProjectTimeliness(project, holidays)
   const target = resolveTargetReleaseDate(project, holidays)
   const progress = pipelineProgressPercent(project.current_stage)
@@ -52,20 +61,20 @@ function KanbanCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={cn(CARD_BASE, cardClass, 'p-3.5', isDragging && cn('opacity-60 scale-[0.98] shadow-lg ring-2', ipAccent.ring))}
+      className={cn(CARD_BASE, cardClass, 'p-3.5 touch-manipulation', isDragging && cn('shadow-lg ring-2', ipAccent.ring))}
     >
       <div className="flex gap-2">
         {!readOnly && (
           <button
             {...listeners}
             {...attributes}
-            className="text-zinc-300 hover:text-zinc-500 cursor-grab shrink-0 mt-1"
+            className="text-zinc-300 hover:text-zinc-500 cursor-grab active:cursor-grabbing shrink-0 mt-1 touch-none"
             aria-label="Drag"
           >
             <GripVertical size={15} />
           </button>
         )}
-        <button type="button" onClick={onOpen} className="flex-1 text-left min-w-0">
+        <Link href={`/projects/${project.id}`} prefetch className="flex-1 text-left min-w-0 block min-h-[44px]">
           {t.status === 'delayed' && (
             <span className="inline-block mb-1.5 rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">
               Delayed
@@ -125,18 +134,17 @@ function KanbanCard({
               <span className="text-[11px] text-zinc-400 font-medium">Unassigned</span>
             )}
           </div>
-        </button>
+        </Link>
       </div>
     </div>
   )
-}
+})
 
 function KanbanColumn({
-  stage, projects, onOpen, readOnly, holidays, index, isLast, hideHeader,
+  stage, projects, readOnly, holidays, index, isLast, hideHeader,
 }: {
   stage: string
   projects: Project[]
-  onOpen: (id: string) => void
   readOnly?: boolean
   holidays: string[]
   index: number
@@ -165,7 +173,7 @@ function KanbanColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          'flex-1 min-h-[120px] max-h-[480px] overflow-y-auto space-y-3 p-2 rounded-xl transition-all',
+          'flex-1 min-h-[120px] max-h-[480px] overflow-y-auto space-y-3 p-2 rounded-xl transition-colors',
           accent.bg,
           isOver && 'ring-2 ring-violet-300 ring-offset-2 ring-offset-[#f4f4f5] bg-violet-50/60'
         )}
@@ -177,7 +185,6 @@ function KanbanColumn({
           <KanbanCard
             key={p.id}
             project={p}
-            onOpen={() => onOpen(p.id)}
             readOnly={readOnly}
             holidays={holidays}
           />
@@ -250,7 +257,6 @@ export function KanbanBoard({
   viewerUserId,
   teamBoardView = false,
 }: Props) {
-  const router = useRouter()
   const [projects, setProjects] = useState(initialProjects)
   const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [pending, setPending] = useState<{ project: Project; newStage: string } | null>(null)
@@ -259,10 +265,26 @@ export function KanbanBoard({
     setProjects(initialProjects)
   }, [initialProjects])
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 6 } }),
+  )
 
-  const getDisplayStage = (project: Project) =>
-    getBoardDisplayStage(project, { externalView, viewerUserId, teamBoardView })
+  const getDisplayStage = useCallback(
+    (project: Project) =>
+      getBoardDisplayStage(project, { externalView, viewerUserId, teamBoardView }),
+    [externalView, viewerUserId, teamBoardView],
+  )
+
+  const projectsByStage = useMemo(() => {
+    const map = new Map<string, Project[]>()
+    for (const stage of stages) map.set(stage, [])
+    for (const project of projects) {
+      const displayStage = getDisplayStage(project)
+      map.get(displayStage)?.push(project)
+    }
+    return map
+  }, [projects, stages, getDisplayStage])
 
   const handleDragEnd = async (e: DragEndEvent) => {
     if (readOnly) return
@@ -277,17 +299,17 @@ export function KanbanBoard({
       return
     }
 
-    const result = await changeProjectStage(project.id, newStage)
-    if (!result.error) {
-      setProjects(prev =>
-        prev.map(p =>
-          p.id === project.id
-            ? { ...p, current_stage: newStage, last_status_update_at: new Date().toISOString() }
-            : p
-        )
+    const previous = projects
+    setProjects(prev =>
+      prev.map(p =>
+        p.id === project.id
+          ? { ...p, current_stage: newStage, last_status_update_at: new Date().toISOString() }
+          : p
       )
-      router.refresh()
-    }
+    )
+
+    const result = await changeProjectStage(project.id, newStage)
+    if (result.error) setProjects(previous)
   }
 
   const handleTeleprompterConfirm = async (usesTeleprompter: boolean) => {
@@ -312,13 +334,11 @@ export function KanbanBoard({
             : p
         )
       )
-      router.refresh()
     }
     setPending(null)
   }
 
-  const byStage = (stage: string) =>
-    projects.filter(p => getDisplayStage(p) === stage)
+  const byStage = (stage: string) => projectsByStage.get(stage) ?? []
 
   return (
     <>
@@ -381,7 +401,6 @@ export function KanbanBoard({
                     index={i}
                     isLast={i === stages.length - 1}
                     projects={byStage(stage)}
-                    onOpen={id => router.push(`/projects/${id}`)}
                     readOnly={readOnly}
                     holidays={holidays}
                     hideHeader
@@ -390,7 +409,7 @@ export function KanbanBoard({
               </div>
             </div>
           </div>
-          <DragOverlay>
+          <DragOverlay dropAnimation={dropAnimation}>
             {activeProject && (
               <div className={cn(
                 CARD_BASE,

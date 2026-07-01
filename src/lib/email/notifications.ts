@@ -5,6 +5,7 @@ import {
   stageActionableEmail,
   stageReminderEmail,
   channelAccessEmail,
+  userWelcomeEmail,
 } from '@/lib/email/templates'
 import { getProjectTeamMemberIds } from '@/lib/projects/team'
 import { getChannelByDbName, getChannelBySlug } from '@/lib/channels'
@@ -17,6 +18,7 @@ export type NotificationType =
   | 'stage_actionable'
   | 'stage_reminder'
   | 'channel_access'
+  | 'user_welcome'
 
 const REMINDER_THRESHOLDS_HOURS = [24, 48, 72, 96, 120] as const
 
@@ -196,6 +198,42 @@ export async function notifyChannelAccess(params: {
       type: 'channel_access',
       recipientId: profile.id,
       recipientEmail: profile.email,
+      channelSlug: params.channelSlug,
+      metadata: { channelRole: params.channelRole },
+    })
+  }
+}
+
+export async function notifyUserWelcome(params: {
+  profileId: string
+  name: string
+  email: string
+  password: string
+  channelSlug: string
+  channelRole: string
+}): Promise<void> {
+  const channel = getChannelBySlug(params.channelSlug)
+  if (!channel) return
+
+  if (await wasNotificationSent({
+    type: 'user_welcome',
+    recipientId: params.profileId,
+  })) return
+
+  const { subject, text, html } = userWelcomeEmail({
+    recipientName: params.name,
+    email: params.email,
+    password: params.password,
+    channelName: channel.name,
+    channelRole: params.channelRole,
+  })
+
+  const result = await sendEmail({ to: params.email, subject, text, html })
+  if (result.sent) {
+    await logNotification({
+      type: 'user_welcome',
+      recipientId: params.profileId,
+      recipientEmail: params.email,
       channelSlug: params.channelSlug,
       metadata: { channelRole: params.channelRole },
     })

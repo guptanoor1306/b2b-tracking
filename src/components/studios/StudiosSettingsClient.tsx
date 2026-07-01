@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
+import { UserSearchSelect } from '@/components/ui/UserSearchSelect'
 import {
   SettingsPanel, SettingsCard, SettingsStat, SettingsEmptyState,
 } from '@/components/settings/SettingsLayout'
@@ -40,6 +41,7 @@ export function StudiosSettingsClient({ allUsers, membersByChannel }: Props) {
   const [selectedUserId, setSelectedUserId] = useState('')
   const [exclusiveOnly, setExclusiveOnly] = useState(false)
   const [error, setError] = useState('')
+  const [promoteUserId, setPromoteUserId] = useState('')
   const [form, setForm] = useState({
     name: '', email: '', password: '', role: 'Channel Team', organization: '',
   })
@@ -131,6 +133,17 @@ export function StudiosSettingsClient({ allUsers, membersByChannel }: Props) {
     })
   }
 
+  const handlePromoteSuperAdmin = () => {
+    if (!promoteUserId) return
+    const user = promotableUsers.find(u => u.id === promoteUserId)
+    if (!user) return
+    startTransition(async () => {
+      await setSuperAdminRole(promoteUserId, true)
+      setPromoteUserId('')
+      router.refresh()
+    })
+  }
+
   return (
     <div className="theme-v2 mx-auto max-w-5xl px-6 py-10">
       <Link
@@ -174,23 +187,29 @@ export function StudiosSettingsClient({ allUsers, membersByChannel }: Props) {
           </div>
         )}
         {promotableUsers.length > 0 && (
-          <>
-            <p className="mb-2 text-[11px] font-medium text-zinc-500">Promote to Super Admin</p>
-            <div className="flex flex-wrap gap-2">
-              {promotableUsers.map(u => (
-                <button
-                  key={u.id}
-                  type="button"
-                  disabled={pending}
-                  onClick={() => toggleSuperAdmin(u.id, u.role)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:border-violet-200 hover:text-violet-700"
-                >
-                  <Shield size={12} />
-                  {u.name}
-                </button>
-              ))}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <UserSearchSelect
+                label="Promote to Super Admin"
+                users={promotableUsers}
+                value={promoteUserId}
+                onChange={setPromoteUserId}
+                placeholder="Search and select a user…"
+                clearLabel="Clear selection"
+                showEmail
+              />
             </div>
-          </>
+            <Button
+              size="sm"
+              disabled={!promoteUserId || pending}
+              loading={pending}
+              onClick={handlePromoteSuperAdmin}
+              className="shrink-0"
+            >
+              <Shield size={14} className="mr-1.5" />
+              Promote
+            </Button>
+          </div>
         )}
       </SettingsCard>
 

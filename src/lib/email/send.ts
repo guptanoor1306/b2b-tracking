@@ -18,6 +18,14 @@ export function channelEnterUrl(slug: string): string {
   return `${appBaseUrl()}/studios/enter/${slug}`
 }
 
+export function loginUrl(): string {
+  return `${appBaseUrl()}/login`
+}
+
+export function accountUrl(): string {
+  return `${appBaseUrl()}/account`
+}
+
 export type EmailPayload = {
   to: string
   subject: string

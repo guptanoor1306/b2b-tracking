@@ -1,12 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { ArrowUpRight, Lock, LogOut } from 'lucide-react'
+import { ArrowUpRight, Lock } from 'lucide-react'
 import { ChannelStats } from '@/lib/data/channel-stats'
 import { getChannelBySlug } from '@/lib/channels'
-import { createClient } from '@/lib/supabase/client'
 
 type Props = {
   stats: ChannelStats[]
@@ -15,15 +13,6 @@ type Props = {
 }
 
 export function ChannelCardsHub({ stats, accessibleSlugs, profileName }: Props) {
-  const router = useRouter()
-
-  const signOut = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
-
   const accessibleStats = stats.filter(s => accessibleSlugs.includes(s.slug))
   const lockedStats = stats.filter(s => !accessibleSlugs.includes(s.slug))
 
@@ -44,14 +33,6 @@ export function ChannelCardsHub({ stats, accessibleSlugs, profileName }: Props) 
           </div>
           <p className="text-sm text-zinc-500">Select a channel to open your production dashboard.</p>
         </div>
-        <button
-          type="button"
-          onClick={signOut}
-          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-600 shadow-sm hover:bg-zinc-50"
-        >
-          <LogOut size={16} />
-          Sign out
-        </button>
       </header>
 
       {accessibleStats.length > 0 && (
