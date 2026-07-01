@@ -10,11 +10,19 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-const NAV = [
+type NavItem = {
+  href: string
+  label: string
+  icon: typeof LayoutDashboard
+  exact?: boolean
+  superAdminOnly?: boolean
+}
+
+const NAV: NavItem[] = [
   { href: '/studios', label: 'Overview', icon: LayoutDashboard, exact: true },
   { href: '/studios/settings', label: 'Channel settings', icon: Settings, superAdminOnly: true },
   { href: '/studios/account', label: 'Account', icon: UserCircle },
-] as const
+]
 
 type Props = {
   isSuperAdmin: boolean
