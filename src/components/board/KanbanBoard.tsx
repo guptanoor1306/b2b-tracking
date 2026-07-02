@@ -4,11 +4,10 @@ import { useState, useEffect, useMemo, useCallback, memo } from 'react'
 import Link from 'next/link'
 import {
   DndContext, DragEndEvent, DragOverlay, DragStartEvent, DragCancelEvent,
-  PointerSensor, TouchSensor, useSensor, useSensors,
-  useDraggable, useDroppable, pointerWithin, rectIntersection,
+  MouseSensor, TouchSensor, useSensor, useSensors,
+  useDraggable, useDroppable, rectIntersection,
   type CollisionDetection,
 } from '@dnd-kit/core'
-import { CSS } from '@dnd-kit/utilities'
 import { Project, Profile } from '@/lib/types'
 import { cn, formatDate } from '@/lib/utils'
 import { changeProjectStage } from '@/lib/actions/projects'
@@ -41,23 +40,22 @@ function resolveDropStage(
 }
 
 const boardCollisionDetection: CollisionDetection = args => {
-  const pointerHits = pointerWithin(args)
-  if (pointerHits.length > 0) {
-    const columnHit = pointerHits.find(hit => {
-      const id = hit.id as string
-      return args.droppableContainers.some(c => c.id === id && c.data.current?.type === 'column')
-    })
-    return columnHit ? [columnHit] : pointerHits
-  }
-  return rectIntersection(args)
+  const hits = rectIntersection(args)
+  const columnHit = hits.find(hit =>
+    args.droppableContainers.some(
+      c => c.id === hit.id && c.data.current?.type === 'column',
+    ),
+  )
+  return columnHit ? [columnHit, ...hits.filter(h => h.id !== columnHit.id)] : hits
 }
 
 function CardContent({
-  project, holidays, compact = false,
+  project, holidays, compact = false, titleHref,
 }: {
   project: Project
   holidays: string[]
   compact?: boolean
+  titleHref?: string
 }) {
   const t = getProjectTimeliness(project, holidays)
   const target = resolveTargetReleaseDate(project, holidays)
@@ -80,7 +78,19 @@ function CardContent({
         'font-bold text-zinc-900 line-clamp-2 leading-snug tracking-tight',
         compact ? 'text-sm' : 'text-[15px]',
       )}>
-        {project.title}
+        {titleHref ? (
+          <Link
+            href={titleHref}
+            prefetch
+            draggable={false}
+            onPointerDown={e => e.stopPropagation()}
+            className="pointer-events-auto hover:text-violet-700 hover:underline underline-offset-2"
+          >
+            {project.title}
+          </Link>
+        ) : (
+          project.title
+        )}
       </p>
       <p className="text-xs text-zinc-500 mt-1 truncate font-medium inline-flex items-center gap-1.5">
         <span className={cn('h-2 w-2 shrink-0 rounded-full', getIpAccent(project.ip).bg)} />
@@ -141,7 +151,7 @@ const KanbanCard = memo(function KanbanCard({
   readOnly?: boolean
   holidays: string[]
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: project.id,
     data: { type: 'card', project },
     disabled: readOnly,
@@ -149,40 +159,29 @@ const KanbanCard = memo(function KanbanCard({
 
   const cardClass = getIpCardBorderClass(project.ip, project.is_on_hold)
   const ipAccent = getIpAccent(project.ip)
-
-  const style: React.CSSProperties | undefined = isDragging
-    ? { opacity: 0.25 }
-    : transform
-      ? { transform: CSS.Translate.toString(transform), transition: undefined }
-      : undefined
+  const projectHref = `/projects/${project.id}`
 
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      {...(!readOnly ? listeners : {})}
-      {...(!readOnly ? attributes : {})}
+      style={isDragging ? { opacity: 0.35 } : undefined}
       className={cn(
-        CARD_BASE, cardClass, 'p-3.5 touch-manipulation select-none',
-        !readOnly && 'cursor-grab active:cursor-grabbing',
+        CARD_BASE, cardClass, 'relative p-3.5 select-none',
+        !readOnly && 'cursor-grab active:cursor-grabbing touch-none',
         isDragging && cn('shadow-lg ring-2', ipAccent.ring),
       )}
+      {...(!readOnly ? listeners : {})}
+      {...(!readOnly ? attributes : {})}
     >
-      <div className="flex gap-2">
+      <div className="pointer-events-none flex gap-2">
         {!readOnly && (
-          <div className="text-zinc-300 shrink-0 mt-1 pointer-events-none">
+          <div className="text-zinc-300 shrink-0 mt-1">
             <GripVertical size={15} />
           </div>
         )}
-        <Link
-          href={`/projects/${project.id}`}
-          prefetch
-          className="flex-1 text-left min-w-0 block min-h-[44px]"
-          onClick={e => { if (isDragging) e.preventDefault() }}
-          draggable={false}
-        >
-          <CardContent project={project} holidays={holidays} />
-        </Link>
+        <div className="flex-1 min-w-0">
+          <CardContent project={project} holidays={holidays} titleHref={projectHref} />
+        </div>
       </div>
     </div>
   )
@@ -296,7 +295,6 @@ type Props = {
   readOnly?: boolean
   externalView?: boolean
   viewerUserId?: string
-  teamBoardView?: boolean
 }
 
 export function KanbanBoard({
@@ -307,36 +305,42 @@ export function KanbanBoard({
   readOnly = false,
   externalView = false,
   viewerUserId,
-  teamBoardView = false,
 }: Props) {
   const [projects, setProjects] = useState(initialProjects)
   const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [pending, setPending] = useState<{ project: Project; newStage: string } | null>(null)
+
+  const [dragError, setDragError] = useState('')
 
   useEffect(() => {
     setProjects(initialProjects)
   }, [initialProjects])
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
   )
 
-  const getDisplayStage = useCallback(
-    (project: Project) =>
-      getBoardDisplayStage(project, { externalView, viewerUserId, teamBoardView }),
-    [externalView, viewerUserId, teamBoardView],
+  const getLayoutStage = useCallback(
+    (project: Project) => {
+      // Always lay out cards by real stage so drag-and-drop sticks (team view only filters the list)
+      if (!externalView) return project.current_stage
+      return getBoardDisplayStage(project, { externalView, viewerUserId, teamBoardView: false })
+    },
+    [externalView, viewerUserId],
   )
 
   const projectsByStage = useMemo(() => {
     const map = new Map<string, Project[]>()
     for (const stage of stages) map.set(stage, [])
     for (const project of projects) {
-      const displayStage = getDisplayStage(project)
-      map.get(displayStage)?.push(project)
+      const layoutStage = getLayoutStage(project)
+      if (map.has(layoutStage)) {
+        map.get(layoutStage)!.push(project)
+      }
     }
     return map
-  }, [projects, stages, getDisplayStage])
+  }, [projects, stages, getLayoutStage])
 
   const applyStageChange = useCallback((projectId: string, newStage: string) => {
     setProjects(prev =>
@@ -365,8 +369,10 @@ export function KanbanBoard({
     const newStage = resolveDropStage(e.over?.id as string | undefined, stages, projectsByStage)
     if (!project || !newStage) return
 
-    const currentDisplayStage = getDisplayStage(project)
-    if (currentDisplayStage === newStage) return
+    const layoutStage = getLayoutStage(project)
+    if (layoutStage === newStage) return
+
+    setDragError('')
 
     if (needsTeleprompterPrompt(project.current_stage, newStage)) {
       setPending({ project, newStage })
@@ -377,7 +383,10 @@ export function KanbanBoard({
     applyStageChange(project.id, newStage)
 
     const result = await changeProjectStage(project.id, newStage)
-    if (result.error) setProjects(previous)
+    if (result.error) {
+      setProjects(previous)
+      setDragError(result.error)
+    }
   }
 
   const handleTeleprompterConfirm = async (usesTeleprompter: boolean) => {
@@ -412,6 +421,11 @@ export function KanbanBoard({
 
   return (
     <>
+      {dragError && (
+        <p className="mb-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+          Could not move card: {dragError}
+        </p>
+      )}
       <div className="rounded-2xl border border-zinc-200/80 bg-white/60 shadow-sm overflow-hidden">
         <DndContext
           sensors={sensors}
@@ -479,7 +493,10 @@ export function KanbanBoard({
               </div>
             </div>
           </div>
-          <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1)' }}>
+          <DragOverlay
+            adjustScale={false}
+            dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' }}
+          >
             {activeProject ? (
               <div className={cn(
                 CARD_BASE,

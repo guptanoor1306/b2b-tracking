@@ -102,7 +102,6 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         readOnly={!canMoveBoardCards(role)}
         externalView={!internal}
         viewerUserId={profile.id}
-        teamBoardView={teamBoard}
       />
     </div>
   )
