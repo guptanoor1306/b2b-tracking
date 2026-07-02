@@ -1,17 +1,24 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { UserSearchSelect } from '@/components/ui/UserSearchSelect'
-import { CONTENT_TYPES, LEVELS_OF_VIDEO, PRIORITIES } from '@/lib/constants'
+import { CONTENT_TYPES, PRIORITIES } from '@/lib/constants'
 import { Profile } from '@/lib/types'
 import { createProject } from '@/lib/actions/projects'
 import { computeTargetReleaseDateString } from '@/lib/timelines'
 import { formatDate } from '@/lib/utils'
+import { useActiveChannel } from '@/context/ChannelContext'
+import {
+  isZerodhaChannelDbName,
+  isZerodhaChannelSlug,
+  projectLevelOptions,
+  VIDEO_LANGUAGES,
+} from '@/lib/zerodha-sla'
 
 type Props = {
   open: boolean
@@ -24,6 +31,7 @@ const emptyForm = () => ({
   title: '',
   ip: '',
   content_type: '',
+  video_language: '',
   level_of_video: '',
   priority: '',
   editor_id: '',
@@ -38,25 +46,58 @@ const emptyForm = () => ({
 
 export function QuickAddModal({ open, onClose, users, holidays = [] }: Props) {
   const router = useRouter()
+  const channel = useActiveChannel()
+  const isZerodha = isZerodhaChannelSlug(channel?.slug) || isZerodhaChannelDbName(channel?.dbName)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState(emptyForm())
 
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+  const levelOptions = useMemo(
+    () => projectLevelOptions(channel?.dbName, form.video_language || null),
+    [channel?.dbName, form.video_language],
+  )
+
+  const set = (k: string, v: string) => setForm(f => {
+    const next = { ...f, [k]: v }
+    if (k === 'video_language' && isZerodha) {
+      const valid = projectLevelOptions(channel?.dbName, v).map(o => o.value)
+      if (next.level_of_video && !valid.includes(next.level_of_video)) {
+        next.level_of_video = ''
+      }
+    }
+    return next
+  })
 
   const teamCtx = {
     level_of_video: form.level_of_video || null,
+    video_language: form.video_language || null,
+    channel: channel?.dbName ?? null,
     editor_id: form.editor_id || null,
     editor_2_id: form.editor_2_id || null,
     designer_id: form.designer_id || null,
     designer_2_id: form.designer_2_id || null,
   }
 
-  const estimatedRelease = form.received_date
-    ? computeTargetReleaseDateString(form.received_date, holidays, form.level_of_video || null, teamCtx)
+  const estimatedRelease = form.received_date && (!isZerodha || (form.video_language && form.level_of_video))
+    ? computeTargetReleaseDateString(
+        form.received_date,
+        holidays,
+        form.level_of_video || null,
+        teamCtx,
+        channel?.dbName,
+      )
     : null
 
   const handleSubmit = async () => {
+    if (isZerodha && !form.video_language) {
+      setError('Video language is required')
+      return
+    }
+    if (isZerodha && !form.level_of_video) {
+      setError('Video level is required')
+      return
+    }
+
     setLoading(true)
     setError('')
 
@@ -66,6 +107,7 @@ export function QuickAddModal({ open, onClose, users, holidays = [] }: Props) {
       title: form.title.trim() || undefined,
       ip: form.ip.trim() || undefined,
       content_type: form.content_type || undefined,
+      video_language: form.video_language || null,
       level_of_video: form.level_of_video || null,
       priority: form.priority || undefined,
       editor: editor?.name ?? null,
@@ -97,7 +139,28 @@ export function QuickAddModal({ open, onClose, users, holidays = [] }: Props) {
         <Input label="IP" placeholder="Enter IP" value={form.ip} onChange={e => set('ip', e.target.value)} />
         <div className="grid grid-cols-2 gap-3">
           <Select label="Type" placeholder="Select type" options={CONTENT_TYPES.map(t => ({ value: t, label: t }))} value={form.content_type} onChange={e => set('content_type', e.target.value)} />
-          <Select label="Level" placeholder="Select level" options={LEVELS_OF_VIDEO.map(l => ({ value: l, label: l }))} value={form.level_of_video} onChange={e => set('level_of_video', e.target.value)} />
+          {isZerodha ? (
+            <>
+              <Select
+                label="Language"
+                placeholder="Select language"
+                required
+                options={VIDEO_LANGUAGES.map(l => ({ value: l, label: l }))}
+                value={form.video_language}
+                onChange={e => set('video_language', e.target.value)}
+              />
+              <Select
+                label="Level"
+                placeholder={form.video_language ? 'Select level' : 'Select language first'}
+                required
+                options={levelOptions}
+                value={form.level_of_video}
+                onChange={e => set('level_of_video', e.target.value)}
+              />
+            </>
+          ) : (
+            <Select label="Level" placeholder="Select level" options={levelOptions} value={form.level_of_video} onChange={e => set('level_of_video', e.target.value)} />
+          )}
         </div>
         <Select label="Priority" placeholder="Select priority" options={PRIORITIES.map(p => ({ value: p, label: p }))} value={form.priority} onChange={e => set('priority', e.target.value)} />
         <Input label="Start date" type="date" value={form.received_date} onChange={e => set('received_date', e.target.value)} />

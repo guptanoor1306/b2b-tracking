@@ -4,13 +4,24 @@ import { revalidatePath } from 'next/cache'
 import { requireChannelAdmin } from '@/lib/channel-context'
 import { createClient } from '@/lib/supabase/server'
 import { DEFAULT_STAGE_SLA } from '@/lib/stage-sla'
+import { isZerodhaChannelDbName } from '@/lib/zerodha-sla'
 import { recalculateActiveProjectTargets } from '@/lib/recalculate-project-targets'
+
+type SlaUpdatePayload = {
+  duration_hours?: number
+  level_0_hours?: number | null
+  level_1_hours?: number | null
+  level_2_hours?: number | null
+  level_3_hours?: number | null
+  level_4_hours?: number | null
+}
 
 async function logSettingsActivity(
   userId: string,
   fieldChanged: string,
   oldValue: string | null,
-  newValue: string | null
+  newValue: string | null,
+  channelSlug?: string | null,
 ) {
   const supabase = await createClient()
   await supabase.from('settings_activity_logs').insert({
@@ -19,20 +30,60 @@ async function logSettingsActivity(
     old_value: oldValue,
     new_value: newValue,
     updated_by: userId,
+    channel_slug: channelSlug ?? null,
   })
 }
 
-export async function updateStageSla(
-  stageName: string,
-  updates: {
-    duration_hours?: number
-    level_1_hours?: number | null
-    level_2_hours?: number | null
-    level_3_hours?: number | null
-  }
-) {
-  const { profile } = await requireChannelAdmin()
+export async function updateStageSla(stageName: string, updates: SlaUpdatePayload) {
+  const { profile, channel } = await requireChannelAdmin()
   const supabase = await createClient()
+
+  if (isZerodhaChannelDbName(channel.dbName)) {
+    const { data: existing } = await supabase
+      .from('channel_stage_sla')
+      .select('*')
+      .eq('channel_slug', channel.slug)
+      .eq('stage_name', stageName)
+      .single()
+
+    if (!existing) return { error: 'Stage SLA not found' }
+
+    const payload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+      updated_by: profile.id,
+    }
+
+    for (const [k, v] of Object.entries(updates)) {
+      if (v !== undefined) payload[k] = v
+    }
+
+    const { error } = await supabase
+      .from('channel_stage_sla')
+      .update(payload)
+      .eq('channel_slug', channel.slug)
+      .eq('stage_name', stageName)
+
+    if (error) return { error: error.message }
+
+    for (const [k, v] of Object.entries(updates)) {
+      if (v === undefined) continue
+      const oldVal = existing[k] != null ? String(existing[k]) : null
+      await logSettingsActivity(
+        profile.id,
+        `${stageName}.${k}`,
+        oldVal,
+        v != null ? String(v) : null,
+        channel.slug,
+      )
+    }
+
+    const recalc = await recalculateActiveProjectTargets(supabase, undefined, channel.dbName)
+    revalidatePath('/settings')
+    revalidatePath('/board')
+    revalidatePath('/dashboard')
+    revalidatePath('/projects')
+    return { success: true, projectsUpdated: recalc.updated ?? 0 }
+  }
 
   const { data: existing } = await supabase
     .from('settings_stage_sla')

@@ -8,14 +8,13 @@ import { useActiveChannel, useActiveChannelRole } from '@/context/ChannelContext
 import { useSidebar } from '@/context/SidebarContext'
 import { isSuperAdmin } from '@/lib/views'
 import {
-  LayoutDashboard, Columns2, LogOut, Grid3X3,
+  Home, LayoutDashboard, LogOut, Grid3X3,
   PanelLeftClose, PanelLeft, Settings, UserCircle,
 } from 'lucide-react'
 
 const NAV = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, show: () => true },
-  { href: '/board', label: 'Board', icon: Columns2, show: () => true },
-  { href: '/account', label: 'Account', icon: UserCircle, show: () => true },
+  { href: '/dashboard', label: 'Home', icon: Home, show: () => true },
+  { href: '/board', label: 'Dashboard', icon: LayoutDashboard, show: () => true },
   {
     href: '/settings',
     label: 'Settings',
@@ -92,13 +91,22 @@ export function Sidebar({ showChannelSwitcher = false }: { showChannelSwitcher?:
       </nav>
 
       <div className={cn('border-t border-zinc-100 px-3 py-3 space-y-1', collapsed && 'px-2')}>
-        {!collapsed && profile && (
+        {profile && (
           <Link
             href="/account"
-            className="block px-2 py-2 rounded-lg bg-zinc-50 border border-zinc-100 mb-1 hover:bg-zinc-100 transition-colors"
+            title={collapsed ? 'Profile' : undefined}
+            className={cn(
+              'flex items-center gap-2 rounded-lg bg-zinc-50 border border-zinc-100 mb-1 hover:bg-zinc-100 transition-colors',
+              collapsed ? 'justify-center p-2' : 'px-2 py-2',
+            )}
           >
-            <p className="text-xs font-medium text-zinc-700 truncate">{profile.name}</p>
-            <p className="text-[10px] text-zinc-400 truncate">{profile.email}</p>
+            <UserCircle size={collapsed ? 18 : 16} className="shrink-0 text-zinc-500" />
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-zinc-700 truncate">{profile.name}</p>
+                <p className="text-[10px] text-zinc-400 truncate">{profile.email}</p>
+              </div>
+            )}
           </Link>
         )}
         <button

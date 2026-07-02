@@ -5,10 +5,10 @@ import { BoardHeaderActions } from '@/components/board/BoardHeaderActions'
 import { fetchProjects } from '@/lib/data/projects'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig } from '@/lib/data/stage-sla'
+import { fetchChannelMembers } from '@/lib/data/channel-access'
 import { setStageSlaCache } from '@/lib/timelines'
-import { createClient } from '@/lib/supabase/server'
 import { getSessionProfile } from '@/lib/auth'
-import { getActiveChannelRole } from '@/lib/channel-context'
+import { getActiveChannelRole, getActiveChannelDbName, getActiveChannelSlug } from '@/lib/channel-context'
 import { redirect } from 'next/navigation'
 import { STAGES_INTERNAL, STAGES_EXTERNAL } from '@/lib/constants'
 import {
@@ -30,19 +30,18 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   if (!profile) redirect('/login')
 
   const params = await searchParams
-  const supabase = await createClient()
-  const [projects, usersRes, holidays, stageSla] = await Promise.all([
+  const [projects, users, holidays, stageSla, channelName] = await Promise.all([
     fetchProjects(),
-    supabase.from('profiles').select('*').eq('is_active', true).order('name'),
+    getActiveChannelSlug().then(slug => fetchChannelMembers(slug ?? '')),
     fetchHolidayDates(),
-    fetchStageSlaConfig(),
+    getActiveChannelDbName().then(name => fetchStageSlaConfig(name)),
+    getActiveChannelDbName(),
   ])
-  setStageSlaCache(stageSla)
+  setStageSlaCache(stageSla, channelName)
 
   const channelRole = await getActiveChannelRole(profile)
   const role = effectiveRoleForChannel(channelRole, profile.role)
   const superAdmin = isSuperAdmin(profile.role)
-  const users = usersRes.data ?? []
   const internal = usesInternalBoardView(profile.role, channelRole)
 
   const assigneeIds = new Set(

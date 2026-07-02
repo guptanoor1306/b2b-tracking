@@ -22,6 +22,7 @@ type Props = {
   canManageRoles: boolean
   stageSla: StageSlaRow[]
   slaActivity: SettingsActivityLog[]
+  channelDbName: string
 }
 
 const TABS: {
@@ -51,7 +52,7 @@ const TABS: {
 ]
 
 export function SettingsClient({
-  members, channelSlug, channelName, holidays, currentUserId, canManageRoles, stageSla, slaActivity,
+  members, channelSlug, channelName, holidays, currentUserId, canManageRoles, stageSla, slaActivity, channelDbName,
 }: Props) {
   const [tab, setTab] = useState<Tab>('users')
   const activeTab = TABS.find(t => t.id === tab)!
@@ -108,7 +109,7 @@ export function SettingsClient({
           )}
           {tab === 'holidays' && <HolidaysSettings holidays={holidays} />}
           {tab === 'timelines' && (
-            <StageSlaSettings rows={stageSla} activity={slaActivity} />
+            <StageSlaSettings rows={stageSla} activity={slaActivity} channelDbName={channelDbName} />
           )}
         </div>
       </div>

@@ -63,7 +63,7 @@ export async function fetchChannelMembers(slug: string): Promise<ChannelMember[]
   return data
     .map(row => {
       const mapped = mapProfileChannelRow(row as Parameters<typeof mapProfileChannelRow>[0])
-      if (!mapped.profile) return null
+      if (!mapped.profile || !mapped.profile.is_active) return null
       return { ...mapped.profile, channel_role: mapped.channel_role }
     })
     .filter((m): m is ChannelMember => Boolean(m))

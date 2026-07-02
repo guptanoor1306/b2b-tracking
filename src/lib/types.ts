@@ -49,6 +49,7 @@ export type Project = {
   delivered_date: string | null
   target_delivery_date: string | null
   level_of_video: string | null
+  video_language: string | null
   editor: string | null
   editor_id: string | null
   editor_2_id: string | null

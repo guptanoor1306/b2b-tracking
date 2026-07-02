@@ -10,6 +10,8 @@ type ProjectRow = {
   received_date: string | null
   target_delivery_date: string | null
   level_of_video: string | null
+  video_language: string | null
+  channel: string
   editor_id: string | null
   editor_2_id: string | null
   designer_id: string | null
@@ -22,7 +24,8 @@ type ProjectRow = {
 /** Recompute target dates for in-pipeline projects after admin SLA changes */
 export async function recalculateActiveProjectTargets(
   supabase: SupabaseClient,
-  holidays?: string[]
+  holidays?: string[],
+  channelDbName?: string | null,
 ) {
   const holidayDates = holidays ?? await fetchHolidayDates()
 
@@ -30,7 +33,7 @@ export async function recalculateActiveProjectTargets(
     .from('projects')
     .select(`
       id, current_stage, delivered_date, received_date, target_delivery_date,
-      level_of_video, editor_id, editor_2_id, designer_id, designer_2_id,
+      level_of_video, video_language, channel, editor_id, editor_2_id, designer_id, designer_2_id,
       uses_teleprompter, is_on_hold, last_status_update_at
     `)
 
@@ -40,11 +43,11 @@ export async function recalculateActiveProjectTargets(
     if (p.delivered_date) return false
     if (normalizeStage(p.current_stage) === FINAL_STAGE) return false
     return !!p.received_date
-  })
+  }).filter(p => !channelDbName || p.channel === channelDbName)
 
   let updated = 0
   for (const project of active) {
-    const target_delivery_date = computeProjectTargetDate(project, holidayDates)
+    const target_delivery_date = computeProjectTargetDate(project, holidayDates, project.channel)
     if (!target_delivery_date || target_delivery_date === project.target_delivery_date) continue
 
     const status_health = computeProjectHealth({

@@ -5,10 +5,11 @@ import { useAuth } from '@/context/AuthContext'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 
 const PAGE_TITLES: Record<string, string> = {
-  '/dashboard': 'Dashboard',
+  '/dashboard': 'Home',
   '/ip-overview': 'IP Overview',
-  '/board': 'Board',
+  '/board': 'Dashboard',
   '/settings': 'Settings',
+  '/account': 'Profile',
 }
 
 export function Topbar() {

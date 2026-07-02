@@ -171,9 +171,18 @@ export function CommentsSection({ projectId, comments, canAdd = true, variant = 
   return (
     <div className="min-w-0 space-y-3">
       {tree.length === 0 && (
-        <div className={cn('flex items-center gap-2 py-2', light ? 'text-zinc-400' : 'text-zinc-600')}>
-          <MessageSquare size={14} />
-          <p className="text-xs">No comments yet.</p>
+        <div className={cn('py-1', light ? 'text-zinc-400' : 'text-zinc-600')}>
+          {compact ? (
+            <>
+              <p className="text-sm font-medium text-zinc-600">No feedback yet</p>
+              <p className="mt-0.5 text-xs text-zinc-500">Comments from client and internal review will appear here.</p>
+            </>
+          ) : (
+            <div className="flex items-center gap-2 py-2">
+              <MessageSquare size={14} />
+              <p className="text-xs">No comments yet.</p>
+            </div>
+          )}
         </div>
       )}
       {tree.length > 0 && (

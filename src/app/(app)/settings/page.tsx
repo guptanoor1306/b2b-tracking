@@ -5,18 +5,20 @@ import { fetchStageSlaConfig, fetchSettingsActivityLogs } from '@/lib/data/stage
 import { setStageSlaCache } from '@/lib/timelines'
 import { SettingsClient } from '@/components/settings/SettingsClient'
 import { isSuperAdmin } from '@/lib/views'
+import { isZerodhaChannelDbName } from '@/lib/zerodha-sla'
 
 export default async function SettingsPage() {
   const { profile, channel } = await requireChannelAdmin()
+  const isZerodha = isZerodhaChannelDbName(channel.dbName)
 
   const [members, holidays, stageSla, slaActivity] = await Promise.all([
     fetchChannelMembers(channel.slug),
     fetchHolidays(),
-    fetchStageSlaConfig(),
-    fetchSettingsActivityLogs(),
+    fetchStageSlaConfig(channel.dbName),
+    fetchSettingsActivityLogs(channel.slug, isZerodha),
   ])
 
-  setStageSlaCache(stageSla)
+  setStageSlaCache(stageSla, channel.dbName)
 
   return (
     <SettingsClient
@@ -28,6 +30,7 @@ export default async function SettingsPage() {
       canManageRoles={isSuperAdmin(profile.role)}
       stageSla={stageSla}
       slaActivity={slaActivity}
+      channelDbName={channel.dbName}
     />
   )
 }

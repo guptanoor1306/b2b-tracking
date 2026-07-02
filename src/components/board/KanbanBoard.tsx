@@ -16,6 +16,7 @@ import { GripVertical, Clock, Layers, AlertTriangle, Pause } from 'lucide-react'
 import { getBoardDisplayStage } from '@/lib/views'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { getProjectTimeliness, resolveTargetReleaseDate } from '@/lib/timelines'
+import { useActiveChannel } from '@/context/ChannelContext'
 import {
   getTimelinessTextClassV2,
   pipelineProgressPercent,
@@ -306,6 +307,7 @@ export function KanbanBoard({
   externalView = false,
   viewerUserId,
 }: Props) {
+  const channel = useActiveChannel()
   const [projects, setProjects] = useState(initialProjects)
   const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [pending, setPending] = useState<{ project: Project; newStage: string } | null>(null)
@@ -374,7 +376,7 @@ export function KanbanBoard({
 
     setDragError('')
 
-    if (needsTeleprompterPrompt(project.current_stage, newStage)) {
+    if (needsTeleprompterPrompt(project.current_stage, newStage, channel?.dbName ?? project.channel)) {
       setPending({ project, newStage })
       return
     }

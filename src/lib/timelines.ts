@@ -14,6 +14,11 @@ import {
   totalPipelineHoursFromSla,
   DEFAULT_STAGE_SLA,
 } from '@/lib/stage-sla'
+import {
+  isZerodhaChannelDbName,
+  zerodhaStageSlaRows,
+  hindiTotalPipelineHours,
+} from '@/lib/zerodha-sla'
 import { HoldPeriod } from '@/lib/types'
 
 /** Maps legacy DB stage names to the current pipeline. */
@@ -44,9 +49,24 @@ export const LEGACY_STAGE_ALIASES: Record<string, string> = {
 }
 
 let cachedSlaRows: StageSlaRow[] = DEFAULT_STAGE_SLA.map((r, i) => ({ ...r, id: `default-${i}` }))
+let cachedSlaChannel: string | null = null
 
-export function setStageSlaCache(rows: StageSlaRow[]) {
-  cachedSlaRows = rows.length ? rows : cachedSlaRows
+export function setStageSlaCache(rows: StageSlaRow[], channelDbName?: string | null) {
+  cachedSlaChannel = channelDbName ?? null
+  if (isZerodhaChannelDbName(channelDbName)) {
+    cachedSlaRows = zerodhaStageSlaRows()
+    return
+  }
+  cachedSlaRows = rows.length ? rows : DEFAULT_STAGE_SLA.map((r, i) => ({ ...r, id: `default-${i}` }))
+}
+
+function slaRowsForChannel(channelDbName?: string | null): StageSlaRow[] {
+  if (isZerodhaChannelDbName(channelDbName ?? cachedSlaChannel)) return zerodhaStageSlaRows()
+  return cachedSlaRows
+}
+
+function resolveChannelDbName(project?: ProjectTeamContext & { channel?: string | null }, channelDbName?: string | null) {
+  return channelDbName ?? project?.channel ?? cachedSlaChannel
 }
 
 export function getStageSlaRows(): StageSlaRow[] {
@@ -56,11 +76,15 @@ export function getStageSlaRows(): StageSlaRow[] {
 export function getStageSlaHours(
   stage: string,
   level?: string | null,
-  project?: ProjectTeamContext,
-  teleprompter?: boolean | null
+  project?: ProjectTeamContext & { channel?: string | null },
+  teleprompter?: boolean | null,
+  channelDbName?: string | null,
 ): number | null {
+  const channel = resolveChannelDbName(project, channelDbName)
+  if (isZerodhaChannelDbName(channel) && project?.video_language === 'Hindi') return null
+
   const normalized = normalizeStage(stage)
-  const row = cachedSlaRows.find(r => r.stage_name === normalized)
+  const row = slaRowsForChannel(channel).find(r => r.stage_name === normalized)
   if (!row) return null
   const h = resolveStageHours(row, level, project, teleprompter)
   return h > 0 ? h : null
@@ -69,10 +93,23 @@ export function getStageSlaHours(
 /** Back-compat map for components still reading STAGE_SLA_HOURS */
 export function buildStageSlaHoursMap(
   level?: string | null,
-  project?: ProjectTeamContext
+  project?: ProjectTeamContext & { channel?: string | null },
+  channelDbName?: string | null,
 ): Partial<Record<string, number>> {
+  const channel = resolveChannelDbName(project, channelDbName)
+  if (isZerodhaChannelDbName(channel) && project?.video_language === 'Hindi') {
+    return {}
+  }
+  if (isZerodhaChannelDbName(channel)) {
+    const map: Partial<Record<string, number>> = {}
+    for (const row of slaRowsForChannel(channel)) {
+      const h = resolveStageHours(row, level, project)
+      if (h > 0) map[row.stage_name] = h
+    }
+    return map
+  }
   const map: Partial<Record<string, number>> = {}
-  for (const row of cachedSlaRows) {
+  for (const row of slaRowsForChannel(channel)) {
     const h = resolveStageHours(row, level, project)
     if (h > 0) map[row.stage_name] = h
   }
@@ -96,14 +133,18 @@ export function isProjectTimelineLocked(project: {
 
 export function projectTeamContext(project: {
   level_of_video?: string | null
+  video_language?: string | null
+  channel?: string | null
   editor_id?: string | null
   editor_2_id?: string | null
   designer_id?: string | null
   designer_2_id?: string | null
   uses_teleprompter?: boolean | null
-}): ProjectTeamContext {
+}): ProjectTeamContext & { channel?: string | null } {
   return {
     level_of_video: project.level_of_video,
+    video_language: project.video_language,
+    channel: project.channel,
     editor_id: project.editor_id,
     editor_2_id: project.editor_2_id,
     designer_id: project.designer_id,
@@ -117,6 +158,8 @@ export function computeProjectTargetDate(
     target_delivery_date?: string | null
     received_date?: string | null
     level_of_video?: string | null
+    video_language?: string | null
+    channel?: string | null
     editor_id?: string | null
     editor_2_id?: string | null
     designer_id?: string | null
@@ -125,7 +168,8 @@ export function computeProjectTargetDate(
     current_stage?: string | null
     delivered_date?: string | null
   },
-  holidays: string[] = []
+  holidays: string[] = [],
+  channelDbName?: string | null,
 ): string | null {
   if (isProjectTimelineLocked(project)) {
     return project.target_delivery_date ?? null
@@ -137,36 +181,47 @@ export function computeProjectTargetDate(
     project.received_date,
     holidays,
     project.level_of_video,
-    projectTeamContext(project)
+    projectTeamContext(project),
+    channelDbName ?? project.channel,
   )
 }
 
 export function totalPipelineHours(
   level?: string | null,
-  project?: ProjectTeamContext
+  project?: ProjectTeamContext & { channel?: string | null },
+  channelDbName?: string | null,
 ): number {
-  return totalPipelineHoursFromSla(cachedSlaRows, level, project)
+  const channel = resolveChannelDbName(project, channelDbName)
+  if (isZerodhaChannelDbName(channel)) {
+    if (project?.video_language === 'Hindi') {
+      return hindiTotalPipelineHours(level)
+    }
+    return totalPipelineHoursFromSla(slaRowsForChannel(channel), level, project)
+  }
+  return totalPipelineHoursFromSla(slaRowsForChannel(channel), level, project)
 }
 
 export function computeTargetReleaseDate(
   startDate: string | null | undefined,
   holidays: string[] = [],
   level?: string | null,
-  project?: ProjectTeamContext
+  project?: ProjectTeamContext & { channel?: string | null },
+  channelDbName?: string | null,
 ): Date | null {
   if (!startDate) return null
   const start = parseISO(startDate)
   if (!isValid(start)) return null
-  return addBusinessHours(start, totalPipelineHours(level, project), holidays)
+  return addBusinessHours(start, totalPipelineHours(level, project, channelDbName), holidays)
 }
 
 export function computeTargetReleaseDateString(
   startDate: string | null | undefined,
   holidays: string[] = [],
   level?: string | null,
-  project?: ProjectTeamContext
+  project?: ProjectTeamContext & { channel?: string | null },
+  channelDbName?: string | null,
 ): string | null {
-  const d = computeTargetReleaseDate(startDate, holidays, level, project)
+  const d = computeTargetReleaseDate(startDate, holidays, level, project, channelDbName)
   return d ? format(d, 'yyyy-MM-dd') : null
 }
 
@@ -175,6 +230,8 @@ export function resolveTargetReleaseDate(
     target_delivery_date: string | null
     received_date: string | null
     level_of_video?: string | null
+    video_language?: string | null
+    channel?: string | null
     editor_id?: string | null
     editor_2_id?: string | null
     designer_id?: string | null
@@ -183,9 +240,9 @@ export function resolveTargetReleaseDate(
     current_stage?: string | null
     delivered_date?: string | null
   },
-  holidays: string[] = []
+  holidays: string[] = [],
 ): string | null {
-  return computeProjectTargetDate(project, holidays)
+  return computeProjectTargetDate(project, holidays, project.channel)
 }
 
 export function formatSlaDuration(hours: number): string {
@@ -223,6 +280,8 @@ export function getProjectTimeliness(
     target_delivery_date: string | null
     received_date: string | null
     level_of_video?: string | null
+    video_language?: string | null
+    channel?: string | null
     is_on_hold?: boolean
     editor_id?: string | null
     editor_2_id?: string | null
@@ -235,7 +294,8 @@ export function getProjectTimeliness(
 ): TimelinessResult {
   const stage = normalizeStage(project.current_stage)
   const targetReleaseDate = resolveTargetReleaseDate(project, holidays)
-  const slaMap = buildStageSlaHoursMap(project.level_of_video, project)
+  const teamCtx = projectTeamContext(project)
+  const slaMap = buildStageSlaHoursMap(project.level_of_video, teamCtx, project.channel)
   const base = {
     targetReleaseDate,
     stageSlaHours: slaMap[stage] ?? null,

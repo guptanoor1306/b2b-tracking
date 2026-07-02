@@ -6,6 +6,7 @@ import { getSessionProfile } from '@/lib/auth'
 import { getActiveChannelRole } from '@/lib/channel-context'
 import { FINAL_STAGE } from '@/lib/constants'
 import { getActiveChannelDbName } from '@/lib/channel-context'
+import { isZerodhaChannelDbName } from '@/lib/zerodha-sla'
 import {
   isInternalRole,
   resolveStageAssigneeId,
@@ -42,6 +43,7 @@ type ProjectInput = {
   content_type?: string
   title?: string
   level_of_video?: string | null
+  video_language?: string | null
   received_date?: string | null
   picked_up_date?: string | null
   target_delivery_date?: string | null
@@ -101,10 +103,19 @@ export async function createProject(input: ProjectInput) {
 
   const supabase = await createClient()
   const holidays = await fetchHolidayDates()
+  const channelName = await getActiveChannelDbName()
+
+  if (isZerodhaChannelDbName(channelName)) {
+    if (!input.video_language) return { error: 'Video language is required' }
+    if (!input.level_of_video) return { error: 'Video level is required' }
+  }
+
   const initialStage = 'Video received'
   const now = new Date().toISOString()
   const teamCtx = {
     level_of_video: input.level_of_video,
+    video_language: input.video_language,
+    channel: channelName,
     editor_id: input.editor_id,
     editor_2_id: input.editor_2_id,
     designer_id: input.designer_id,
@@ -112,14 +123,12 @@ export async function createProject(input: ProjectInput) {
     uses_teleprompter: input.uses_teleprompter,
   }
   const target_delivery_date = input.received_date
-    ? computeTargetReleaseDateString(input.received_date, holidays, input.level_of_video, teamCtx)
+    ? computeTargetReleaseDateString(input.received_date, holidays, input.level_of_video, teamCtx, channelName)
     : null
 
   const editorName = input.editor_id
     ? (await supabase.from('profiles').select('name').eq('id', input.editor_id).single()).data?.name
     : input.editor
-
-  const channelName = await getActiveChannelDbName()
 
   const { data, error } = await supabase
     .from('projects')
@@ -128,6 +137,7 @@ export async function createProject(input: ProjectInput) {
       ip: input.ip?.trim() || '—',
       content_type: input.content_type || 'Long-Form',
       level_of_video: input.level_of_video ?? null,
+      video_language: input.video_language ?? null,
       priority: input.priority || 'Medium',
       editor: editorName ?? input.editor ?? null,
       editor_id: input.editor_id ?? null,
@@ -224,6 +234,8 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
 
   const teamCtx = {
     level_of_video: (input.level_of_video ?? existing.level_of_video) as string | null,
+    video_language: (input.video_language ?? existing.video_language) as string | null,
+    channel: existing.channel as string,
     editor_id: (input.editor_id ?? existing.editor_id) as string | null,
     editor_2_id: (input.editor_2_id ?? existing.editor_2_id) as string | null,
     designer_id: (input.designer_id ?? existing.designer_id) as string | null,
@@ -231,11 +243,19 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
     uses_teleprompter: (input.uses_teleprompter ?? existing.uses_teleprompter) as boolean | null,
   }
 
+  if (isZerodhaChannelDbName(existing.channel)) {
+    const lang = input.video_language ?? existing.video_language
+    const level = input.level_of_video ?? existing.level_of_video
+    if (!lang) return { error: 'Video language is required' }
+    if (!level) return { error: 'Video level is required' }
+  }
+
   const startDate = input.received_date ?? existing.received_date
   const timelineLocked = isProjectTimelineLocked(existing)
   if (!timelineLocked && startDate && (
     input.received_date !== existing.received_date ||
     input.level_of_video !== undefined ||
+    input.video_language !== undefined ||
     input.editor_id !== undefined ||
     input.editor_2_id !== undefined ||
     input.designer_id !== undefined ||
@@ -244,14 +264,16 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
   )) {
     patch.target_delivery_date = computeProjectTargetDate(
       { ...existing, ...patch, received_date: startDate },
-      holidays
+      holidays,
+      existing.channel,
     )
   }
 
   if (!timelineLocked && input.received_date && input.received_date !== existing.received_date) {
     patch.target_delivery_date = computeProjectTargetDate(
       { ...existing, ...patch, received_date: input.received_date },
-      holidays
+      holidays,
+      existing.channel,
     )
   }
 
@@ -324,7 +346,8 @@ export async function changeProjectStage(
     updates.uses_teleprompter = usesTeleprompter
     updates.target_delivery_date = computeProjectTargetDate(
       { ...project, uses_teleprompter: usesTeleprompter },
-      holidays
+      holidays,
+      project.channel,
     )
   } else if (normalizeStage(newStage) === FIRST_CUT_STAGE && usesTeleprompter != null) {
     updates.uses_teleprompter = usesTeleprompter
@@ -410,7 +433,8 @@ export async function updateStageHistoryDate(
       projectPatch.picked_up_date = dateStr
       projectPatch.target_delivery_date = computeProjectTargetDate(
         { ...project, received_date: dateStr },
-        holidays
+        holidays,
+        project.channel,
       )
     }
     if (isLast) {

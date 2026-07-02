@@ -150,9 +150,14 @@ export function shouldFilterBoardForViewer(
   return shouldFilterBoardToSelf(effectiveRoleForChannel(channelRole, globalRole))
 }
 
+/** Full internal pipeline (12 stages) — Agency sees same columns as Channel Team */
+export function usesInternalPipelineView(role: Role | string): boolean {
+  return isInternalRole(role) || role === 'Agency'
+}
+
 export function usesInternalBoardView(globalRole: Role | string, channelRole: string | null): boolean {
   if (isSuperAdmin(globalRole)) return true
-  return isInternalRole(effectiveRoleForChannel(channelRole, globalRole))
+  return usesInternalPipelineView(effectiveRoleForChannel(channelRole, globalRole))
 }
 
 /** @deprecated use shouldFilterBoardToSelf */

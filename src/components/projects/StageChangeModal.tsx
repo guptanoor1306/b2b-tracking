@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { FIRST_CUT_STAGE, STAGES_INTERNAL } from '@/lib/constants'
 import { normalizeStage } from '@/lib/timelines'
+import { channelUsesTeleprompterFlow } from '@/lib/zerodha-sla'
 
 type Props = {
   open: boolean
@@ -61,7 +62,12 @@ export function StageChangeModal({
   )
 }
 
-export function needsTeleprompterPrompt(currentStage: string, targetStage: string): boolean {
+export function needsTeleprompterPrompt(
+  currentStage: string,
+  targetStage: string,
+  channelDbName?: string | null,
+): boolean {
+  if (!channelUsesTeleprompterFlow(channelDbName)) return false
   return normalizeStage(targetStage) === FIRST_CUT_STAGE
     && normalizeStage(currentStage) !== FIRST_CUT_STAGE
 }

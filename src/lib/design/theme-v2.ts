@@ -47,6 +47,31 @@ export function pipelineProgressPercent(currentStage: string): number {
   return Math.round((idx / (STAGES_INTERNAL.length - 1)) * 100)
 }
 
+export function pipelineStageSummary(currentStage: string): {
+  completedStages: number
+  totalStages: number
+  progressLabel: string
+  percent: number
+} {
+  const totalStages = STAGES_INTERNAL.length
+  if (currentStage === FINAL_STAGE) {
+    return {
+      completedStages: totalStages,
+      totalStages,
+      progressLabel: 'Delivered',
+      percent: 100,
+    }
+  }
+  const idx = STAGES_INTERNAL.indexOf(currentStage as (typeof STAGES_INTERNAL)[number])
+  const completedStages = idx >= 0 ? idx + 1 : 1
+  return {
+    completedStages,
+    totalStages,
+    progressLabel: `${currentStage} in progress`,
+    percent: pipelineProgressPercent(currentStage),
+  }
+}
+
 export const HEALTH_PILL_V2: Record<string, string> = {
   'On track':  'bg-emerald-50 text-emerald-700 border-emerald-200',
   'At risk':   'bg-amber-50 text-amber-700 border-amber-200',

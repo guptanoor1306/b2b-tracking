@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Project, Profile } from '@/lib/types'
-import { CONTENT_TYPES, LEVELS_OF_VIDEO, PRIORITIES, STAGES_INTERNAL, FIRST_CUT_STAGE } from '@/lib/constants'
+import { CONTENT_TYPES, PRIORITIES, STAGES_INTERNAL, FIRST_CUT_STAGE } from '@/lib/constants'
 import { computeProjectTargetDate, isProjectTimelineLocked } from '@/lib/timelines'
 import { needsTeleprompterPrompt } from '@/components/projects/StageChangeModal'
 import { formatDate } from '@/lib/utils'
@@ -14,6 +14,14 @@ import { Button } from '@/components/ui/Button'
 import { SlideOver, SlideOverSection } from '@/components/ui/SlideOver'
 import { UserSearchSelect } from '@/components/ui/UserSearchSelect'
 import { updateProject, changeProjectStage } from '@/lib/actions/projects'
+import { useActiveChannel } from '@/context/ChannelContext'
+import {
+  isZerodhaChannelDbName,
+  isZerodhaChannelSlug,
+  projectLevelOptions,
+  VIDEO_LANGUAGES,
+  channelUsesTeleprompterFlow,
+} from '@/lib/zerodha-sla'
 
 type Props = {
   open: boolean
@@ -25,11 +33,16 @@ type Props = {
 
 export function ProjectEditModal({ open, onClose, project, users, holidays = [] }: Props) {
   const router = useRouter()
+  const channel = useActiveChannel()
+  const isZerodha = isZerodhaChannelSlug(channel?.slug)
+    || isZerodhaChannelDbName(channel?.dbName)
+    || isZerodhaChannelDbName(project.channel)
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
     title: project.title,
     ip: project.ip === '—' ? '' : project.ip,
     content_type: project.content_type,
+    video_language: project.video_language ?? '',
     level_of_video: project.level_of_video ?? '',
     priority: project.priority,
     editor_id: project.editor_id ?? '',
@@ -49,8 +62,15 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
     notes: project.notes ?? '',
   })
 
+  const levelOptions = useMemo(
+    () => projectLevelOptions(project.channel ?? channel?.dbName, form.video_language || null),
+    [project.channel, channel?.dbName, form.video_language],
+  )
+
   const teamCtx = {
     level_of_video: form.level_of_video || null,
+    video_language: form.video_language || null,
+    channel: project.channel,
     editor_id: form.editor_id || null,
     editor_2_id: form.editor_2_id || null,
     designer_id: form.designer_id || null,
@@ -64,16 +84,30 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
         ...project,
         received_date: form.received_date || null,
         level_of_video: form.level_of_video || null,
+        video_language: form.video_language || null,
         editor_id: form.editor_id || null,
         editor_2_id: form.editor_2_id || null,
         designer_id: form.designer_id || null,
         designer_2_id: form.designer_2_id || null,
         uses_teleprompter: form.uses_teleprompter === 'yes' ? true : form.uses_teleprompter === 'no' ? false : null,
-      }, holidays)
+      }, holidays, project.channel)
 
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+  const set = (k: string, v: string) => setForm(f => {
+    const next = { ...f, [k]: v }
+    if (k === 'video_language' && isZerodha) {
+      const valid = projectLevelOptions(project.channel ?? channel?.dbName, v).map(o => o.value)
+      if (next.level_of_video && !valid.includes(next.level_of_video)) {
+        next.level_of_video = ''
+      }
+    }
+    return next
+  })
 
-  const stageChangingToFirstCut = needsTeleprompterPrompt(project.current_stage, form.current_stage)
+  const stageChangingToFirstCut = needsTeleprompterPrompt(
+    project.current_stage,
+    form.current_stage,
+    project.channel ?? channel?.dbName,
+  )
 
   const handleSave = async () => {
     if (stageChangingToFirstCut && !form.uses_teleprompter) return
@@ -93,6 +127,7 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
       title: form.title.trim() || 'Untitled project',
       ip: form.ip.trim() || '—',
       content_type: form.content_type || CONTENT_TYPES[0],
+      video_language: form.video_language || null,
       level_of_video: form.level_of_video || null,
       priority: form.priority,
       editor_id: form.editor_id || null,
@@ -138,7 +173,26 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
           <Input label="IP" placeholder="Enter IP" value={form.ip} onChange={e => set('ip', e.target.value)} />
           <div className="grid grid-cols-2 gap-3">
             <Select label="Type" placeholder="Select type" options={CONTENT_TYPES.map(t => ({ value: t, label: t }))} value={form.content_type} onChange={e => set('content_type', e.target.value)} />
-            <Select label="Level" placeholder="Select level" options={LEVELS_OF_VIDEO.map(l => ({ value: l, label: l }))} value={form.level_of_video} onChange={e => set('level_of_video', e.target.value)} />
+            {isZerodha ? (
+              <>
+                <Select
+                  label="Language"
+                  placeholder="Select language"
+                  options={VIDEO_LANGUAGES.map(l => ({ value: l, label: l }))}
+                  value={form.video_language}
+                  onChange={e => set('video_language', e.target.value)}
+                />
+                <Select
+                  label="Level"
+                  placeholder={form.video_language ? 'Select level' : 'Select language first'}
+                  options={levelOptions}
+                  value={form.level_of_video}
+                  onChange={e => set('level_of_video', e.target.value)}
+                />
+              </>
+            ) : (
+              <Select label="Level" placeholder="Select level" options={levelOptions} value={form.level_of_video} onChange={e => set('level_of_video', e.target.value)} />
+            )}
           </div>
           <Select label="Priority" options={PRIORITIES.map(p => ({ value: p, label: p }))} value={form.priority} onChange={e => set('priority', e.target.value)} />
         </SlideOverSection>
@@ -158,7 +212,7 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
         <SlideOverSection title="Stage & dates">
           <Select label="Current stage" options={STAGES_INTERNAL.map(s => ({ value: s, label: s }))} value={form.current_stage} onChange={e => set('current_stage', e.target.value)} />
 
-          {(stageChangingToFirstCut || form.current_stage === FIRST_CUT_STAGE) && (
+          {(stageChangingToFirstCut || form.current_stage === FIRST_CUT_STAGE) && channelUsesTeleprompterFlow(project.channel ?? channel?.dbName) && (
             <div>
               <p className="mb-2 text-sm font-medium text-zinc-700">Is Teleprompter Used</p>
               <div className="flex gap-2">

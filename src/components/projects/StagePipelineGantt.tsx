@@ -28,7 +28,7 @@ const ROW_MIN_H = 56
 
 type Props = {
   history: StageHistory[]
-  project: Pick<Project, 'level_of_video' | 'editor_id' | 'editor_2_id' | 'designer_id' | 'designer_2_id' | 'uses_teleprompter' | 'is_on_hold' | 'current_stage' | 'delivered_date'>
+  project: Pick<Project, 'level_of_video' | 'video_language' | 'channel' | 'editor_id' | 'editor_2_id' | 'designer_id' | 'designer_2_id' | 'uses_teleprompter' | 'is_on_hold' | 'current_stage' | 'delivered_date'>
   holdPeriods?: HoldPeriod[]
   currentStage?: string
   projectId: string

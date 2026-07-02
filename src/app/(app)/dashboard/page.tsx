@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getSessionProfile } from '@/lib/auth'
-import { getActiveChannelRole } from '@/lib/channel-context'
+import { getActiveChannelRole, getActiveChannelDbName } from '@/lib/channel-context'
 import { fetchProjects } from '@/lib/data/projects'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig } from '@/lib/data/stage-sla'
@@ -20,12 +20,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const profile = await getSessionProfile()
   if (!profile) redirect('/login')
 
-  const [projects, holidays, stageSla] = await Promise.all([
+  const [projects, holidays, stageSla, channelName] = await Promise.all([
     fetchProjects(),
     fetchHolidayDates(),
-    fetchStageSlaConfig(),
+    getActiveChannelDbName().then(name => fetchStageSlaConfig(name)),
+    getActiveChannelDbName(),
   ])
-  setStageSlaCache(stageSla)
+  setStageSlaCache(stageSla, channelName)
 
   const channelRole = await getActiveChannelRole(profile)
 
