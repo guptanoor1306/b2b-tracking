@@ -12,12 +12,13 @@ import { getActiveChannelRole } from '@/lib/channel-context'
 import { redirect } from 'next/navigation'
 import { STAGES_INTERNAL, STAGES_EXTERNAL } from '@/lib/constants'
 import {
-  isInternalRole,
   canSeeBoardAssigneeFilter,
-  shouldFilterBoardToSelf,
+  shouldFilterBoardForViewer,
+  usesInternalBoardView,
   filterProjectsByAssignee,
   canChangeStages,
   effectiveRoleForChannel,
+  isSuperAdmin,
 } from '@/lib/views'
 import { filterProjectsByTeamMembership } from '@/lib/projects/team'
 
@@ -39,8 +40,9 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
 
   const channelRole = await getActiveChannelRole(profile)
   const role = effectiveRoleForChannel(channelRole, profile.role)
+  const superAdmin = isSuperAdmin(profile.role)
   const users = usersRes.data ?? []
-  const internal = isInternalRole(role)
+  const internal = usesInternalBoardView(profile.role, channelRole)
 
   const assigneeIds = new Set(
     projects.map(p => p.stage_assignee_id).filter((id): id is string => Boolean(id))
@@ -50,7 +52,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   const boardIps = [...new Set(projects.map(p => p.ip).filter(ip => ip && ip !== '—'))].sort()
 
   let filtered = projects
-  const teamBoard = shouldFilterBoardToSelf(role)
+  const teamBoard = shouldFilterBoardForViewer(profile.role, channelRole)
 
   if (teamBoard) {
     filtered = filterProjectsByTeamMembership(filtered, profile.id)
@@ -83,7 +85,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
           ips={boardIps}
           users={assigneeUsers}
           currentUserId={profile.id}
-          showAssigneeFilter={canSeeBoardAssigneeFilter(role)}
+          showAssigneeFilter={superAdmin || canSeeBoardAssigneeFilter(role)}
           matchCount={filtered.length}
         />
       </Suspense>

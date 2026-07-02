@@ -19,25 +19,60 @@ type CreateUserInput = {
   organization?: string
 }
 
-async function assertCanManageActiveChannel() {
+async function assertCanManageChannel(channelSlug: string) {
   const profile = await getSessionProfile()
   if (!profile) throw new Error('Unauthorized')
-  const slug = await getActiveChannelSlug()
-  if (!slug) throw new Error('No active channel')
-  if (isSuperAdmin(profile.role)) return { profile, slug }
-  const role = await fetchChannelRole(profile.id, slug)
+  if (!channelSlug) throw new Error('No channel specified')
+  if (isSuperAdmin(profile.role)) return { profile, slug: channelSlug }
+  const role = await fetchChannelRole(profile.id, channelSlug)
   if (role !== 'Channel Admin') throw new Error('Unauthorized')
-  return { profile, slug }
+  return { profile, slug: channelSlug }
 }
 
-export async function createChannelUser(input: CreateUserInput, channelRole: ChannelMemberRole) {
-  const { slug } = await assertCanManageActiveChannel()
+function isDuplicateAuthError(message: string): boolean {
+  return /already registered|already exists|duplicate/i.test(message)
+}
+
+async function findAuthUserByEmail(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string,
+) {
+  const normalized = email.trim().toLowerCase()
+  let page = 1
+  const perPage = 1000
+
+  while (true) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage })
+    if (error) throw error
+
+    const match = data.users.find(u => u.email?.toLowerCase() === normalized)
+    if (match) return match
+
+    if (data.users.length < perPage) break
+    page++
+  }
+
+  return null
+}
+
+export async function createChannelUser(
+  input: CreateUserInput,
+  channelRole: ChannelMemberRole,
+  channelSlug?: string,
+) {
+  const slug = channelSlug ?? await getActiveChannelSlug()
+  if (!slug) return { error: 'No channel selected' }
+
+  const { slug: resolvedSlug } = await assertCanManageChannel(slug)
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return { error: 'SUPABASE_SERVICE_ROLE_KEY is required for user creation' }
   }
 
   const admin = createAdminClient()
+
+  let userId: string
+  let isNewUser = false
 
   const { data: authData, error: authError } = await admin.auth.admin.createUser({
     email: input.email,
@@ -46,13 +81,29 @@ export async function createChannelUser(input: CreateUserInput, channelRole: Cha
     user_metadata: { name: input.name },
   })
 
-  if (authError) return { error: authError.message }
+  if (authError) {
+    if (!isDuplicateAuthError(authError.message)) {
+      return { error: authError.message }
+    }
 
-  const userId = authData.user.id
+    const existingAuthUser = await findAuthUserByEmail(admin, input.email)
+    if (!existingAuthUser) return { error: authError.message }
+
+    userId = existingAuthUser.id
+
+    const { error: updateAuthError } = await admin.auth.admin.updateUserById(userId, {
+      password: input.password,
+      email_confirm: true,
+      user_metadata: { name: input.name },
+    })
+    if (updateAuthError) return { error: updateAuthError.message }
+  } else {
+    userId = authData.user.id
+    isNewUser = true
+  }
 
   const { data: existing } = await admin.from('profiles').select('id').eq('id', userId).maybeSingle()
-  const isNewUser = !existing
-  if (isNewUser) {
+  if (!existing) {
     const { error: profileError } = await admin.from('profiles').insert({
       id: userId,
       name: input.name,
@@ -62,11 +113,20 @@ export async function createChannelUser(input: CreateUserInput, channelRole: Cha
       is_active: true,
     })
     if (profileError) return { error: profileError.message }
+    isNewUser = true
+  } else {
+    const { error: profileError } = await admin.from('profiles').update({
+      name: input.name,
+      email: input.email,
+      organization: input.organization ?? null,
+      is_active: true,
+    }).eq('id', userId)
+    if (profileError) return { error: profileError.message }
   }
 
   const { error: memberError } = await admin.from('profile_channels').upsert({
     profile_id: userId,
-    channel_slug: slug,
+    channel_slug: resolvedSlug,
     channel_role: channelRole,
   }, { onConflict: 'profile_id,channel_slug' })
 
@@ -80,12 +140,12 @@ export async function createChannelUser(input: CreateUserInput, channelRole: Cha
       name: input.name,
       email: input.email,
       password: input.password,
-      channelSlug: slug,
+      channelSlug: resolvedSlug,
       channelRole,
     }).catch(() => {})
   }
 
-  void notifyChannelAccess({ profileId: userId, channelSlug: slug, channelRole }).catch(() => {})
+  void notifyChannelAccess({ profileId: userId, channelSlug: resolvedSlug, channelRole }).catch(() => {})
 
   revalidatePath('/settings')
   revalidatePath('/studios/settings')

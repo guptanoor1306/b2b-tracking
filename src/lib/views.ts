@@ -133,7 +133,21 @@ export function canSeeBoardAssigneeFilter(role: Role | string): boolean {
 }
 
 export function shouldFilterBoardToSelf(role: Role | string): boolean {
+  if (isSuperAdmin(role)) return false
   return isExternalRole(role) || role === 'Channel Team'
+}
+
+export function shouldFilterBoardForViewer(
+  globalRole: Role | string,
+  channelRole: string | null,
+): boolean {
+  if (isSuperAdmin(globalRole)) return false
+  return shouldFilterBoardToSelf(effectiveRoleForChannel(channelRole, globalRole))
+}
+
+export function usesInternalBoardView(globalRole: Role | string, channelRole: string | null): boolean {
+  if (isSuperAdmin(globalRole)) return true
+  return isInternalRole(effectiveRoleForChannel(channelRole, globalRole))
 }
 
 /** @deprecated use shouldFilterBoardToSelf */

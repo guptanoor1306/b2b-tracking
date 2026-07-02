@@ -72,7 +72,7 @@ export function UsersClient({
   const handleCreate = async () => {
     setLoading(true)
     setError('')
-    const result = await createChannelUser(form, form.role as ChannelMember['channel_role'])
+    const result = await createChannelUser(form, form.role as ChannelMember['channel_role'], channelSlug)
     setLoading(false)
     if (result.error) { setError(result.error); return }
     setCreateOpen(false)

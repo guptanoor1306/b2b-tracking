@@ -105,7 +105,7 @@ export function StudiosSettingsClient({ allUsers, membersByChannel }: Props) {
   const handleCreate = () => {
     setError('')
     startTransition(async () => {
-      const result = await createChannelUser(form, form.role as ChannelMemberRole)
+      const result = await createChannelUser(form, form.role as ChannelMemberRole, activeSlug)
       if (result.error) {
         setError(result.error)
         return
