@@ -17,6 +17,7 @@ import {
   usesInternalBoardView,
   filterProjectsByAssignee,
   canChangeStages,
+  canMoveBoardCards,
   effectiveRoleForChannel,
   isSuperAdmin,
 } from '@/lib/views'
@@ -98,7 +99,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         users={users}
         holidays={holidays}
         stages={internal ? STAGES_INTERNAL : STAGES_EXTERNAL}
-        readOnly={!canChangeStages(role)}
+        readOnly={!canMoveBoardCards(role)}
         externalView={!internal}
         viewerUserId={profile.id}
         teamBoardView={teamBoard}

@@ -108,6 +108,11 @@ export function canChangeStages(role: Role | string): boolean {
   return role === 'Channel Admin' || role === 'Channel Team'
 }
 
+/** Any channel member can drag cards on the production board */
+export function canMoveBoardCards(role: Role | string): boolean {
+  return isInternalRole(role) || isExternalRole(role)
+}
+
 export function canSendStageReminder(role: Role | string): boolean {
   return role === 'Channel Admin' || role === 'Channel Team' || isSuperAdmin(role)
 }

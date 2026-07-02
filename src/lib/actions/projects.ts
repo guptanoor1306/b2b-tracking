@@ -11,6 +11,7 @@ import {
   resolveStageAssigneeId,
   effectiveRoleForChannel,
   canChangeStages,
+  canMoveBoardCards,
   canSendStageReminder,
   isChannelAdmin,
   canEditRpCuts,
@@ -284,7 +285,7 @@ export async function changeProjectStage(
   usesTeleprompter?: boolean | null
 ) {
   const session = await getSessionEffectiveRole()
-  if (!session || !canChangeStages(session.role)) {
+  if (!session || !canMoveBoardCards(session.role)) {
     return { error: 'Unauthorized' }
   }
   const { profile } = session

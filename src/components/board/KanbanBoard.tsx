@@ -3,9 +3,10 @@
 import { useState, useEffect, useMemo, useCallback, memo } from 'react'
 import Link from 'next/link'
 import {
-  DndContext, DragEndEvent, DragOverlay, DragStartEvent,
-  PointerSensor, TouchSensor, useSensor, useSensors, closestCorners,
-  useDraggable, useDroppable, defaultDropAnimationSideEffects,
+  DndContext, DragEndEvent, DragOverlay, DragStartEvent, DragCancelEvent,
+  PointerSensor, TouchSensor, useSensor, useSensors,
+  useDraggable, useDroppable, pointerWithin, rectIntersection,
+  type CollisionDetection,
 } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import { Project, Profile } from '@/lib/types'
@@ -26,73 +27,67 @@ import {
 
 const CARD_BASE = 'rounded-xl border bg-white transition-[box-shadow,opacity] hover:shadow-md'
 
-const dropAnimation = {
-  sideEffects: defaultDropAnimationSideEffects({
-    styles: { active: { opacity: '0.35' } },
-  }),
+function resolveDropStage(
+  overId: string | undefined,
+  stages: readonly string[],
+  projectsByStage: Map<string, Project[]>,
+): string | null {
+  if (!overId) return null
+  if (stages.includes(overId)) return overId
+  for (const stage of stages) {
+    if (projectsByStage.get(stage)?.some(p => p.id === overId)) return stage
+  }
+  return null
 }
 
-const KanbanCard = memo(function KanbanCard({
-  project, readOnly, holidays,
+const boardCollisionDetection: CollisionDetection = args => {
+  const pointerHits = pointerWithin(args)
+  if (pointerHits.length > 0) {
+    const columnHit = pointerHits.find(hit => {
+      const id = hit.id as string
+      return args.droppableContainers.some(c => c.id === id && c.data.current?.type === 'column')
+    })
+    return columnHit ? [columnHit] : pointerHits
+  }
+  return rectIntersection(args)
+}
+
+function CardContent({
+  project, holidays, compact = false,
 }: {
   project: Project
-  readOnly?: boolean
   holidays: string[]
+  compact?: boolean
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: project.id,
-    data: { project },
-    disabled: readOnly,
-  })
-
-  const style: React.CSSProperties | undefined = isDragging
-    ? { opacity: 0.35 }
-    : transform
-      ? { transform: CSS.Translate.toString(transform) }
-      : undefined
   const t = getProjectTimeliness(project, holidays)
   const target = resolveTargetReleaseDate(project, holidays)
   const progress = pipelineProgressPercent(project.current_stage)
-  const cardClass = getIpCardBorderClass(project.ip, project.is_on_hold)
-  const ipAccent = getIpAccent(project.ip)
   const delayClass = getTimelinessTextClassV2(t.status)
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(CARD_BASE, cardClass, 'p-3.5 touch-manipulation', isDragging && cn('shadow-lg ring-2', ipAccent.ring))}
-    >
-      <div className="flex gap-2">
-        {!readOnly && (
-          <button
-            {...listeners}
-            {...attributes}
-            className="text-zinc-300 hover:text-zinc-500 cursor-grab active:cursor-grabbing shrink-0 mt-1 touch-none"
-            aria-label="Drag"
-          >
-            <GripVertical size={15} />
-          </button>
-        )}
-        <Link href={`/projects/${project.id}`} prefetch className="flex-1 text-left min-w-0 block min-h-[44px]">
-          {t.status === 'delayed' && (
-            <span className="inline-block mb-1.5 rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">
-              Delayed
-            </span>
-          )}
-          {project.is_on_hold && (
-            <span className="inline-block mb-1.5 ml-1 rounded-md bg-zinc-200 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-700">
-              On hold
-            </span>
-          )}
-          <p className="text-[15px] font-bold text-zinc-900 line-clamp-2 leading-snug tracking-tight">
-            {project.title}
-          </p>
-          <p className="text-xs text-zinc-500 mt-1 truncate font-medium inline-flex items-center gap-1.5">
-            <span className={cn('h-2 w-2 shrink-0 rounded-full', ipAccent.bg)} />
-            {project.ip}
-          </p>
-
+    <>
+      {t.status === 'delayed' && (
+        <span className="inline-block mb-1.5 rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">
+          Delayed
+        </span>
+      )}
+      {project.is_on_hold && (
+        <span className="inline-block mb-1.5 ml-1 rounded-md bg-zinc-200 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-700">
+          On hold
+        </span>
+      )}
+      <p className={cn(
+        'font-bold text-zinc-900 line-clamp-2 leading-snug tracking-tight',
+        compact ? 'text-sm' : 'text-[15px]',
+      )}>
+        {project.title}
+      </p>
+      <p className="text-xs text-zinc-500 mt-1 truncate font-medium inline-flex items-center gap-1.5">
+        <span className={cn('h-2 w-2 shrink-0 rounded-full', getIpAccent(project.ip).bg)} />
+        {project.ip}
+      </p>
+      {!compact && (
+        <>
           <div className="mt-3">
             <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
               <div
@@ -105,7 +100,6 @@ const KanbanCard = memo(function KanbanCard({
             </div>
             <p className="text-[11px] text-zinc-500 mt-1 font-medium tabular-nums">{progress}% complete</p>
           </div>
-
           <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-zinc-100">
             <div className="min-w-0">
               {t.showLabel && (
@@ -134,6 +128,60 @@ const KanbanCard = memo(function KanbanCard({
               <span className="text-[11px] text-zinc-400 font-medium">Unassigned</span>
             )}
           </div>
+        </>
+      )}
+    </>
+  )
+}
+
+const KanbanCard = memo(function KanbanCard({
+  project, readOnly, holidays,
+}: {
+  project: Project
+  readOnly?: boolean
+  holidays: string[]
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: project.id,
+    data: { type: 'card', project },
+    disabled: readOnly,
+  })
+
+  const cardClass = getIpCardBorderClass(project.ip, project.is_on_hold)
+  const ipAccent = getIpAccent(project.ip)
+
+  const style: React.CSSProperties | undefined = isDragging
+    ? { opacity: 0.25 }
+    : transform
+      ? { transform: CSS.Translate.toString(transform), transition: undefined }
+      : undefined
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...(!readOnly ? listeners : {})}
+      {...(!readOnly ? attributes : {})}
+      className={cn(
+        CARD_BASE, cardClass, 'p-3.5 touch-manipulation select-none',
+        !readOnly && 'cursor-grab active:cursor-grabbing',
+        isDragging && cn('shadow-lg ring-2', ipAccent.ring),
+      )}
+    >
+      <div className="flex gap-2">
+        {!readOnly && (
+          <div className="text-zinc-300 shrink-0 mt-1 pointer-events-none">
+            <GripVertical size={15} />
+          </div>
+        )}
+        <Link
+          href={`/projects/${project.id}`}
+          prefetch
+          className="flex-1 text-left min-w-0 block min-h-[44px]"
+          onClick={e => { if (isDragging) e.preventDefault() }}
+          draggable={false}
+        >
+          <CardContent project={project} holidays={holidays} />
         </Link>
       </div>
     </div>
@@ -151,7 +199,11 @@ function KanbanColumn({
   isLast: boolean
   hideHeader?: boolean
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: stage, disabled: readOnly })
+  const { setNodeRef, isOver } = useDroppable({
+    id: stage,
+    data: { type: 'column', stage },
+    disabled: readOnly,
+  })
   const accent = getColumnAccent(index)
 
   return (
@@ -173,13 +225,13 @@ function KanbanColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          'flex-1 min-h-[120px] max-h-[480px] overflow-y-auto space-y-3 p-2 rounded-xl transition-colors',
+          'flex-1 min-h-[160px] max-h-[480px] overflow-y-auto space-y-3 p-2 rounded-xl transition-colors duration-150',
           accent.bg,
-          isOver && 'ring-2 ring-violet-300 ring-offset-2 ring-offset-[#f4f4f5] bg-violet-50/60'
+          isOver && 'ring-2 ring-violet-400 ring-offset-2 ring-offset-[#f4f4f5] bg-violet-50/70'
         )}
       >
         {projects.length === 0 && (
-          <p className="text-xs text-zinc-400 text-center py-10 font-medium">No projects</p>
+          <p className="text-xs text-zinc-400 text-center py-10 font-medium pointer-events-none">Drop here</p>
         )}
         {projects.map(p => (
           <KanbanCard
@@ -266,8 +318,8 @@ export function KanbanBoard({
   }, [initialProjects])
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 6 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
   )
 
   const getDisplayStage = useCallback(
@@ -286,13 +338,35 @@ export function KanbanBoard({
     return map
   }, [projects, stages, getDisplayStage])
 
-  const handleDragEnd = async (e: DragEndEvent) => {
-    if (readOnly) return
+  const applyStageChange = useCallback((projectId: string, newStage: string) => {
+    setProjects(prev =>
+      prev.map(p =>
+        p.id === projectId
+          ? { ...p, current_stage: newStage, last_status_update_at: new Date().toISOString() }
+          : p
+      )
+    )
+  }, [])
+
+  const handleDragStart = (e: DragStartEvent) => {
+    const p = projects.find(x => x.id === e.active.id)
+    if (p) setActiveProject(p)
+  }
+
+  const handleDragCancel = (_e: DragCancelEvent) => {
     setActiveProject(null)
+  }
+
+  const handleDragEnd = async (e: DragEndEvent) => {
+    setActiveProject(null)
+    if (readOnly) return
+
     const project = projects.find(p => p.id === e.active.id)
-    const newStage = e.over?.id as string
-    if (!project || !newStage || !stages.includes(newStage)) return
-    if (project.current_stage === newStage) return
+    const newStage = resolveDropStage(e.over?.id as string | undefined, stages, projectsByStage)
+    if (!project || !newStage) return
+
+    const currentDisplayStage = getDisplayStage(project)
+    if (currentDisplayStage === newStage) return
 
     if (needsTeleprompterPrompt(project.current_stage, newStage)) {
       setPending({ project, newStage })
@@ -300,13 +374,7 @@ export function KanbanBoard({
     }
 
     const previous = projects
-    setProjects(prev =>
-      prev.map(p =>
-        p.id === project.id
-          ? { ...p, current_stage: newStage, last_status_update_at: new Date().toISOString() }
-          : p
-      )
-    )
+    applyStageChange(project.id, newStage)
 
     const result = await changeProjectStage(project.id, newStage)
     if (result.error) setProjects(previous)
@@ -314,28 +382,30 @@ export function KanbanBoard({
 
   const handleTeleprompterConfirm = async (usesTeleprompter: boolean) => {
     if (!pending) return
+    const { project, newStage } = pending
+    setPending(null)
+
+    const previous = projects
+    applyStageChange(project.id, newStage)
+
     const result = await changeProjectStage(
-      pending.project.id,
-      pending.newStage,
+      project.id,
+      newStage,
       undefined,
       undefined,
       usesTeleprompter
     )
-    if (!result.error) {
+    if (result.error) {
+      setProjects(previous)
+    } else {
       setProjects(prev =>
         prev.map(p =>
-          p.id === pending.project.id
-            ? {
-                ...p,
-                current_stage: pending.newStage,
-                last_status_update_at: new Date().toISOString(),
-                uses_teleprompter: usesTeleprompter,
-              }
+          p.id === project.id
+            ? { ...p, uses_teleprompter: usesTeleprompter }
             : p
         )
       )
     }
-    setPending(null)
   }
 
   const byStage = (stage: string) => projectsByStage.get(stage) ?? []
@@ -345,12 +415,12 @@ export function KanbanBoard({
       <div className="rounded-2xl border border-zinc-200/80 bg-white/60 shadow-sm overflow-hidden">
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={e => { const p = projects.find(x => x.id === e.active.id); if (p) setActiveProject(p) }}
+          collisionDetection={boardCollisionDetection}
+          onDragStart={handleDragStart}
+          onDragCancel={handleDragCancel}
           onDragEnd={handleDragEnd}
         >
           <div className="max-h-[calc(100vh-14rem)] flex flex-col">
-            {/* Top horizontal scrollbar mirror */}
             <div
               id="board-scroll-top"
               className="overflow-x-auto overflow-y-hidden shrink-0 border-b border-zinc-100 h-3"
@@ -409,18 +479,17 @@ export function KanbanBoard({
               </div>
             </div>
           </div>
-          <DragOverlay dropAnimation={dropAnimation}>
-            {activeProject && (
+          <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1)' }}>
+            {activeProject ? (
               <div className={cn(
                 CARD_BASE,
                 getIpCardBorderClass(activeProject.ip, activeProject.is_on_hold),
-                'p-3.5 w-60 shadow-xl ring-2',
-                getIpAccent(activeProject.ip).ring
+                'p-3.5 w-[252px] shadow-2xl ring-2 rotate-[1.5deg] scale-[1.02]',
+                getIpAccent(activeProject.ip).ring,
               )}>
-                <p className="text-[15px] font-bold text-zinc-900 line-clamp-2">{activeProject.title}</p>
-                <p className="text-xs text-zinc-500 mt-1 font-medium">{activeProject.ip}</p>
+                <CardContent project={activeProject} holidays={holidays} compact />
               </div>
-            )}
+            ) : null}
           </DragOverlay>
         </DndContext>
       </div>
