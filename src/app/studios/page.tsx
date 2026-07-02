@@ -30,12 +30,13 @@ export default async function StudiosPage({ searchParams }: { searchParams: Sear
     fetchAllProjects(),
   ])
 
-  if (accessibleSlugs.length === 1 && !isSuperAdmin(profile.role)) {
+  if (accessibleSlugs.length === 1) {
     redirect(`/studios/enter/${accessibleSlugs[0]}`)
   }
 
   const superAdmin = isSuperAdmin(profile.role)
   const stats = computeChannelStats(projects, memberCounts, period)
+  const accessibleStats = stats.filter(s => accessibleSlugs.includes(s.slug))
 
   return (
     <Suspense fallback={null}>
@@ -49,7 +50,7 @@ export default async function StudiosPage({ searchParams }: { searchParams: Sear
         />
       ) : (
         <ChannelCardsHub
-          stats={stats}
+          stats={accessibleStats}
           accessibleSlugs={accessibleSlugs}
           profileName={profile.name}
         />

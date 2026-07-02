@@ -25,7 +25,7 @@ const NAV = [
   },
 ] as const
 
-export function Sidebar() {
+export function Sidebar({ showChannelSwitcher = false }: { showChannelSwitcher?: boolean }) {
   const pathname = usePathname()
   const { profile, signOut } = useAuth()
   const channel = useActiveChannel()
@@ -57,7 +57,7 @@ export function Sidebar() {
         )}
       </div>
 
-      {!collapsed && (
+      {!collapsed && showChannelSwitcher && (
         <Link
           href="/studios"
           className="mx-2 mt-3 flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-800"

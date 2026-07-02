@@ -9,8 +9,13 @@ import { StudioChannel } from '@/lib/channels'
 import { ChannelMemberRole } from '@/lib/types'
 
 export function AppShell({
-  children, activeChannel, channelRole,
-}: { children: React.ReactNode; activeChannel: StudioChannel; channelRole: ChannelMemberRole | null }) {
+  children, activeChannel, channelRole, showChannelSwitcher = false,
+}: {
+  children: React.ReactNode
+  activeChannel: StudioChannel
+  channelRole: ChannelMemberRole | null
+  showChannelSwitcher?: boolean
+}) {
   const { loading } = useAuth()
 
   if (loading) {
@@ -28,7 +33,7 @@ export function AppShell({
     <ChannelProvider channel={activeChannel} channelRole={channelRole}>
       <SidebarProvider>
         <div className="flex h-screen min-w-0 overflow-hidden bg-zinc-100">
-          <Sidebar />
+          <Sidebar showChannelSwitcher={showChannelSwitcher} />
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <Topbar />
             <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 bg-zinc-100">{children}</main>
