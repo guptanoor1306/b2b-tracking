@@ -10,6 +10,7 @@ import { ChannelMemberRole } from '@/lib/types'
 import { isSuperAdmin } from '@/lib/views'
 import { notifyChannelAccess, notifyUserWelcome } from '@/lib/email/notifications'
 import { saveInitialPasswordHint } from '@/lib/actions/account'
+import { reconcileAuthAndProfile, ensureProfileForUser } from '@/lib/users/reconcile'
 
 type CreateUserInput = {
   name: string
@@ -29,32 +30,6 @@ async function assertCanManageChannel(channelSlug: string) {
   return { profile, slug: channelSlug }
 }
 
-function isDuplicateAuthError(message: string): boolean {
-  return /already registered|already exists|duplicate/i.test(message)
-}
-
-async function findAuthUserByEmail(
-  admin: ReturnType<typeof createAdminClient>,
-  email: string,
-) {
-  const normalized = email.trim().toLowerCase()
-  let page = 1
-  const perPage = 1000
-
-  while (true) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage })
-    if (error) throw error
-
-    const match = data.users.find(u => u.email?.toLowerCase() === normalized)
-    if (match) return match
-
-    if (data.users.length < perPage) break
-    page++
-  }
-
-  return null
-}
-
 export async function createChannelUser(
   input: CreateUserInput,
   channelRole: ChannelMemberRole,
@@ -71,58 +46,15 @@ export async function createChannelUser(
 
   const admin = createAdminClient()
 
-  let userId: string
-  let isNewUser = false
+  const authResult = await reconcileAuthAndProfile(input)
+  if ('error' in authResult) return { error: authResult.error }
 
-  const { data: authData, error: authError } = await admin.auth.admin.createUser({
-    email: input.email,
-    password: input.password,
-    email_confirm: true,
-    user_metadata: { name: input.name },
-  })
+  const { userId, isNewAuth } = authResult
 
-  if (authError) {
-    if (!isDuplicateAuthError(authError.message)) {
-      return { error: authError.message }
-    }
+  const profileResult = await ensureProfileForUser(userId, input)
+  if ('error' in profileResult) return { error: profileResult.error }
 
-    const existingAuthUser = await findAuthUserByEmail(admin, input.email)
-    if (!existingAuthUser) return { error: authError.message }
-
-    userId = existingAuthUser.id
-
-    const { error: updateAuthError } = await admin.auth.admin.updateUserById(userId, {
-      password: input.password,
-      email_confirm: true,
-      user_metadata: { name: input.name },
-    })
-    if (updateAuthError) return { error: updateAuthError.message }
-  } else {
-    userId = authData.user.id
-    isNewUser = true
-  }
-
-  const { data: existing } = await admin.from('profiles').select('id').eq('id', userId).maybeSingle()
-  if (!existing) {
-    const { error: profileError } = await admin.from('profiles').insert({
-      id: userId,
-      name: input.name,
-      email: input.email,
-      role: 'Member',
-      organization: input.organization ?? null,
-      is_active: true,
-    })
-    if (profileError) return { error: profileError.message }
-    isNewUser = true
-  } else {
-    const { error: profileError } = await admin.from('profiles').update({
-      name: input.name,
-      email: input.email,
-      organization: input.organization ?? null,
-      is_active: true,
-    }).eq('id', userId)
-    if (profileError) return { error: profileError.message }
-  }
+  const isNewUser = isNewAuth || profileResult.isNewProfile
 
   const { error: memberError } = await admin.from('profile_channels').upsert({
     profile_id: userId,
@@ -230,7 +162,7 @@ export async function deleteUser(id: string) {
   }
 
   const admin = createAdminClient()
-  const { error } = await admin.auth.admin.deleteUser(id)
+  const { error } = await admin.auth.admin.deleteUser(id, false)
 
   if (error) return { error: error.message }
 
