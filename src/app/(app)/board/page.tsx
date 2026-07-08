@@ -10,7 +10,8 @@ import { setStageSlaCache } from '@/lib/timelines'
 import { getSessionProfile } from '@/lib/auth'
 import { getActiveChannelRole, getActiveChannelDbName, getActiveChannelSlug } from '@/lib/channel-context'
 import { redirect } from 'next/navigation'
-import { STAGES_INTERNAL, STAGES_EXTERNAL } from '@/lib/constants'
+import { STAGES_EXTERNAL } from '@/lib/constants'
+import { isZerodhaChannelDbName, internalStagesForChannel, VIDEO_LANGUAGES } from '@/lib/zerodha-sla'
 import {
   canSeeBoardAssigneeFilter,
   shouldFilterBoardForViewer,
@@ -50,6 +51,11 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   const assigneeUsers = users.filter(u => assigneeIds.has(u.id))
 
   const boardIps = [...new Set(projects.map(p => p.ip).filter(ip => ip && ip !== '—'))].sort()
+  const isZerodha = isZerodhaChannelDbName(channelName)
+  const boardLanguages = isZerodha
+    ? [...new Set(projects.map(p => p.video_language).filter(Boolean))].sort() as string[]
+    : []
+  const internalStages = internalStagesForChannel(channelName)
 
   let filtered = projects
   const teamBoard = shouldFilterBoardForViewer(profile.role, channelRole)
@@ -64,7 +70,11 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
     filtered = filtered.filter(p => p.ip === params.ip)
   }
 
-  const boardKey = `${params.assignee ?? 'all'}-${params.ip ?? 'all'}`
+  if (params.language) {
+    filtered = filtered.filter(p => p.video_language === params.language)
+  }
+
+  const boardKey = `${params.assignee ?? 'all'}-${params.ip ?? 'all'}-${params.language ?? 'all'}`
 
   return (
     <div className="theme-v2 -mx-6 -mt-2 min-h-[calc(100vh-4rem)] px-6 pb-10 pt-2">
@@ -83,9 +93,11 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
       <Suspense fallback={null}>
         <BoardFiltersBar
           ips={boardIps}
+          languages={boardLanguages.length ? boardLanguages : [...VIDEO_LANGUAGES]}
           users={assigneeUsers}
           currentUserId={profile.id}
           showAssigneeFilter={superAdmin || canSeeBoardAssigneeFilter(role)}
+          showLanguageFilter={isZerodha}
           matchCount={filtered.length}
         />
       </Suspense>
@@ -97,7 +109,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         projects={filtered}
         users={users}
         holidays={holidays}
-        stages={internal ? STAGES_INTERNAL : STAGES_EXTERNAL}
+        stages={internal ? internalStages : STAGES_EXTERNAL}
         readOnly={!canMoveBoardCards(role)}
         externalView={!internal}
         viewerUserId={profile.id}

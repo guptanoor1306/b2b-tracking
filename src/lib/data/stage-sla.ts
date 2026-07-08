@@ -4,6 +4,7 @@ import {
   isZerodhaChannelDbName,
   ZERODHA_CHANNEL_SLUG,
   DEFAULT_ZERODHA_STAGE_SLA,
+  filterZerodhaSlaRows,
 } from '@/lib/zerodha-sla'
 import { getChannelBySlug } from '@/lib/channels'
 
@@ -79,7 +80,7 @@ async function fetchChannelStageSla(channelSlug: string): Promise<StageSlaRow[]>
     }
   }
 
-  return data.map(mapSlaRow)
+  return filterZerodhaSlaRows(data.map(mapSlaRow))
 }
 
 export async function fetchStageSlaConfig(channelDbName?: string | null): Promise<StageSlaRow[]> {

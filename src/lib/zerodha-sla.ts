@@ -9,6 +9,37 @@ import {
 export const ZERODHA_CHANNEL_DB_NAME = 'Zerodha Online'
 export const ZERODHA_CHANNEL_SLUG = 'zerodha-online'
 
+/** Zerodha pipeline omits First Cut Changes (step 5 in the legacy 12-stage list). */
+export const ZERODHA_REMOVED_STAGES = ['First Cut Changes'] as const
+
+export const STAGES_ZERODHA_INTERNAL = STAGES_INTERNAL.filter(
+  s => !(ZERODHA_REMOVED_STAGES as readonly string[]).includes(s),
+) as readonly string[]
+
+export function internalStagesForChannel(channelDbName: string | null | undefined): readonly string[] {
+  return isZerodhaChannelDbName(channelDbName) ? STAGES_ZERODHA_INTERNAL : STAGES_INTERNAL
+}
+
+/** Map legacy Zerodha rows still on removed stages into the board column layout. */
+export function normalizeZerodhaBoardStage(stage: string): string {
+  if (stage === 'First Cut Changes') return 'Storyboard'
+  return stage
+}
+
+export function pipelineProgressPercentForChannel(
+  currentStage: string,
+  channelDbName?: string | null,
+): number {
+  const stages = internalStagesForChannel(channelDbName)
+  const stage = isZerodhaChannelDbName(channelDbName)
+    ? normalizeZerodhaBoardStage(currentStage)
+    : currentStage
+  if (stage === 'Final Delivery') return 100
+  const idx = (stages as readonly string[]).indexOf(stage)
+  if (idx < 0) return 0
+  return Math.round((idx / (stages.length - 1)) * 100)
+}
+
 export type VideoLanguage = 'English' | 'Hindi'
 
 export const VIDEO_LANGUAGES: VideoLanguage[] = ['English', 'Hindi']
@@ -60,24 +91,29 @@ export function hindiTotalPipelineHours(level: string | null | undefined): numbe
   return 24
 }
 
-/** English Zerodha SLA — steps 1–5 and 9–12 fixed; 6–8 vary by level (7 & 8 parallel from end of 6) */
+/** English Zerodha SLA — steps 1–4 and 8–11 fixed; 5–7 vary by level (6 & 7 parallel from end of 5) */
 export const DEFAULT_ZERODHA_STAGE_SLA: Omit<StageSlaRow, 'id'>[] = [
   { stage_name: 'Video received', role_owner: 'Internal', duration_hours: 0, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 1 },
   { stage_name: 'First Cut', role_owner: 'Editor', duration_hours: 1, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 2 },
   { stage_name: 'First Cut sent for Review', role_owner: 'External Team', duration_hours: 24, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: 'review_bundle', sort_order: 3 },
   { stage_name: 'Thumbnail Copy + RP Cuts', role_owner: 'External Team', duration_hours: 24, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: 'review_bundle', sort_order: 4 },
-  { stage_name: 'First Cut Changes', role_owner: 'Editor', duration_hours: 2, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 5 },
-  { stage_name: 'Storyboard', role_owner: 'Writer', duration_hours: 0, level_0_hours: 0, level_1_hours: 0, level_2_hours: 1.5, level_3_hours: 2, level_4_hours: 12, parallel_group: null, sort_order: 6 },
-  { stage_name: 'Graphics & VD', role_owner: 'Designer', duration_hours: 0, level_0_hours: 0, level_1_hours: 24, level_2_hours: 48, level_3_hours: 72, level_4_hours: 96, parallel_group: 'vd_bundle', sort_order: 7 },
-  { stage_name: 'Animation & VD', role_owner: 'Editor', duration_hours: 12, level_0_hours: 12, level_1_hours: 24, level_2_hours: 72, level_3_hours: 144, level_4_hours: 192, parallel_group: 'vd_bundle', sort_order: 8 },
-  { stage_name: 'Video/Thumbnail Review', role_owner: 'External Team', duration_hours: 24, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 9 },
-  { stage_name: 'Final Changes', role_owner: 'Editor', duration_hours: 24, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 10 },
-  { stage_name: 'Sound', role_owner: 'Sound Designer', duration_hours: 1.5, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 11 },
-  { stage_name: 'Final Delivery', role_owner: 'Internal', duration_hours: 0, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 12 },
+  { stage_name: 'Storyboard', role_owner: 'Writer', duration_hours: 0, level_0_hours: 0, level_1_hours: 0, level_2_hours: 1.5, level_3_hours: 2, level_4_hours: 12, parallel_group: null, sort_order: 5 },
+  { stage_name: 'Graphics & VD', role_owner: 'Designer', duration_hours: 0, level_0_hours: 0, level_1_hours: 24, level_2_hours: 48, level_3_hours: 72, level_4_hours: 96, parallel_group: 'vd_bundle', sort_order: 6 },
+  { stage_name: 'Animation & VD', role_owner: 'Editor', duration_hours: 12, level_0_hours: 12, level_1_hours: 24, level_2_hours: 72, level_3_hours: 144, level_4_hours: 192, parallel_group: 'vd_bundle', sort_order: 7 },
+  { stage_name: 'Video/Thumbnail Review', role_owner: 'External Team', duration_hours: 24, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 8 },
+  { stage_name: 'Final Changes', role_owner: 'Editor', duration_hours: 24, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 9 },
+  { stage_name: 'Sound', role_owner: 'Sound Designer', duration_hours: 1.5, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 10 },
+  { stage_name: 'Final Delivery', role_owner: 'Internal', duration_hours: 0, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 11 },
 ]
 
 export function zerodhaStageSlaRows(): StageSlaRow[] {
   return DEFAULT_ZERODHA_STAGE_SLA.map((r, i) => ({ ...r, id: `zerodha-${i}` }))
+}
+
+export function filterZerodhaSlaRows(rows: StageSlaRow[]): StageSlaRow[] {
+  return rows
+    .filter(r => !(ZERODHA_REMOVED_STAGES as readonly string[]).includes(r.stage_name))
+    .sort((a, b) => a.sort_order - b.sort_order)
 }
 
 export function resolveZerodhaStageHours(
@@ -112,5 +148,5 @@ export function zerodhaStageSlaHoursMap(
 }
 
 export function isZerodhaStage(stage: string): boolean {
-  return (STAGES_INTERNAL as readonly string[]).includes(stage)
+  return (STAGES_ZERODHA_INTERNAL as readonly string[]).includes(stage)
 }

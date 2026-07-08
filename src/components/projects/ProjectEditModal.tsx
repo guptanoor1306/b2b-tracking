@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Project, Profile } from '@/lib/types'
-import { CONTENT_TYPES, PRIORITIES, STAGES_INTERNAL, FIRST_CUT_STAGE } from '@/lib/constants'
+import { CONTENT_TYPES, PRIORITIES, FIRST_CUT_STAGE } from '@/lib/constants'
 import { computeProjectTargetDate, isProjectTimelineLocked } from '@/lib/timelines'
 import { needsTeleprompterPrompt } from '@/components/projects/StageChangeModal'
 import { formatDate } from '@/lib/utils'
@@ -18,6 +18,7 @@ import { useActiveChannel } from '@/context/ChannelContext'
 import {
   isZerodhaChannelDbName,
   isZerodhaChannelSlug,
+  internalStagesForChannel,
   projectLevelOptions,
   VIDEO_LANGUAGES,
   channelUsesTeleprompterFlow,
@@ -65,6 +66,11 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
   const levelOptions = useMemo(
     () => projectLevelOptions(project.channel ?? channel?.dbName, form.video_language || null),
     [project.channel, channel?.dbName, form.video_language],
+  )
+
+  const stageOptions = useMemo(
+    () => internalStagesForChannel(project.channel ?? channel?.dbName),
+    [project.channel, channel?.dbName],
   )
 
   const teamCtx = {
@@ -210,7 +216,7 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
         </SlideOverSection>
 
         <SlideOverSection title="Stage & dates">
-          <Select label="Current stage" options={STAGES_INTERNAL.map(s => ({ value: s, label: s }))} value={form.current_stage} onChange={e => set('current_stage', e.target.value)} />
+          <Select label="Current stage" options={stageOptions.map(s => ({ value: s, label: s }))} value={form.current_stage} onChange={e => set('current_stage', e.target.value)} />
 
           {(stageChangingToFirstCut || form.current_stage === FIRST_CUT_STAGE) && channelUsesTeleprompterFlow(project.channel ?? channel?.dbName) && (
             <div>

@@ -76,7 +76,7 @@ export function StageSlaSettings({ rows, activity, channelDbName }: Props) {
   }
 
   const description = isZerodha
-    ? 'Zerodha Online English SLAs. Steps 1–5 and 9–12 are shared across levels; steps 6–8 vary by level (Graphics & Animation run in parallel from step 6). Hindi projects use end-to-end totals only — Level 2: 1 day, Level 3: 1.5 days.'
+    ? 'Zerodha Online English SLAs. Steps 1–4 and 8–11 are shared across levels; steps 5–7 vary by level (Graphics & Animation run in parallel from step 5). Hindi projects use end-to-end totals only — Level 2: 1 day, Level 3: 1.5 days.'
     : 'Set SLA hours per pipeline stage. Changes apply to active in-pipeline projects and all new projects. Delivered projects keep their original target dates.'
 
   return (

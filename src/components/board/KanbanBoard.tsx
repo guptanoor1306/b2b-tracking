@@ -19,11 +19,15 @@ import { getProjectTimeliness, resolveTargetReleaseDate } from '@/lib/timelines'
 import { useActiveChannel } from '@/context/ChannelContext'
 import {
   getTimelinessTextClassV2,
-  pipelineProgressPercent,
   getColumnAccent,
   getIpCardBorderClass,
   getIpAccent,
 } from '@/lib/design/theme-v2'
+import {
+  isZerodhaChannelDbName,
+  normalizeZerodhaBoardStage,
+  pipelineProgressPercentForChannel,
+} from '@/lib/zerodha-sla'
 
 const CARD_BASE = 'rounded-xl border bg-white transition-[box-shadow,opacity] hover:shadow-md'
 
@@ -51,17 +55,19 @@ const boardCollisionDetection: CollisionDetection = args => {
 }
 
 function CardContent({
-  project, holidays, compact = false, titleHref,
+  project, holidays, compact = false, titleHref, channelDbName,
 }: {
   project: Project
   holidays: string[]
   compact?: boolean
   titleHref?: string
+  channelDbName?: string | null
 }) {
   const t = getProjectTimeliness(project, holidays)
   const target = resolveTargetReleaseDate(project, holidays)
-  const progress = pipelineProgressPercent(project.current_stage)
+  const progress = pipelineProgressPercentForChannel(project.current_stage, channelDbName ?? project.channel)
   const delayClass = getTimelinessTextClassV2(t.status)
+  const showLanguage = isZerodhaChannelDbName(channelDbName ?? project.channel) && project.video_language
 
   return (
     <>
@@ -93,9 +99,16 @@ function CardContent({
           project.title
         )}
       </p>
-      <p className="text-xs text-zinc-500 mt-1 truncate font-medium inline-flex items-center gap-1.5">
-        <span className={cn('h-2 w-2 shrink-0 rounded-full', getIpAccent(project.ip).bg)} />
-        {project.ip}
+      <p className="text-xs text-zinc-500 mt-1 truncate font-medium inline-flex items-center gap-1.5 flex-wrap">
+        <span className="inline-flex items-center gap-1.5 min-w-0">
+          <span className={cn('h-2 w-2 shrink-0 rounded-full', getIpAccent(project.ip).bg)} />
+          <span className="truncate">{project.ip}</span>
+        </span>
+        {showLanguage && (
+          <span className="shrink-0 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            {project.video_language}
+          </span>
+        )}
       </p>
       {!compact && (
         <>
@@ -146,11 +159,12 @@ function CardContent({
 }
 
 const KanbanCard = memo(function KanbanCard({
-  project, readOnly, holidays,
+  project, readOnly, holidays, channelDbName,
 }: {
   project: Project
   readOnly?: boolean
   holidays: string[]
+  channelDbName?: string | null
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: project.id,
@@ -181,7 +195,7 @@ const KanbanCard = memo(function KanbanCard({
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <CardContent project={project} holidays={holidays} titleHref={projectHref} />
+          <CardContent project={project} holidays={holidays} titleHref={projectHref} channelDbName={channelDbName} />
         </div>
       </div>
     </div>
@@ -189,7 +203,7 @@ const KanbanCard = memo(function KanbanCard({
 })
 
 function KanbanColumn({
-  stage, projects, readOnly, holidays, index, isLast, hideHeader,
+  stage, projects, readOnly, holidays, index, isLast, hideHeader, channelDbName,
 }: {
   stage: string
   projects: Project[]
@@ -198,6 +212,7 @@ function KanbanColumn({
   index: number
   isLast: boolean
   hideHeader?: boolean
+  channelDbName?: string | null
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage,
@@ -239,6 +254,7 @@ function KanbanColumn({
             project={p}
             readOnly={readOnly}
             holidays={holidays}
+            channelDbName={channelDbName}
           />
         ))}
       </div>
@@ -325,11 +341,16 @@ export function KanbanBoard({
 
   const getLayoutStage = useCallback(
     (project: Project) => {
-      // Always lay out cards by real stage so drag-and-drop sticks (team view only filters the list)
-      if (!externalView) return project.current_stage
+      if (!externalView) {
+        const dbName = channel?.dbName ?? project.channel
+        if (isZerodhaChannelDbName(dbName)) {
+          return normalizeZerodhaBoardStage(project.current_stage)
+        }
+        return project.current_stage
+      }
       return getBoardDisplayStage(project, { externalView, viewerUserId, teamBoardView: false })
     },
-    [externalView, viewerUserId],
+    [externalView, viewerUserId, channel?.dbName],
   )
 
   const projectsByStage = useMemo(() => {
@@ -490,6 +511,7 @@ export function KanbanBoard({
                     readOnly={readOnly}
                     holidays={holidays}
                     hideHeader
+                    channelDbName={channel?.dbName}
                   />
                 ))}
               </div>
@@ -506,7 +528,7 @@ export function KanbanBoard({
                 'p-3.5 w-[252px] shadow-2xl ring-2 rotate-[1.5deg] scale-[1.02]',
                 getIpAccent(activeProject.ip).ring,
               )}>
-                <CardContent project={activeProject} holidays={holidays} compact />
+                <CardContent project={activeProject} holidays={holidays} compact channelDbName={channel?.dbName} />
               </div>
             ) : null}
           </DragOverlay>
