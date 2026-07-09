@@ -154,9 +154,9 @@ export function ProjectSectionsGrid({
       'grid gap-4',
       canViewRpCuts ? 'lg:grid-cols-2' : 'md:grid-cols-2',
     )}>
-      {/* Row 1: Review Links | Client Information */}
+      {/* Row 1: Content Links | Client Information */}
       <SectionCard
-        title="Review Links"
+        title="Content Links"
         footer={canEditLinks ? (
           <div className="flex justify-end">
             <Button size="sm" loading={linksLoading} onClick={saveLinks}>Save</Button>
