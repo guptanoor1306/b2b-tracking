@@ -58,7 +58,7 @@ export function ProjectCopyLinks({ project }: { project: Project }) {
       <CopyBlock label="Thumbnail copy" value={project.thumbnail_copy} />
       <CopyBlock label="Title copy" value={project.title_copy} />
       <LinkBlock label="Drive / video link" url={driveLink} />
-      <LinkBlock label="Asset link" url={project.assets_link} />
+      <LinkBlock label="Review link" url={project.assets_link} />
     </aside>
   )
 }

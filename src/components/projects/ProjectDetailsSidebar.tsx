@@ -119,7 +119,7 @@ export function ProjectDetailsSidebar({ project, internal, holidays = [], varian
         <CopyBlock label="Thumbnail copy" value={project.thumbnail_copy} v2={v2} />
         <CopyBlock label="Title copy" value={project.title_copy} v2={v2} />
         <LinkBlock label="Drive / video link" url={driveLink} v2={v2} />
-        <LinkBlock label="Asset link" url={assetLink} v2={v2} />
+        <LinkBlock label="Review link" url={assetLink} v2={v2} />
       </div>
     </aside>
   )

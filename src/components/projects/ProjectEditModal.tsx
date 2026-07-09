@@ -240,7 +240,7 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
         <SlideOverSection title="Links & copy">
           <Input label="Thumbnail text" value={form.thumbnail_copy} onChange={e => set('thumbnail_copy', e.target.value)} />
           <Input label="Title copy" value={form.title_copy} onChange={e => set('title_copy', e.target.value)} />
-          <Input label="Asset link" value={form.assets_link} onChange={e => set('assets_link', e.target.value)} />
+          <Input label="Review link" value={form.assets_link} onChange={e => set('assets_link', e.target.value)} />
           <Input label="Drive / video link" value={form.drive_link} onChange={e => set('drive_link', e.target.value)} />
         </SlideOverSection>
 

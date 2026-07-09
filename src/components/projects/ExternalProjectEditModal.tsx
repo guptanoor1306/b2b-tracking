@@ -29,7 +29,7 @@ export function ExternalProjectEditModal({ open, onClose, project }: Props) {
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const missing = [
-    !form.assets_link.trim() && 'Asset link',
+    !form.assets_link.trim() && 'Review link',
     !form.title_copy.trim() && 'Title copy',
     !form.thumbnail_copy.trim() && 'Thumbnail copy',
     !form.drive_link.trim() && 'Drive / video link',
@@ -60,7 +60,7 @@ export function ExternalProjectEditModal({ open, onClose, project }: Props) {
             </div>
           </div>
         )}
-        <Input label="Asset link" placeholder="Paste asset folder or file link" value={form.assets_link} onChange={e => set('assets_link', e.target.value)} />
+        <Input label="Review link" placeholder="Paste review link" value={form.assets_link} onChange={e => set('assets_link', e.target.value)} />
         <Input label="Drive / video link" placeholder="Paste drive or video link" value={form.drive_link} onChange={e => set('drive_link', e.target.value)} />
         <Textarea label="Title copy" placeholder="Paste or write title copy" value={form.title_copy} onChange={e => set('title_copy', e.target.value)} />
         <Textarea label="Thumbnail copy" placeholder="Paste or write thumbnail text" value={form.thumbnail_copy} onChange={e => set('thumbnail_copy', e.target.value)} />

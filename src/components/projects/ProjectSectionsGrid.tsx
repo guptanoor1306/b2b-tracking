@@ -166,8 +166,8 @@ export function ProjectSectionsGrid({
         {canEditLinks ? (
           <div className="space-y-3">
             <Input
-              label="Asset link"
-              placeholder="Paste asset link"
+              label="Review link"
+              placeholder="Paste review link"
               value={links.assets_link}
               onChange={e => setLinks(l => ({ ...l, assets_link: e.target.value }))}
             />
@@ -180,7 +180,7 @@ export function ProjectSectionsGrid({
           </div>
         ) : (
           <div className="space-y-2">
-            <ReadLink label="Asset link" url={project.assets_link} />
+            <ReadLink label="Review link" url={project.assets_link} />
             <ReadLink label="Drive video link" url={driveLink} />
           </div>
         )}
