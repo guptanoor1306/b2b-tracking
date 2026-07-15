@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { Profile } from '@/lib/types'
 import { DEFAULT_STAGE_SLA, StageSlaRow } from '@/lib/stage-sla'
 import {
   isZerodhaChannelDbName,
@@ -112,6 +113,22 @@ export async function fetchProjectHoldPeriods(projectId: string) {
     .eq('project_id', projectId)
     .order('started_at')
   return data ?? []
+}
+
+export async function fetchOpenHoldStarters(): Promise<Record<string, Pick<Profile, 'id' | 'name' | 'email'>>> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('project_hold_periods')
+    .select('project_id, starter:profiles!project_hold_periods_started_by_fkey(id, name, email)')
+    .is('ended_at', null)
+
+  const starters: Record<string, Pick<Profile, 'id' | 'name' | 'email'>> = {}
+  for (const row of data ?? []) {
+    const raw = row.starter as Pick<Profile, 'id' | 'name' | 'email'> | Pick<Profile, 'id' | 'name' | 'email'>[] | null
+    const starter = Array.isArray(raw) ? raw[0] : raw
+    if (starter) starters[row.project_id] = starter
+  }
+  return starters
 }
 
 export async function fetchSettingsActivityLogs(

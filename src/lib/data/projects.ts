@@ -22,7 +22,15 @@ const PROJECT_SELECT = `
   agency:agencies(id, name),
   owner:profiles!projects_internal_owner_id_fkey(id, name, email),
   graphic_designer:profiles!projects_graphic_designer_id_fkey(id, name, email),
-  stage_assignee:profiles!projects_stage_assignee_id_fkey(id, name, email)
+  stage_assignee:profiles!projects_stage_assignee_id_fkey(id, name, email),
+  editor_profile:profiles!projects_editor_id_fkey(id, name, email),
+  editor_2_profile:profiles!projects_editor_2_id_fkey(id, name, email),
+  designer:profiles!projects_designer_id_fkey(id, name, email),
+  designer_2:profiles!projects_designer_2_id_fkey(id, name, email),
+  writer:profiles!projects_writer_id_fkey(id, name, email),
+  sound_designer:profiles!projects_sound_designer_id_fkey(id, name, email),
+  external_team_member:profiles!projects_external_team_member_id_fkey(id, name, email),
+  updater:profiles!projects_updated_by_fkey(id, name, email)
 `
 
 export async function fetchAllProjects(): Promise<Project[]> {

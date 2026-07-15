@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { Project } from '@/lib/types'
+import { DisplayProfile } from '@/lib/projects/display-assignee'
 import { CollapsibleProjectSection } from '@/components/dashboard/CollapsibleProjectSection'
 import { MonthFilter } from '@/components/dashboard/MonthFilter'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
@@ -19,6 +20,7 @@ type Props = {
   delivered: Project[]
   onHold: Project[]
   holidays: string[]
+  holdStarters?: Record<string, DisplayProfile>
 }
 
 const STAT_CONFIG = [
@@ -28,7 +30,7 @@ const STAT_CONFIG = [
 ]
 
 export function AdminDashboard({
-  profileName, month, counts, inPipeline, delivered, onHold, holidays,
+  profileName, month, counts, inPipeline, delivered, onHold, holidays, holdStarters = {},
 }: Props) {
   const needsAttention = inPipeline
     .filter(p => p.status_health === 'Delayed' || p.status_health === 'At risk')
@@ -136,6 +138,7 @@ export function AdminDashboard({
             iconColor="bg-violet-100 text-violet-600"
             emptyMessage="No projects in pipeline."
             variant="light"
+            assigneeContext="stage"
           />
           <CollapsibleProjectSection
             title="Delivered"
@@ -145,6 +148,7 @@ export function AdminDashboard({
             iconColor="bg-emerald-100 text-emerald-600"
             emptyMessage="No delivered projects."
             variant="light"
+            assigneeContext="stage"
           />
           <CollapsibleProjectSection
             title="On Hold"
@@ -154,6 +158,8 @@ export function AdminDashboard({
             iconColor="bg-zinc-100 text-zinc-600"
             emptyMessage="No projects on hold."
             variant="light"
+            assigneeContext="hold"
+            holdStarters={holdStarters}
           />
         </div>
       </div>

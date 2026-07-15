@@ -94,6 +94,7 @@ export type Project = {
   sound_designer?: Profile | null
   writer?: Profile | null
   external_team_member?: Profile | null
+  updater?: Profile | null
 }
 
 export type StageHistory = {

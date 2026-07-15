@@ -10,8 +10,7 @@ import { setStageSlaCache } from '@/lib/timelines'
 import { getSessionProfile } from '@/lib/auth'
 import { getActiveChannelRole, getActiveChannelDbName, getActiveChannelSlug } from '@/lib/channel-context'
 import { redirect } from 'next/navigation'
-import { STAGES_EXTERNAL } from '@/lib/constants'
-import { isZerodhaChannelDbName, internalStagesForChannel, VIDEO_LANGUAGES } from '@/lib/zerodha-sla'
+import { isZerodhaChannelDbName, externalStagesForChannel, internalStagesForChannel, VIDEO_LANGUAGES } from '@/lib/zerodha-sla'
 import {
   canSeeBoardAssigneeFilter,
   shouldFilterBoardForViewer,
@@ -61,6 +60,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
     ? [...new Set(projects.map(p => p.video_language).filter(Boolean))].sort() as string[]
     : []
   const internalStages = internalStagesForChannel(channelName)
+  const externalStages = externalStagesForChannel(channelName)
 
   let filtered = projects
   const teamBoard = shouldFilterBoardForViewer(profile.role, channelRole)
@@ -114,7 +114,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         projects={filtered}
         users={users}
         holidays={holidays}
-        stages={internal ? internalStages : STAGES_EXTERNAL}
+        stages={internal ? internalStages : externalStages}
         readOnly={!canMoveBoardCards(role)}
         externalView={!internal}
         viewerUserId={profile.id}

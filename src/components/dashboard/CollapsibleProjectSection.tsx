@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Project } from '@/lib/types'
 import { CompactProjectRow } from './CompactProjectRow'
+import { AssigneeContext, DisplayProfile } from '@/lib/projects/display-assignee'
 import {
   ChevronDown, Inbox, Package, CheckCircle2, GitBranch, PauseCircle,
 } from 'lucide-react'
@@ -27,10 +28,13 @@ type Props = {
   iconColor: string
   emptyMessage: string
   variant?: 'dark' | 'light'
+  assigneeContext?: AssigneeContext
+  holdStarters?: Record<string, DisplayProfile>
 }
 
 export function CollapsibleProjectSection({
   title, count, projects, iconName, iconColor, emptyMessage, variant = 'dark',
+  assigneeContext = 'stage', holdStarters,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const hasMore = projects.length > PREVIEW_LIMIT
@@ -80,7 +84,13 @@ export function CollapsibleProjectSection({
           <>
             <div className="grid gap-1">
               {visible.map(p => (
-                <CompactProjectRow key={p.id} project={p} variant={light ? 'light' : 'dark'} />
+                <CompactProjectRow
+                  key={p.id}
+                  project={p}
+                  variant={light ? 'light' : 'dark'}
+                  assigneeContext={assigneeContext}
+                  holdStarter={holdStarters?.[p.id]}
+                />
               ))}
             </div>
             {hasMore && !expanded && (

@@ -3,7 +3,7 @@ import { getSessionProfile } from '@/lib/auth'
 import { getActiveChannelRole, getActiveChannelDbName } from '@/lib/channel-context'
 import { fetchProjects } from '@/lib/data/projects'
 import { fetchHolidayDates } from '@/lib/data/holidays'
-import { fetchStageSlaConfig } from '@/lib/data/stage-sla'
+import { fetchStageSlaConfig, fetchOpenHoldStarters } from '@/lib/data/stage-sla'
 import { setStageSlaCache } from '@/lib/timelines'
 import { AdminDashboard } from '@/components/dashboard/AdminDashboard'
 import { ExternalDashboard } from '@/components/dashboard/ExternalDashboard'
@@ -20,11 +20,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const profile = await getSessionProfile()
   if (!profile) redirect('/login')
 
-  const [projects, holidays, stageSla, channelName] = await Promise.all([
+  const [projects, holidays, stageSla, channelName, holdStarters] = await Promise.all([
     fetchProjects(),
     fetchHolidayDates(),
     getActiveChannelDbName().then(name => fetchStageSlaConfig(name)),
     getActiveChannelDbName(),
+    fetchOpenHoldStarters(),
   ])
   setStageSlaCache(stageSla, channelName)
 
@@ -37,6 +38,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
         userId={profile.id}
         userName={profile.name}
         holidays={holidays}
+        showAssignedSections={channelRole === 'Channel Team'}
+        holdStarters={holdStarters}
       />
     )
   }
@@ -77,6 +80,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       delivered={delivered}
       onHold={onHold}
       holidays={holidays}
+      holdStarters={holdStarters}
     />
   )
 }

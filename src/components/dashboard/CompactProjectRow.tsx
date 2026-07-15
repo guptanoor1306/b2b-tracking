@@ -1,16 +1,25 @@
 import Link from 'next/link'
-import { Project } from '@/lib/types'
+import { Project, Profile } from '@/lib/types'
 import { Badge } from '@/components/ui/Badge'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { HEALTH_PILL_V2 } from '@/lib/design/theme-v2'
+import { AssigneeContext, DisplayProfile, getProjectDisplayAssignee } from '@/lib/projects/display-assignee'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type Props = { project: Project; variant?: 'dark' | 'light' }
+type Props = {
+  project: Project
+  variant?: 'dark' | 'light'
+  assigneeContext?: AssigneeContext
+  holdStarter?: DisplayProfile | null
+}
 
-export function CompactProjectRow({ project, variant = 'dark' }: Props) {
+export function CompactProjectRow({
+  project, variant = 'dark', assigneeContext = 'stage', holdStarter,
+}: Props) {
   const light = variant === 'light'
   const pill = HEALTH_PILL_V2[project.status_health]
+  const displayAssignee = getProjectDisplayAssignee(project, assigneeContext, holdStarter)
 
   return (
     <Link
@@ -41,10 +50,10 @@ export function CompactProjectRow({ project, variant = 'dark' }: Props) {
           <Badge label={project.status_health} variant="health" className="shrink-0" />
         </>
       )}
-      {project.stage_assignee && light && (
+      {light && displayAssignee && (
         <AssigneeAvatar
-          name={project.stage_assignee.name}
-          id={project.stage_assignee.id}
+          name={displayAssignee.name}
+          id={displayAssignee.id}
           size="sm"
           theme="light"
         />

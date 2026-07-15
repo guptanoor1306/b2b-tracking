@@ -1,10 +1,12 @@
 import Link from 'next/link'
 import { isUserOnProjectTeam } from '@/lib/projects/team'
 import { Project } from '@/lib/types'
+import { DisplayProfile } from '@/lib/projects/display-assignee'
 import { formatWaitingSince, formatDate } from '@/lib/utils'
 import { resolveTargetReleaseDate } from '@/lib/timelines'
 import { FINAL_STAGE } from '@/lib/constants'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
+import { CollapsibleProjectSection } from '@/components/dashboard/CollapsibleProjectSection'
 import { welcomeFirstName } from '@/lib/design/theme-v2'
 import {
   PlayCircle, CheckCircle2, Zap, ArrowRight, Clock,
@@ -15,16 +17,19 @@ type Props = {
   userId: string
   userName: string
   holidays?: string[]
+  showAssignedSections?: boolean
+  holdStarters?: Record<string, DisplayProfile>
 }
 
-export function ExternalDashboard({ projects, userId, userName, holidays = [] }: Props) {
-  const myProjects = projects.filter(
-    p => isUserOnProjectTeam(p, userId) && p.current_stage !== FINAL_STAGE
+export function ExternalDashboard({
+  projects, userId, userName, holidays = [], showAssignedSections = false, holdStarters = {},
+}: Props) {
+  const myProjects = projects.filter(p => isUserOnProjectTeam(p, userId))
+  const inPipeline = myProjects.filter(
+    p => p.current_stage !== FINAL_STAGE && p.status_health !== 'On hold'
   )
-  const inPipeline = myProjects
-  const delivered = projects.filter(
-    p => isUserOnProjectTeam(p, userId) && p.current_stage === FINAL_STAGE
-  )
+  const delivered = myProjects.filter(p => p.current_stage === FINAL_STAGE)
+  const onHold = myProjects.filter(p => p.status_health === 'On hold')
   const actionItems = projects.filter(
     p => p.stage_assignee_id === userId && p.current_stage !== FINAL_STAGE
   )
@@ -113,6 +118,42 @@ export function ExternalDashboard({ projects, userId, userName, holidays = [] }:
             </div>
           )}
         </section>
+
+        {showAssignedSections && (
+          <div className="space-y-4">
+            <CollapsibleProjectSection
+              title="In Pipeline"
+              count={inPipeline.length}
+              projects={inPipeline}
+              iconName="pipeline"
+              iconColor="bg-violet-100 text-violet-600"
+              emptyMessage="No projects in pipeline assigned to you."
+              variant="light"
+              assigneeContext="stage"
+            />
+            <CollapsibleProjectSection
+              title="Delivered"
+              count={delivered.length}
+              projects={delivered}
+              iconName="delivered"
+              iconColor="bg-emerald-100 text-emerald-600"
+              emptyMessage="No delivered projects assigned to you."
+              variant="light"
+              assigneeContext="stage"
+            />
+            <CollapsibleProjectSection
+              title="On Hold"
+              count={onHold.length}
+              projects={onHold}
+              iconName="hold"
+              iconColor="bg-zinc-100 text-zinc-600"
+              emptyMessage="No projects on hold assigned to you."
+              variant="light"
+              assigneeContext="hold"
+              holdStarters={holdStarters}
+            />
+          </div>
+        )}
       </div>
     </div>
   )
