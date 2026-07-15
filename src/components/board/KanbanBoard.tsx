@@ -13,7 +13,7 @@ import { cn, formatDate } from '@/lib/utils'
 import { changeProjectStage } from '@/lib/actions/projects'
 import { StageChangeModal, needsTeleprompterPrompt } from '@/components/projects/StageChangeModal'
 import { GripVertical, Clock, Layers, AlertTriangle, Pause } from 'lucide-react'
-import { getBoardDisplayStage } from '@/lib/views'
+import { getBoardDisplayStage, resolveStageAssigneeId } from '@/lib/views'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { getProjectTimeliness, resolveTargetReleaseDate } from '@/lib/timelines'
 import { useActiveChannel } from '@/context/ChannelContext'
@@ -55,19 +55,23 @@ const boardCollisionDetection: CollisionDetection = args => {
 }
 
 function CardContent({
-  project, holidays, compact = false, titleHref, channelDbName,
+  project, holidays, compact = false, titleHref, channelDbName, users = [],
 }: {
   project: Project
   holidays: string[]
   compact?: boolean
   titleHref?: string
   channelDbName?: string | null
+  users?: Profile[]
 }) {
   const t = getProjectTimeliness(project, holidays)
   const target = resolveTargetReleaseDate(project, holidays)
   const progress = pipelineProgressPercentForChannel(project.current_stage, channelDbName ?? project.channel)
   const delayClass = getTimelinessTextClassV2(t.status)
   const showLanguage = isZerodhaChannelDbName(channelDbName ?? project.channel) && project.video_language
+  const assigneeId = resolveStageAssigneeId(project, project.current_stage)
+  const displayAssignee = project.stage_assignee
+    ?? (assigneeId ? users.find(u => u.id === assigneeId) ?? null : null)
 
   return (
     <>
@@ -136,16 +140,16 @@ function CardContent({
                 </span>
               )}
             </div>
-            {project.stage_assignee ? (
+            {displayAssignee ? (
               <div className="flex items-center gap-1.5 shrink-0 max-w-[110px]">
                 <AssigneeAvatar
-                  name={project.stage_assignee.name}
-                  id={project.stage_assignee.id}
+                  name={displayAssignee.name}
+                  id={displayAssignee.id}
                   size="sm"
                   theme="light"
                 />
                 <span className="text-[11px] font-semibold text-zinc-700 truncate">
-                  {project.stage_assignee.name.split(' ')[0]}
+                  {displayAssignee.name.split(' ')[0]}
                 </span>
               </div>
             ) : (
@@ -159,12 +163,13 @@ function CardContent({
 }
 
 const KanbanCard = memo(function KanbanCard({
-  project, readOnly, holidays, channelDbName,
+  project, readOnly, holidays, channelDbName, users,
 }: {
   project: Project
   readOnly?: boolean
   holidays: string[]
   channelDbName?: string | null
+  users: Profile[]
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: project.id,
@@ -195,7 +200,7 @@ const KanbanCard = memo(function KanbanCard({
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <CardContent project={project} holidays={holidays} titleHref={projectHref} channelDbName={channelDbName} />
+          <CardContent project={project} holidays={holidays} titleHref={projectHref} channelDbName={channelDbName} users={users} />
         </div>
       </div>
     </div>
@@ -203,7 +208,7 @@ const KanbanCard = memo(function KanbanCard({
 })
 
 function KanbanColumn({
-  stage, projects, readOnly, holidays, index, isLast, hideHeader, channelDbName,
+  stage, projects, readOnly, holidays, index, isLast, hideHeader, channelDbName, users,
 }: {
   stage: string
   projects: Project[]
@@ -213,6 +218,7 @@ function KanbanColumn({
   isLast: boolean
   hideHeader?: boolean
   channelDbName?: string | null
+  users: Profile[]
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage,
@@ -255,6 +261,7 @@ function KanbanColumn({
             readOnly={readOnly}
             holidays={holidays}
             channelDbName={channelDbName}
+            users={users}
           />
         ))}
       </div>
@@ -512,6 +519,7 @@ export function KanbanBoard({
                     holidays={holidays}
                     hideHeader
                     channelDbName={channel?.dbName}
+                    users={users}
                   />
                 ))}
               </div>
@@ -528,7 +536,7 @@ export function KanbanBoard({
                 'p-3.5 w-[252px] shadow-2xl ring-2 rotate-[1.5deg] scale-[1.02]',
                 getIpAccent(activeProject.ip).ring,
               )}>
-                <CardContent project={activeProject} holidays={holidays} compact channelDbName={channel?.dbName} />
+                <CardContent project={activeProject} holidays={holidays} compact channelDbName={channel?.dbName} users={users} />
               </div>
             ) : null}
           </DragOverlay>

@@ -17,6 +17,7 @@ import { isUserOnProjectTeam } from '@/lib/projects/team'
 export function resolveStageAssigneeId(
   project: {
     editor_id?: string | null
+    editor_2_id?: string | null
     designer_id?: string | null
     writer_id?: string | null
     sound_designer_id?: string | null
@@ -26,24 +27,25 @@ export function resolveStageAssigneeId(
   stage: string
 ): string | null {
   const s = normalizeStage(stage)
+  const editor = project.editor_id ?? project.editor_2_id ?? null
   switch (s) {
     case 'First Cut':
     case 'First Cut Changes':
     case 'Animation & VD':
     case 'Final Changes':
-      return project.editor_id ?? null
+      return editor
     case 'Graphics & VD':
-      return project.designer_id ?? null
+      return project.designer_id ?? editor
     case 'Storyboard':
-      return project.writer_id ?? null
+      return project.writer_id ?? editor
     case 'Sound':
-      return project.sound_designer_id ?? null
+      return project.sound_designer_id ?? editor
     case 'First Cut sent for Review':
     case 'Thumbnail Copy + RP Cuts':
     case 'Video/Thumbnail Review':
-      return project.external_team_member_id ?? null
+      return project.external_team_member_id ?? editor
     default:
-      return project.stage_assignee_id ?? project.editor_id ?? null
+      return project.stage_assignee_id ?? editor
   }
 }
 
@@ -205,10 +207,13 @@ export function isToBePicked(project: { current_stage: string; picked_up_date: s
   return project.current_stage === 'Video received' && !project.picked_up_date
 }
 
-export function filterProjectsByAssignee<T extends { stage_assignee_id: string | null }>(
-  projects: T[],
-  assigneeId: string | null | undefined
-): T[] {
+export function filterProjectsByAssignee<
+  T extends { stage_assignee_id: string | null; current_stage: string } & Parameters<typeof resolveStageAssigneeId>[0],
+>(projects: T[], assigneeId: string | null | undefined): T[] {
   if (!assigneeId) return projects
-  return projects.filter(p => p.stage_assignee_id === assigneeId)
+  return projects.filter(p =>
+    p.stage_assignee_id === assigneeId
+    || resolveStageAssigneeId(p, p.current_stage) === assigneeId
+    || isUserOnProjectTeam(p, assigneeId)
+  )
 }

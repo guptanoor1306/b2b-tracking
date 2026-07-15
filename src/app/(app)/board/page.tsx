@@ -22,7 +22,7 @@ import {
   effectiveRoleForChannel,
   isSuperAdmin,
 } from '@/lib/views'
-import { filterProjectsByTeamMembership } from '@/lib/projects/team'
+import { filterProjectsByTeamMembership, isUserOnProjectTeam } from '@/lib/projects/team'
 
 type SearchParams = Promise<Record<string, string | undefined>>
 
@@ -45,10 +45,15 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   const superAdmin = isSuperAdmin(profile.role)
   const internal = usesInternalBoardView(profile.role, channelRole)
 
-  const assigneeIds = new Set(
-    projects.map(p => p.stage_assignee_id).filter((id): id is string => Boolean(id))
-  )
-  const assigneeUsers = users.filter(u => assigneeIds.has(u.id))
+  const canFilterByMember = superAdmin || canSeeBoardAssigneeFilter(role)
+  const filterUsers = canFilterByMember
+    ? users
+    : users.filter(u =>
+      projects.some(p =>
+        p.stage_assignee_id === u.id
+        || isUserOnProjectTeam(p, u.id)
+      )
+    )
 
   const boardIps = [...new Set(projects.map(p => p.ip).filter(ip => ip && ip !== '—'))].sort()
   const isZerodha = isZerodhaChannelDbName(channelName)
@@ -94,7 +99,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         <BoardFiltersBar
           ips={boardIps}
           languages={boardLanguages.length ? boardLanguages : [...VIDEO_LANGUAGES]}
-          users={assigneeUsers}
+          users={filterUsers}
           currentUserId={profile.id}
           showAssigneeFilter={superAdmin || canSeeBoardAssigneeFilter(role)}
           showLanguageFilter={isZerodha}
