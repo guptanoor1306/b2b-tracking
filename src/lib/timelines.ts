@@ -17,7 +17,6 @@ import {
 import {
   isZerodhaChannelDbName,
   zerodhaStageSlaRows,
-  hindiTotalPipelineHours,
 } from '@/lib/zerodha-sla'
 import { HoldPeriod } from '@/lib/types'
 
@@ -81,7 +80,6 @@ export function getStageSlaHours(
   channelDbName?: string | null,
 ): number | null {
   const channel = resolveChannelDbName(project, channelDbName)
-  if (isZerodhaChannelDbName(channel) && project?.video_language === 'Hindi') return null
 
   const normalized = normalizeStage(stage)
   const row = slaRowsForChannel(channel).find(r => r.stage_name === normalized)
@@ -97,9 +95,6 @@ export function buildStageSlaHoursMap(
   channelDbName?: string | null,
 ): Partial<Record<string, number>> {
   const channel = resolveChannelDbName(project, channelDbName)
-  if (isZerodhaChannelDbName(channel) && project?.video_language === 'Hindi') {
-    return {}
-  }
   if (isZerodhaChannelDbName(channel)) {
     const map: Partial<Record<string, number>> = {}
     for (const row of slaRowsForChannel(channel)) {
@@ -193,9 +188,6 @@ export function totalPipelineHours(
 ): number {
   const channel = resolveChannelDbName(project, channelDbName)
   if (isZerodhaChannelDbName(channel)) {
-    if (project?.video_language === 'Hindi') {
-      return hindiTotalPipelineHours(level)
-    }
     return totalPipelineHoursFromSla(slaRowsForChannel(channel), level, project)
   }
   return totalPipelineHoursFromSla(slaRowsForChannel(channel), level, project)

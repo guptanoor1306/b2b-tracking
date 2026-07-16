@@ -52,6 +52,8 @@ export type VideoLanguage = 'English' | 'Hindi'
 
 export const VIDEO_LANGUAGES: VideoLanguage[] = ['English', 'Hindi']
 
+export const ZERODHA_LEVELS = ['Level 0', 'Level 1', 'Level 2', 'Level 3', 'Level 4'] as const
+
 export const ZERODHA_LEVEL_LABELS: Record<string, string> = {
   'Level 0': 'Gif',
   'Level 1': 'Reel',
@@ -65,11 +67,8 @@ export function zerodhaLevelLabel(level: string): string {
   return suffix ? `${level} — ${suffix}` : level
 }
 
-export function zerodhaLevelOptions(language: VideoLanguage | string | null | undefined): { value: string; label: string }[] {
-  const levels = language === 'Hindi'
-    ? (['Level 2', 'Level 3'] as const)
-    : (['Level 0', 'Level 1', 'Level 2', 'Level 3', 'Level 4'] as const)
-  return levels.map(level => ({ value: level, label: zerodhaLevelLabel(level) }))
+export function zerodhaLevelOptions(_language?: VideoLanguage | string | null): { value: string; label: string }[] {
+  return ZERODHA_LEVELS.map(level => ({ value: level, label: zerodhaLevelLabel(level) }))
 }
 
 export function projectLevelOptions(
@@ -92,14 +91,7 @@ export function isZerodhaChannelSlug(slug: string | null | undefined): boolean {
   return slug === ZERODHA_CHANNEL_SLUG
 }
 
-/** Hindi projects: end-to-end totals only (Level 2 = 1 day, Level 3 = 1.5 days) */
-export function hindiTotalPipelineHours(level: string | null | undefined): number {
-  if (level === 'Level 3') return 36
-  if (level === 'Level 2') return 24
-  return 24
-}
-
-/** English Zerodha SLA — fixed early/late steps; Storyboard through Animation vary by level (VD steps parallel) */
+/** Zerodha SLA — fixed early/late steps; Storyboard through Animation vary by level (VD steps parallel) */
 export const DEFAULT_ZERODHA_STAGE_SLA: Omit<StageSlaRow, 'id'>[] = [
   { stage_name: 'Video received', role_owner: 'Internal', duration_hours: 0, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 1 },
   { stage_name: 'First Cut', role_owner: 'Editor', duration_hours: 1, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 2 },
@@ -135,9 +127,6 @@ export function totalZerodhaPipelineHours(
   level: string | null | undefined,
   project?: ProjectTeamContext,
 ): number {
-  if (project?.video_language === 'Hindi') {
-    return hindiTotalPipelineHours(level)
-  }
   return totalPipelineHoursFromSla(DEFAULT_ZERODHA_STAGE_SLA, level, project)
 }
 
@@ -145,7 +134,6 @@ export function zerodhaStageSlaHoursMap(
   level?: string | null,
   project?: ProjectTeamContext,
 ): Partial<Record<string, number>> {
-  if (project?.video_language === 'Hindi') return {}
   const map: Partial<Record<string, number>> = {}
   for (const row of DEFAULT_ZERODHA_STAGE_SLA) {
     const h = resolveZerodhaStageHours(row, level, project)
