@@ -286,6 +286,9 @@ CREATE POLICY "activity_logs_insert_auth" ON activity_logs FOR INSERT WITH CHECK
 -- COMMENTS policies
 CREATE POLICY "comments_select" ON comments FOR SELECT USING (TRUE);
 CREATE POLICY "comments_insert_auth" ON comments FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "comments_update_own" ON comments FOR UPDATE
+  USING (created_by = auth.uid())
+  WITH CHECK (created_by = auth.uid());
 CREATE POLICY "comments_delete_own" ON comments FOR DELETE USING (created_by = auth.uid() OR get_my_role() = 'Admin');
 
 -- AGENCIES policies

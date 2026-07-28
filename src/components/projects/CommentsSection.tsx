@@ -4,11 +4,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Comment } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
-import { addComment, deleteComment } from '@/lib/actions/projects'
+import { addComment, deleteComment, updateComment } from '@/lib/actions/projects'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/Textarea'
-import { MessageSquare, CornerDownRight, Trash2 } from 'lucide-react'
+import { MessageSquare, CornerDownRight, Trash2, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type CommentNode = Comment & { replies: Comment[] }
@@ -71,8 +71,22 @@ function CommentItem({
 }) {
   const router = useRouter()
   const [replyOpen, setReplyOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editText, setEditText] = useState(node.comment)
+  const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const canDelete = !!currentUserId && node.created_by === currentUserId
+  const canModify = !!currentUserId && node.created_by === currentUserId
+
+  const handleEdit = async () => {
+    if (!editText.trim()) return
+    setSaving(true)
+    const result = await updateComment(projectId, node.id, editText.trim())
+    setSaving(false)
+    if (!result.error) {
+      setEditing(false)
+      router.refresh()
+    }
+  }
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -98,28 +112,70 @@ function CommentItem({
               {formatDate(node.created_at, 'dd MMM yyyy HH:mm')}
             </span>
           </div>
-          {canDelete && (
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleting}
-              title="Delete your comment"
-              className={cn(
-                'shrink-0 rounded p-1 transition-colors disabled:opacity-50',
-                light ? 'text-zinc-400 hover:bg-red-50 hover:text-red-600' : 'text-zinc-500 hover:text-rose-400'
-              )}
-            >
-              <Trash2 size={13} />
-            </button>
+          {canModify && !editing && (
+            <div className="flex shrink-0 items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditText(node.comment)
+                  setEditing(true)
+                }}
+                title="Edit your comment"
+                className={cn(
+                  'rounded p-1 transition-colors',
+                  light ? 'text-zinc-400 hover:bg-violet-50 hover:text-violet-600' : 'text-zinc-500 hover:text-indigo-400'
+                )}
+              >
+                <Pencil size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                title="Delete your comment"
+                className={cn(
+                  'rounded p-1 transition-colors disabled:opacity-50',
+                  light ? 'text-zinc-400 hover:bg-red-50 hover:text-red-600' : 'text-zinc-500 hover:text-rose-400'
+                )}
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
           )}
         </div>
-        <p className={cn(
-          'text-sm leading-relaxed break-words whitespace-pre-wrap',
-          light ? 'text-zinc-700' : 'text-zinc-300'
-        )}>
-          {node.comment}
-        </p>
-        {canAdd && depth === 0 && (
+        {editing ? (
+          <div className="space-y-2">
+            <Textarea
+              value={editText}
+              onChange={e => setEditText(e.target.value)}
+              className={cn('text-xs min-h-[60px]', light && 'v2-textarea')}
+            />
+            <div className="flex gap-2">
+              <Button size="sm" loading={saving} onClick={handleEdit} className={cn('h-7 text-xs', light && 'v2-btn-primary')}>
+                Save
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setEditing(false)
+                  setEditText(node.comment)
+                }}
+                className={cn('h-7 text-xs', light && 'v2-btn-secondary')}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className={cn(
+            'text-sm leading-relaxed break-words whitespace-pre-wrap',
+            light ? 'text-zinc-700' : 'text-zinc-300'
+          )}>
+            {node.comment}
+          </p>
+        )}
+        {canAdd && depth === 0 && !editing && (
           <button
             type="button"
             onClick={() => setReplyOpen(v => !v)}

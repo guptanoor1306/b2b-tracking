@@ -499,6 +499,37 @@ export async function addComment(projectId: string, comment: string, parentId?: 
   return { success: true }
 }
 
+export async function updateComment(projectId: string, commentId: string, comment: string) {
+  const profile = await getSessionProfile()
+  if (!profile) return { error: 'Unauthorized' }
+
+  const text = comment.trim()
+  if (!text) return { error: 'Comment cannot be empty' }
+
+  const supabase = await createClient()
+  const { data: existing } = await supabase
+    .from('comments')
+    .select('id, project_id, created_by, comment')
+    .eq('id', commentId)
+    .eq('project_id', projectId)
+    .single()
+
+  if (!existing) return { error: 'Comment not found' }
+  if (existing.created_by !== profile.id) return { error: 'Unauthorized' }
+
+  const { error } = await supabase
+    .from('comments')
+    .update({ comment: text })
+    .eq('id', commentId)
+
+  if (error) return { error: error.message }
+
+  await logActivity(projectId, profile.id, 'comment_edit', 'comment', existing.comment, text)
+
+  revalidatePath(`/projects/${projectId}`)
+  return { success: true }
+}
+
 export async function deleteComment(projectId: string, commentId: string) {
   const profile = await getSessionProfile()
   if (!profile) return { error: 'Unauthorized' }
