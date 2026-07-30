@@ -119,10 +119,7 @@ function CardContent({
           <div className="mt-3">
             <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
               <div
-                className={cn(
-                  'h-full rounded-full transition-all',
-                  t.status === 'delayed' ? 'bg-orange-400' : 'bg-violet-500'
-                )}
+                className="h-full rounded-full bg-zinc-400 transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>

@@ -15,7 +15,7 @@ import {
   vdParallelStartIso,
   vdParallelAnchorEntry,
 } from '@/lib/pipeline-parallel'
-import { ANIMATION_VD_STAGE, GRAPHICS_VD_STAGE } from '@/lib/constants'
+import { ANIMATION_VD_STAGE, FINAL_STAGE, GRAPHICS_VD_STAGE } from '@/lib/constants'
 import { StageReminderButton } from '@/components/projects/StageReminderButton'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { updateStageHistoryDate } from '@/lib/actions/projects'
@@ -68,6 +68,19 @@ function toIsoDate(dateStr: string): string {
 
 function toDateStr(date: Date): string {
   return format(date, 'yyyy-MM-dd')
+}
+
+function resolveCurrentStageEnd(
+  stage: string,
+  startIso: string,
+  project: Pick<Project, 'delivered_date'>,
+): { endIso: string; endDate: Date } {
+  if (normalizeStage(stage) === FINAL_STAGE) {
+    const endIso = project.delivered_date ? toIsoDate(project.delivered_date) : startIso
+    return { endIso, endDate: startOfDay(parseISO(endIso)) }
+  }
+  const endIso = new Date().toISOString()
+  return { endIso, endDate: startOfDay(new Date()) }
 }
 
 function axisTicks(days: Date[]): AxisTick[] {
@@ -387,9 +400,10 @@ export function StagePipelineGantt({
       const startIso = parallelAnchorEntry
         ? resolveDate(parallelAnchorEntry.id, effectiveStart)
         : resolveDate(entry.id, effectiveStart)
-      const endIso = next ? resolveDate(next.id, next.changed_at) : new Date().toISOString()
+      const currentEnd = next ? null : resolveCurrentStageEnd(stage, startIso, project)
+      const endIso = next ? resolveDate(next.id, next.changed_at) : currentEnd!.endIso
       const start = startOfDay(parseISO(startIso))
-      const endDate = next ? startOfDay(parseISO(endIso)) : startOfDay(new Date())
+      const endDate = next ? startOfDay(parseISO(endIso)) : currentEnd!.endDate
       const isCurrent = entry.new_stage === currentStage && !next
       const overSla = isStageDurationOverSla(stage, d.startedAt, endIso, holidays, project.level_of_video, project, holdPeriods, timelineLocked)
 
@@ -485,13 +499,20 @@ export function StagePipelineGantt({
       if (r.end > max) max = r.end
     }
 
+    const pipelineComplete =
+      timelineLocked || normalizeStage(currentStage ?? '') === FINAL_STAGE
+
     const rangeStart = addDays(min, -1)
-    const rangeEnd = addDays(max, 1)
+    const rangeEnd = pipelineComplete ? max : addDays(max, 1)
     const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd })
     const totalDays = days.length
     const today = startOfDay(new Date())
     const todayIdx = differenceInCalendarDays(today, rangeStart)
-    const todayOffset = todayIdx >= 0 && todayIdx < totalDays ? (todayIdx / totalDays) * 100 : null
+    const todayOffset = pipelineComplete
+      ? null
+      : todayIdx >= 0 && todayIdx < totalDays
+        ? (todayIdx / totalDays) * 100
+        : null
 
     const rows: StageRow[] = finalBuilt.map(r => {
       const { leftPct, widthPct } = barGeometry(r.start, r.end, rangeStart, totalDays)
