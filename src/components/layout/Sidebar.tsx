@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import { useActiveChannel, useActiveChannelRole } from '@/context/ChannelContext'
@@ -9,7 +10,7 @@ import { useSidebar } from '@/context/SidebarContext'
 import { isSuperAdmin } from '@/lib/views'
 import {
   Home, LayoutDashboard, LogOut, Grid3X3,
-  PanelLeftClose, PanelLeft, Settings, UserCircle,
+  PanelLeftClose, PanelLeft, Settings, UserCircle, Loader2,
 } from 'lucide-react'
 
 const NAV = [
@@ -26,18 +27,33 @@ const NAV = [
 
 export function Sidebar({ showChannelSwitcher = false }: { showChannelSwitcher?: boolean }) {
   const pathname = usePathname()
+  const [pendingHref, setPendingHref] = useState<string | null>(null)
   const { profile, signOut } = useAuth()
   const channel = useActiveChannel()
   const channelRole = useActiveChannelRole()
   const { collapsed, toggle } = useSidebar()
 
+  useEffect(() => {
+    setPendingHref(null)
+  }, [pathname])
+
   const visible = NAV.filter(n => n.show(channelRole, profile?.role))
+
+  const linkClass = (href: string, active: boolean, extra?: string) => cn(
+    'relative z-10 flex min-h-11 items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors active:bg-zinc-100',
+    collapsed && 'justify-center px-2',
+    active
+      ? 'bg-zinc-100 text-zinc-900 font-medium'
+      : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-50',
+    pendingHref === href && 'opacity-70',
+    extra,
+  )
 
   return (
     <aside
       className={cn(
-        'flex flex-col min-h-screen bg-white border-r border-zinc-200 shrink-0 transition-all duration-300',
-        collapsed ? 'w-[68px]' : 'w-56'
+        'fixed inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-zinc-200 pointer-events-auto transition-[width] duration-200',
+        collapsed ? 'w-[68px]' : 'w-56',
       )}
     >
       <div className={cn('flex items-center gap-3 px-4 py-5 border-b border-zinc-100', collapsed && 'justify-center px-2')}>
@@ -59,9 +75,14 @@ export function Sidebar({ showChannelSwitcher = false }: { showChannelSwitcher?:
       {!collapsed && showChannelSwitcher && (
         <Link
           href="/studios"
-          className="mx-2 mt-3 flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-800"
+          prefetch
+          onClick={() => setPendingHref('/studios')}
+          className={cn(
+            'relative z-10 mx-2 mt-3 flex min-h-11 items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 active:bg-zinc-200/80',
+            pendingHref === '/studios' && 'opacity-70',
+          )}
         >
-          <Grid3X3 size={14} />
+          {pendingHref === '/studios' ? <Loader2 size={14} className="animate-spin" /> : <Grid3X3 size={14} />}
           All channels
         </Link>
       )}
@@ -70,20 +91,21 @@ export function Sidebar({ showChannelSwitcher = false }: { showChannelSwitcher?:
         {visible.map(item => {
           const Icon = item.icon
           const active = pathname === item.href || pathname.startsWith(item.href + '/')
+          const pending = pendingHref === item.href
           return (
             <Link
               key={item.href}
               href={item.href}
+              prefetch
+              onClick={() => setPendingHref(item.href)}
               title={collapsed ? item.label : undefined}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
-                collapsed && 'justify-center px-2',
-                active
-                  ? 'bg-zinc-100 text-zinc-900 font-medium'
-                  : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-50'
-              )}
+              className={linkClass(item.href, active)}
             >
-              <Icon size={18} className={cn(active ? 'text-violet-600' : 'text-zinc-400')} />
+              {pending ? (
+                <Loader2 size={18} className="shrink-0 animate-spin text-violet-600" />
+              ) : (
+                <Icon size={18} className={cn(active ? 'text-violet-600' : 'text-zinc-400')} />
+              )}
               {!collapsed && <span>{item.label}</span>}
             </Link>
           )
@@ -94,11 +116,10 @@ export function Sidebar({ showChannelSwitcher = false }: { showChannelSwitcher?:
         {profile && (
           <Link
             href="/account"
+            prefetch
+            onClick={() => setPendingHref('/account')}
             title={collapsed ? 'Profile' : undefined}
-            className={cn(
-              'flex items-center gap-2 rounded-lg bg-zinc-50 border border-zinc-100 mb-1 hover:bg-zinc-100 transition-colors',
-              collapsed ? 'justify-center p-2' : 'px-2 py-2',
-            )}
+            className={linkClass('/account', pathname === '/account', 'gap-2 bg-zinc-50 border border-zinc-100 mb-1 hover:bg-zinc-100 active:bg-zinc-200/80')}
           >
             <UserCircle size={collapsed ? 18 : 16} className="shrink-0 text-zinc-500" />
             {!collapsed && (
@@ -110,10 +131,11 @@ export function Sidebar({ showChannelSwitcher = false }: { showChannelSwitcher?:
           </Link>
         )}
         <button
+          type="button"
           onClick={toggle}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className={cn(
-            'flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-zinc-500 hover:text-zinc-700 hover:bg-zinc-50 transition-colors',
+            'flex min-h-10 items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-zinc-500 hover:text-zinc-700 hover:bg-zinc-50 active:bg-zinc-100 transition-colors',
             collapsed && 'justify-center px-2'
           )}
         >
@@ -121,10 +143,11 @@ export function Sidebar({ showChannelSwitcher = false }: { showChannelSwitcher?:
           {!collapsed && <span>Collapse</span>}
         </button>
         <button
+          type="button"
           onClick={signOut}
           title="Sign out"
           className={cn(
-            'flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-zinc-500 hover:text-red-600 hover:bg-red-50 transition-colors',
+            'flex min-h-10 items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-zinc-500 hover:text-red-600 hover:bg-red-50 active:bg-red-100 transition-colors',
             collapsed && 'justify-center px-2'
           )}
         >

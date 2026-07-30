@@ -17,7 +17,12 @@ function buildTree(comments: Comment[]): CommentNode[] {
   const sorted = [...comments].sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   )
-  const roots = sorted.filter(c => !c.parent_id).reverse()
+  const roots = sorted.filter(c => !c.parent_id)
+  roots.sort((a, b) => {
+    if (a.kind === 'decline' && b.kind !== 'decline') return -1
+    if (b.kind === 'decline' && a.kind !== 'decline') return 1
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  })
   return roots.map(root => ({
     ...root,
     replies: sorted.filter(c => c.parent_id === root.id),
@@ -99,12 +104,19 @@ function CommentItem({
     <div className={cn('min-w-0', depth > 0 ? cn('ml-6 pl-3 border-l', light ? 'border-violet-100' : 'border-white/[0.06]') : '')}>
       <div className={cn(
         'rounded-lg px-3 py-2 border min-w-0',
-        light
-          ? 'bg-zinc-50 border-zinc-100'
-          : 'bg-white/[0.02] border-white/[0.05]'
+        node.kind === 'decline'
+          ? 'bg-red-50 border-red-200'
+          : light
+            ? 'bg-zinc-50 border-zinc-100'
+            : 'bg-white/[0.02] border-white/[0.05]'
       )}>
         <div className="flex items-start justify-between gap-2 mb-1 min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+            {node.kind === 'decline' && (
+              <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
+                Decline reason
+              </span>
+            )}
             <span className={cn('text-xs font-medium shrink-0', light ? 'text-zinc-800' : 'text-zinc-300')}>
               {node.author?.name ?? 'Unknown'}
             </span>
@@ -112,7 +124,7 @@ function CommentItem({
               {formatDate(node.created_at, 'dd MMM yyyy HH:mm')}
             </span>
           </div>
-          {canModify && !editing && (
+          {canModify && !editing && node.kind !== 'decline' && (
             <div className="flex shrink-0 items-center gap-0.5">
               <button
                 type="button"

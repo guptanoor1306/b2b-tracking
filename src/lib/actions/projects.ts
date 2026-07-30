@@ -16,7 +16,12 @@ import {
   canSendStageReminder,
   isChannelAdmin,
   canEditRpCuts,
+  canCreateExternalRequest,
+  isBlockedReadyToProduceMove,
+  canReviewExternalRequest,
+  canEditIntakeMaterials,
 } from '@/lib/views'
+import { hasIntakeMaterials } from '@/lib/zerodha-sla'
 import { FIRST_CUT_STAGE } from '@/lib/constants'
 import { normalizeStage } from '@/lib/timelines'
 import {
@@ -30,6 +35,8 @@ import { notifyProjectTeamOnCreate, notifyStageActionable } from '@/lib/email/no
 import { isEmailConfigured, sendEmail } from '@/lib/email/send'
 import { insertStageHistoryRecord } from '@/lib/data/stage-history'
 import { Project } from '@/lib/types'
+import { ZERODHA_REQUEST_RECEIVED, ZERODHA_READY_TO_PRODUCE, isPendingRequestReview } from '@/lib/zerodha-sla'
+import { format } from 'date-fns'
 
 async function getSessionEffectiveRole() {
   const profile = await getSessionProfile()
@@ -62,6 +69,9 @@ type ProjectInput = {
   assigned_agency_id?: string | null
   internal_owner_id?: string | null
   assets_link?: string | null
+  script_link?: string | null
+  screen_captures_link?: string | null
+  audio_link?: string | null
   drive_link?: string | null
   final_file_link?: string | null
   thumbnail_copy?: string | null
@@ -110,7 +120,7 @@ export async function createProject(input: ProjectInput) {
     if (!input.level_of_video) return { error: 'Video level is required' }
   }
 
-  const initialStage = 'Video received'
+  const initialStage = isZerodhaChannelDbName(channelName) ? ZERODHA_READY_TO_PRODUCE : 'Video received'
   const now = new Date().toISOString()
   const teamCtx = {
     level_of_video: input.level_of_video,
@@ -194,6 +204,189 @@ export async function createProject(input: ProjectInput) {
   return { id: data.id }
 }
 
+export type ExternalRequestInput = {
+  title: string
+  script_link: string
+  drive_link: string
+  screen_captures_link?: string
+  audio_link: string
+  thumbnail_copy: string
+}
+
+export async function createExternalProjectRequest(input: ExternalRequestInput) {
+  const session = await getSessionEffectiveRole()
+  if (!session) return { error: 'Unauthorized' }
+
+  const channelName = await getActiveChannelDbName()
+  if (!canCreateExternalRequest(session.role, channelName)) {
+    return { error: 'Unauthorized' }
+  }
+
+  const title = input.title?.trim()
+  const script_link = input.script_link?.trim()
+  const drive_link = input.drive_link?.trim()
+  const screen_captures_link = input.screen_captures_link?.trim()
+  const audio_link = input.audio_link?.trim()
+  const thumbnail_copy = input.thumbnail_copy?.trim()
+
+  if (!title) return { error: 'Title is required' }
+  if (!script_link) return { error: 'Script link is required' }
+  if (!drive_link) return { error: 'Video link is required' }
+  if (!audio_link) return { error: 'Audio link is required' }
+  if (!thumbnail_copy) return { error: 'Thumbnail copy is required' }
+
+  const { profile } = session
+  const supabase = await createClient()
+  const holidays = await fetchHolidayDates()
+  const initialStage = ZERODHA_REQUEST_RECEIVED
+  const now = new Date().toISOString()
+  const today = format(new Date(), 'yyyy-MM-dd')
+
+  const { data, error } = await supabase
+    .from('projects')
+    .insert({
+      title,
+      ip: 'TBD',
+      content_type: 'Long-Form',
+      priority: 'Medium',
+      script_link,
+      drive_link,
+      screen_captures_link: screen_captures_link || null,
+      audio_link,
+      thumbnail_copy,
+      received_date: today,
+      channel: channelName,
+      current_stage: initialStage,
+      request_status: 'pending',
+      external_team_member_id: profile.id,
+      stage_assignee_id: null,
+      created_by: profile.id,
+      updated_by: profile.id,
+      status_health: computeProjectHealth({
+        current_stage: initialStage,
+        target_delivery_date: null,
+        received_date: today,
+        last_status_update_at: now,
+      }, holidays),
+      last_status_update_at: now,
+    })
+    .select('id')
+    .single()
+
+  if (error) return { error: error.message }
+
+  await insertStageHistoryRecord({
+    project_id: data.id,
+    old_stage: null,
+    new_stage: initialStage,
+    changed_by: profile.id,
+    assignee_id: null,
+    note: 'Production request submitted',
+    is_hold_event: false,
+  })
+
+  revalidatePath('/dashboard')
+  revalidatePath('/board')
+  return { id: data.id }
+}
+
+export async function approveExternalRequest(projectId: string) {
+  const session = await getSessionEffectiveRole()
+  if (!session || !canReviewExternalRequest(session.role, (await getActiveChannelDbName()))) {
+    return { error: 'Unauthorized' }
+  }
+  const { profile } = session
+
+  const supabase = await createClient()
+  const holidays = await fetchHolidayDates()
+  const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).single()
+  if (!project) return { error: 'Project not found' }
+  if (!isPendingRequestReview(project)) return { error: 'This request is not awaiting review' }
+
+  const newStage = ZERODHA_READY_TO_PRODUCE
+  const oldStage = project.current_stage
+  const now = new Date().toISOString()
+  const resolvedAssignee = resolveStageAssigneeId(project, newStage)
+  const status_health = computeProjectHealth({
+    current_stage: newStage,
+    target_delivery_date: project.target_delivery_date,
+    received_date: project.received_date,
+    last_status_update_at: now,
+    is_on_hold: project.is_on_hold,
+    level_of_video: project.level_of_video,
+  }, holidays)
+
+  const { error } = await supabase.from('projects').update({
+    current_stage: newStage,
+    request_status: 'approved',
+    status_health,
+    stage_assignee_id: resolvedAssignee,
+    updated_by: profile.id,
+    last_status_update_at: now,
+  }).eq('id', projectId)
+
+  if (error) return { error: error.message }
+
+  const historyResult = await insertStageHistoryRecord({
+    project_id: projectId,
+    old_stage: oldStage,
+    new_stage: newStage,
+    changed_by: profile.id,
+    assignee_id: resolvedAssignee,
+    note: 'Request approved',
+    is_hold_event: false,
+  })
+  if (historyResult.error) return { error: `Stage history failed: ${historyResult.error}` }
+
+  await logActivity(projectId, profile.id, 'stage_change', 'current_stage', oldStage, newStage)
+
+  revalidatePath(`/projects/${projectId}`)
+  revalidatePath('/dashboard')
+  revalidatePath('/board')
+  revalidatePath('/projects')
+  return { success: true }
+}
+
+export async function declineExternalRequest(projectId: string, reason: string) {
+  const session = await getSessionEffectiveRole()
+  if (!session || !canReviewExternalRequest(session.role, (await getActiveChannelDbName()))) {
+    return { error: 'Unauthorized' }
+  }
+  const { profile } = session
+
+  const text = reason?.trim()
+  if (!text) return { error: 'Decline reason is required' }
+
+  const supabase = await createClient()
+  const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).single()
+  if (!project) return { error: 'Project not found' }
+  if (!isPendingRequestReview(project)) return { error: 'This request is not awaiting review' }
+
+  const { error: updateError } = await supabase.from('projects').update({
+    request_status: 'declined',
+    updated_by: profile.id,
+    last_status_update_at: new Date().toISOString(),
+  }).eq('id', projectId)
+
+  if (updateError) return { error: updateError.message }
+
+  const { error: commentError } = await supabase.from('comments').insert({
+    project_id: projectId,
+    comment: text,
+    kind: 'decline',
+    created_by: profile.id,
+  })
+
+  if (commentError) return { error: commentError.message }
+
+  await logActivity(projectId, profile.id, 'request_declined', 'request_status', 'pending', 'declined')
+
+  revalidatePath(`/projects/${projectId}`)
+  revalidatePath('/dashboard')
+  revalidatePath('/board')
+  return { success: true }
+}
+
 export async function updateProject(id: string, input: Partial<ProjectInput>) {
   const session = await getSessionEffectiveRole()
   if (!session) return { error: 'Unauthorized' }
@@ -207,14 +400,22 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
 
   if (!isInternal) {
     const shared = ['notes', 'blocker', 'next_action', 'next_action_due_date']
+    const zerodhaIntakeFields = ['script_link', 'screen_captures_link', 'audio_link', 'drive_link', 'thumbnail_copy', 'title_copy']
     const allowed =
       session.role === 'Agency'
-        ? ['drive_link', 'assets_link', 'final_file_link', ...shared]
+        ? ['drive_link', 'assets_link', 'final_file_link', ...zerodhaIntakeFields, ...shared]
         : session.role === 'Zerodha Viewer'
-          ? ['thumbnail_copy', 'title_copy', ...shared]
+          ? [...zerodhaIntakeFields, ...shared]
           : []
     const keys = Object.keys(input)
     if (keys.some(k => !allowed.includes(k))) return { error: 'Cannot edit this field' }
+
+    const intakeKeys = keys.filter(k => zerodhaIntakeFields.includes(k))
+    if (intakeKeys.length > 0 && hasIntakeMaterials(existing)) {
+      if (!canEditIntakeMaterials(session.role, existing, profile.id)) {
+        return { error: 'Unauthorized' }
+      }
+    }
   }
 
   const patch: Partial<ProjectInput> = { ...input }
@@ -319,6 +520,10 @@ export async function changeProjectStage(
 
   const oldStage = project.current_stage
   if (oldStage === newStage) return { success: true }
+
+  if (isBlockedReadyToProduceMove(session.role, project.channel, newStage)) {
+    return { error: 'Ready to Produce can only be marked by LearnApp.' }
+  }
 
   const status_health = computeProjectHealth({
     current_stage: newStage,

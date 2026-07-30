@@ -27,6 +27,8 @@ import {
   isZerodhaChannelDbName,
   normalizeZerodhaBoardStage,
   pipelineProgressPercentForChannel,
+  isPendingRequestReview,
+  isDeclinedRequest,
 } from '@/lib/zerodha-sla'
 
 const CARD_BASE = 'rounded-xl border bg-white transition-[box-shadow,opacity] hover:shadow-md'
@@ -72,15 +74,26 @@ function CardContent({
   const assigneeId = resolveStageAssigneeId(project, project.current_stage)
   const displayAssignee = project.stage_assignee
     ?? (assigneeId ? users.find(u => u.id === assigneeId) ?? null : null)
+  const intakeReview = isPendingRequestReview(project) || isDeclinedRequest(project)
 
   return (
     <>
-      {t.status === 'delayed' && (
+      {intakeReview && isPendingRequestReview(project) && (
+        <span className="inline-block mb-1.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+          Pending review
+        </span>
+      )}
+      {intakeReview && isDeclinedRequest(project) && (
+        <span className="inline-block mb-1.5 rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
+          Declined
+        </span>
+      )}
+      {!intakeReview && t.status === 'delayed' && (
         <span className="inline-block mb-1.5 rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">
           Delayed
         </span>
       )}
-      {project.is_on_hold && (
+      {!intakeReview && project.is_on_hold && (
         <span className="inline-block mb-1.5 ml-1 rounded-md bg-zinc-200 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-700">
           On hold
         </span>
@@ -114,7 +127,7 @@ function CardContent({
           </span>
         )}
       </p>
-      {!compact && (
+      {!compact && !intakeReview && (
         <>
           <div className="mt-3">
             <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
@@ -174,7 +187,10 @@ const KanbanCard = memo(function KanbanCard({
     disabled: readOnly,
   })
 
-  const cardClass = getIpCardBorderClass(project.ip, project.is_on_hold)
+  const cardClass = getIpCardBorderClass(
+    project.ip,
+    isPendingRequestReview(project) || isDeclinedRequest(project) ? false : project.is_on_hold,
+  )
   const ipAccent = getIpAccent(project.ip)
   const projectHref = `/projects/${project.id}`
 
@@ -316,6 +332,7 @@ type Props = {
   readOnly?: boolean
   externalView?: boolean
   viewerUserId?: string
+  blockReadyToProduce?: boolean
 }
 
 export function KanbanBoard({
@@ -326,6 +343,7 @@ export function KanbanBoard({
   readOnly = false,
   externalView = false,
   viewerUserId,
+  blockReadyToProduce = false,
 }: Props) {
   const channel = useActiveChannel()
   const [projects, setProjects] = useState(initialProjects)
@@ -352,7 +370,12 @@ export function KanbanBoard({
         }
         return project.current_stage
       }
-      return getBoardDisplayStage(project, { externalView, viewerUserId, teamBoardView: false })
+      return getBoardDisplayStage(project, {
+        externalView,
+        viewerUserId,
+        teamBoardView: false,
+        channelDbName: channel?.dbName ?? project.channel,
+      })
     },
     [externalView, viewerUserId, channel?.dbName],
   )
@@ -400,6 +423,11 @@ export function KanbanBoard({
     if (layoutStage === newStage) return
 
     setDragError('')
+
+    if (blockReadyToProduce && newStage === 'Ready to Produce') {
+      setDragError('Ready to Produce can only be marked by LearnApp.')
+      return
+    }
 
     if (needsTeleprompterPrompt(project.current_stage, newStage, channel?.dbName ?? project.channel)) {
       setPending({ project, newStage })

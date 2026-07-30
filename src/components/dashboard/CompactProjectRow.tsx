@@ -3,6 +3,7 @@ import { Project, Profile } from '@/lib/types'
 import { Badge } from '@/components/ui/Badge'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { HEALTH_PILL_V2 } from '@/lib/design/theme-v2'
+import { isPendingRequestReview } from '@/lib/zerodha-sla'
 import { AssigneeContext, DisplayProfile, getProjectDisplayAssignee } from '@/lib/projects/display-assignee'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -18,8 +19,9 @@ export function CompactProjectRow({
   project, variant = 'dark', assigneeContext = 'stage', holdStarter,
 }: Props) {
   const light = variant === 'light'
-  const pill = HEALTH_PILL_V2[project.status_health]
-  const displayAssignee = getProjectDisplayAssignee(project, assigneeContext, holdStarter)
+  const pendingReview = isPendingRequestReview(project)
+  const pill = pendingReview ? null : HEALTH_PILL_V2[project.status_health]
+  const displayAssignee = pendingReview ? null : getProjectDisplayAssignee(project, assigneeContext, holdStarter)
 
   return (
     <Link
@@ -37,10 +39,14 @@ export function CompactProjectRow({
           {project.title}
         </p>
         <p className={cn('text-[11px] mt-0.5 truncate', light ? 'text-zinc-500' : 'text-zinc-600')}>
-          {project.current_stage}
+          {pendingReview ? 'Awaiting internal review' : project.current_stage}
         </p>
       </div>
-      {light && pill ? (
+      {pendingReview && light ? (
+        <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+          New request
+        </span>
+      ) : light && pill ? (
         <span className={cn('shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold', pill)}>
           {project.status_health}
         </span>

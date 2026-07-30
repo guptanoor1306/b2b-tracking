@@ -1,27 +1,22 @@
 import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
+import { redirect } from 'next/navigation'
 import { getSessionProfile } from '@/lib/auth'
 import { ACTIVE_CHANNEL_COOKIE, getChannelBySlug } from '@/lib/channels'
 import { fetchUserChannelSlugs } from '@/lib/data/channel-access'
 
-type Context = { params: Promise<{ slug: string }> }
+type Params = Promise<{ slug: string }>
 
-export async function GET(_request: Request, context: Context) {
-  const { slug } = await context.params
+/** GET only — sets active channel cookie (login redirect & direct links). Card clicks use enterChannel() action. */
+export async function GET(_request: Request, { params }: { params: Params }) {
+  const { slug } = await params
   const profile = await getSessionProfile()
-  if (!profile) {
-    return NextResponse.redirect(new URL('/login', _request.url))
-  }
+  if (!profile) redirect('/login')
 
   const channel = getChannelBySlug(slug)
-  if (!channel) {
-    return NextResponse.redirect(new URL('/studios', _request.url))
-  }
+  if (!channel) redirect('/studios')
 
   const allowed = await fetchUserChannelSlugs(profile)
-  if (!allowed.includes(slug)) {
-    return NextResponse.redirect(new URL('/studios', _request.url))
-  }
+  if (!allowed.includes(slug)) redirect('/studios')
 
   const jar = await cookies()
   jar.set(ACTIVE_CHANNEL_COOKIE, slug, {
@@ -30,5 +25,5 @@ export async function GET(_request: Request, context: Context) {
     sameSite: 'lax',
   })
 
-  return NextResponse.redirect(new URL('/dashboard', _request.url))
+  redirect('/dashboard')
 }

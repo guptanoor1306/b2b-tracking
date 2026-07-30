@@ -20,6 +20,7 @@ import {
   canMoveBoardCards,
   effectiveRoleForChannel,
   isSuperAdmin,
+  canMarkReadyToProduce,
 } from '@/lib/views'
 import { filterProjectsByTeamMembership, isUserOnProjectTeam } from '@/lib/projects/team'
 
@@ -118,6 +119,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         readOnly={!canMoveBoardCards(role)}
         externalView={!internal}
         viewerUserId={profile.id}
+        blockReadyToProduce={!canMarkReadyToProduce(role, channelName)}
       />
     </div>
   )

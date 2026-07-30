@@ -17,6 +17,8 @@ import {
   canEditProjectCopy,
   canViewRpCuts,
   canEditRpCuts,
+  canReviewExternalRequest,
+  canEditIntakeMaterials,
 } from '@/lib/views'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig, fetchProjectHoldPeriods } from '@/lib/data/stage-sla'
@@ -59,7 +61,9 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
 
   const users = canManageProject ? channelMembers : []
   const graphicsDesigners = users.filter(u => u.name.toLowerCase().includes('amit'))
-  const displayStage = pipelineInternal ? project.current_stage : mapInternalToExternalStage(project.current_stage)
+  const displayStage = pipelineInternal
+    ? project.current_stage
+    : mapInternalToExternalStage(project.current_stage, project.channel)
 
   return (
     <ProjectDetailLayout
@@ -69,9 +73,11 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       canEdit={canEditProjects(role)}
       canEditLinks={canEditProjectLinks(role)}
       canEditCopy={canEditProjectCopy(role)}
+      canEditIntakeMaterials={canEditIntakeMaterials(role, project, profile.id)}
       canViewRpCuts={canViewRpCuts(role)}
       canEditRpCuts={canEditRpCuts(role)}
       canSendReminder={canSendStageReminder(role)}
+      canReviewRequest={canReviewExternalRequest(role, channelName)}
       holidays={holidays}
       users={users}
       graphicsDesigners={graphicsDesigners.length ? graphicsDesigners : users}

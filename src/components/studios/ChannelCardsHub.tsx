@@ -1,10 +1,11 @@
 'use client'
 
-import Link from 'next/link'
+import { useTransition } from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ChannelStats } from '@/lib/data/channel-stats'
 import { getChannelBySlug } from '@/lib/channels'
+import { enterChannel } from '@/lib/actions/channels'
 
 type Props = {
   stats: ChannelStats[]
@@ -52,9 +53,17 @@ export function ChannelCardsHub({ stats, accessibleSlugs, profileName }: Props) 
 
 function ChannelCard({ stat }: { stat: ChannelStats }) {
   const ch = getChannelBySlug(stat.slug)
+  const [pending, startTransition] = useTransition()
+
+  const enter = () => startTransition(() => enterChannel(stat.slug))
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm transition-all hover:border-zinc-300 hover:shadow-md">
+    <button
+      type="button"
+      onClick={enter}
+      disabled={pending}
+      className="relative w-full overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 text-left shadow-sm transition-all hover:border-zinc-300 hover:shadow-md disabled:opacity-70"
+    >
       {ch && (
         <div className={cn(
           'absolute inset-x-0 top-0 h-1 bg-gradient-to-r',
@@ -71,13 +80,12 @@ function ChannelCard({ stat }: { stat: ChannelStats }) {
         )}>
           {ch?.initial ?? '?'}
         </div>
-        <Link
-          href={`/studios/enter/${stat.slug}`}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-violet-50 hover:text-violet-600"
-          title={`Enter ${stat.name}`}
+        <span
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400"
+          aria-hidden
         >
           <ArrowUpRight size={18} />
-        </Link>
+        </span>
       </div>
 
       <h3 className="mt-4 text-base font-bold text-zinc-900">{stat.name}</h3>
@@ -88,7 +96,7 @@ function ChannelCard({ stat }: { stat: ChannelStats }) {
         <MiniStat label="Done" value={stat.delivered} accent="text-emerald-600" />
         <MiniStat label="Hold" value={stat.onHold} muted />
       </div>
-    </div>
+    </button>
   )
 }
 

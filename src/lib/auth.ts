@@ -1,10 +1,12 @@
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { Profile } from '@/lib/types'
 import { redirect } from 'next/navigation'
 
-export async function getSessionProfile(): Promise<Profile | null> {
+export const getSessionProfile = cache(async (): Promise<Profile | null> => {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
   if (!user) return null
 
   const { data } = await supabase
@@ -14,7 +16,7 @@ export async function getSessionProfile(): Promise<Profile | null> {
     .single()
 
   return data
-}
+})
 
 export async function requireProfile(allowedRoles?: string[]): Promise<Profile> {
   const profile = await getSessionProfile()

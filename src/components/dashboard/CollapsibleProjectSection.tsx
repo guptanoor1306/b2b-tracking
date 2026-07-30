@@ -5,7 +5,7 @@ import { Project } from '@/lib/types'
 import { CompactProjectRow } from './CompactProjectRow'
 import { AssigneeContext, DisplayProfile } from '@/lib/projects/display-assignee'
 import {
-  ChevronDown, Inbox, Package, CheckCircle2, GitBranch, PauseCircle,
+  ChevronDown, Inbox, Package, CheckCircle2, GitBranch, PauseCircle, ClipboardList,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -16,6 +16,7 @@ const ICONS = {
   delivered: CheckCircle2,
   pipeline: GitBranch,
   hold: PauseCircle,
+  received: ClipboardList,
 } as const
 
 type IconName = keyof typeof ICONS
@@ -49,12 +50,12 @@ export function CollapsibleProjectSection({
     )}>
       <button
         type="button"
-        onClick={() => hasMore && setExpanded(e => !e)}
+        onClick={() => (hasMore || expanded) && setExpanded(e => !e)}
         className={cn(
           'w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors border-b',
           light ? 'border-zinc-100 hover:bg-zinc-50/50' : 'border-white/[0.06] hover:bg-white/[0.02]',
-          hasMore && 'cursor-pointer',
-          !hasMore && 'cursor-default'
+          (hasMore || expanded) && 'cursor-pointer',
+          !hasMore && !expanded && 'cursor-default'
         )}
       >
         <div className={cn('p-2 rounded-xl shrink-0', iconColor)}>
@@ -66,10 +67,10 @@ export function CollapsibleProjectSection({
             {count} project{count !== 1 ? 's' : ''}
           </p>
         </div>
-        {hasMore && (
+        {(hasMore || expanded) && (
           <ChevronDown
             size={16}
-            className={cn('shrink-0 transition-transform', light ? 'text-zinc-400' : 'text-zinc-600', expanded && 'rotate-180')}
+            className={cn('shrink-0 transition-transform pointer-events-none', light ? 'text-zinc-400' : 'text-zinc-600', expanded && 'rotate-180')}
           />
         )}
       </button>

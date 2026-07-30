@@ -15,7 +15,7 @@ export default async function StudiosLayout({ children }: { children: ReactNode 
   }
 
   return (
-    <StudiosShell isSuperAdmin={isSuperAdmin(profile.role)}>
+    <StudiosShell isSuperAdmin={isSuperAdmin(profile.role)} serverProfile={profile}>
       {children}
     </StudiosShell>
   )

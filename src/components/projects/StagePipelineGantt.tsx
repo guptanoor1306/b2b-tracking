@@ -181,12 +181,20 @@ function GanttBar({
   const displayEnd = preview?.end ?? row.end
   const { leftPct, widthPct } = barGeometry(displayStart, displayEnd, rangeStart, totalDays)
 
-  const statusLabel = row.overSla ? 'Late' : row.isCurrent ? 'In progress' : 'On time'
+  const statusLabel = row.overSla
+    ? 'Late'
+    : row.isCurrent
+      ? 'In progress'
+      : normalizeStage(row.stage) === FINAL_STAGE
+        ? 'Delivered'
+        : 'On time'
   const borderClass = row.overSla
     ? 'border-[3px] border-red-500'
     : row.isCurrent
       ? 'border-[3px] border-violet-500'
-      : 'border-[3px] border-emerald-500'
+      : normalizeStage(row.stage) === FINAL_STAGE
+        ? 'border-[3px] border-emerald-500'
+        : 'border-[3px] border-emerald-500'
 
   const segments = computeBarSegments(displayStart, displayEnd, holdPeriods)
   const hasHoldGap = segments.some(s => s.type === 'hold')
@@ -388,6 +396,8 @@ export function StagePipelineGantt({
 
   const { rangeStart, rangeEnd, days, todayOffset, rows, ticks, totalDays } = useMemo(() => {
     const built: Omit<StageRow, 'leftPct' | 'widthPct'>[] = []
+    const atFinalDelivery =
+      timelineLocked || normalizeStage(currentStage ?? '') === FINAL_STAGE
 
     stageEntries.forEach((entry, i) => {
       const next = stageEntries[i + 1]
@@ -395,6 +405,7 @@ export function StagePipelineGantt({
       if (!d) return
 
       const stage = normalizeStage(entry.new_stage)
+      const isFinalStageRow = stage === FINAL_STAGE
       const effectiveStart = effectiveStageStartIso(stageEntries, entry)
       const parallelAnchorEntry = stage === ANIMATION_VD_STAGE ? vdParallelAnchorEntry(stageEntries) : null
       const startIso = parallelAnchorEntry
@@ -404,8 +415,18 @@ export function StagePipelineGantt({
       const endIso = next ? resolveDate(next.id, next.changed_at) : currentEnd!.endIso
       const start = startOfDay(parseISO(startIso))
       const endDate = next ? startOfDay(parseISO(endIso)) : currentEnd!.endDate
-      const isCurrent = entry.new_stage === currentStage && !next
+      const isCurrent =
+        !atFinalDelivery
+        && normalizeStage(entry.new_stage) === normalizeStage(currentStage ?? '')
+        && !next
       const overSla = isStageDurationOverSla(stage, d.startedAt, endIso, holidays, project.level_of_video, project, holdPeriods, timelineLocked)
+
+      let durationLabel = formatDuration(d.days, d.hours)
+      if (isFinalStageRow && atFinalDelivery && !next) {
+        durationLabel = project.delivered_date
+          ? format(parseISO(toIsoDate(project.delivered_date)), 'dd MMM')
+          : format(start, 'dd MMM')
+      }
 
       built.push({
         key: entry.id,
@@ -417,14 +438,14 @@ export function StagePipelineGantt({
         start,
         end: endDate,
         isCurrent,
-        isComplete: !!next,
+        isComplete: !!next || (isFinalStageRow && atFinalDelivery),
         overSla,
         assigneeInfo: stageAssigneeMap.get(entry.new_stage) ?? (
           isCurrent && currentAssignee
             ? { name: currentAssignee, id: currentAssigneeId ?? undefined }
             : null
         ),
-        durationLabel: formatDuration(d.days, d.hours),
+        durationLabel,
       })
 
       if (
@@ -479,6 +500,20 @@ export function StagePipelineGantt({
       ? collapseRowsForExternalView(built, currentStage)
       : built
 
+    if (atFinalDelivery) {
+      const finalRows = finalBuilt.filter(r => normalizeStage(r.stage) === FINAL_STAGE)
+      const pipelineEnd = finalRows.length > 0 ? finalRows[finalRows.length - 1].end : null
+      if (pipelineEnd) {
+        for (const row of finalBuilt) {
+          if (row.end > pipelineEnd) row.end = pipelineEnd
+          row.isCurrent = false
+          if (normalizeStage(row.stage) === FINAL_STAGE && !row.isComplete) {
+            row.isComplete = true
+          }
+        }
+      }
+    }
+
     if (finalBuilt.length === 0) {
       const today = startOfDay(new Date())
       return {
@@ -499,8 +534,7 @@ export function StagePipelineGantt({
       if (r.end > max) max = r.end
     }
 
-    const pipelineComplete =
-      timelineLocked || normalizeStage(currentStage ?? '') === FINAL_STAGE
+    const pipelineComplete = atFinalDelivery
 
     const rangeStart = addDays(min, -1)
     const rangeEnd = pipelineComplete ? max : addDays(max, 1)

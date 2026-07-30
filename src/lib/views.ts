@@ -10,7 +10,8 @@ import {
   CHANNEL_ADMIN_ROLES,
   FINAL_STAGE,
 } from '@/lib/constants'
-import { Role } from '@/lib/types'
+import { isZerodhaChannelDbName, mapZerodhaInternalToExternalStage, ZERODHA_READY_TO_PRODUCE, hasIntakeMaterials } from '@/lib/zerodha-sla'
+import { Role, Project } from '@/lib/types'
 import { isUserOnProjectTeam } from '@/lib/projects/team'
 
 /** Pick reminder assignee from project team based on stage role */
@@ -43,6 +44,7 @@ export function resolveStageAssigneeId(
     case 'First Cut sent for Review':
     case 'Thumbnail Copy + RP Cuts':
     case 'Video/Thumbnail Review':
+    case 'Request Received':
       return project.external_team_member_id ?? editor
     default:
       return project.stage_assignee_id ?? editor
@@ -127,6 +129,18 @@ export function canEditProjectCopy(role: Role | string): boolean {
   return role === 'Zerodha Viewer'
 }
 
+/** Client submitter or internal team may edit Zerodha request materials (links + copy). */
+export function canEditIntakeMaterials(
+  role: Role | string,
+  project: Pick<Project, 'channel' | 'external_team_member_id' | 'created_by' | 'current_stage' | 'script_link' | 'screen_captures_link' | 'audio_link'>,
+  userId: string,
+): boolean {
+  if (!hasIntakeMaterials(project)) return false
+  if (isInternalRole(role)) return true
+  if (!isExternalRole(role)) return false
+  return project.external_team_member_id === userId || project.created_by === userId
+}
+
 export function canViewRpCuts(role: Role | string): boolean {
   return isInternalRole(role) || role === 'Agency' || role === 'Zerodha Viewer'
 }
@@ -165,11 +179,37 @@ export function usesInternalBoardView(globalRole: Role | string, channelRole: st
 /** @deprecated use shouldFilterBoardToSelf */
 export const shouldFilterBoardToTeam = shouldFilterBoardToSelf
 
+export function canCreateExternalRequest(role: Role | string, channelDbName: string | null | undefined): boolean {
+  return isZerodhaChannelDbName(channelDbName) && (role === 'Agency' || role === 'Zerodha Viewer')
+}
+
+export function canReviewExternalRequest(role: Role | string, channelDbName: string | null | undefined): boolean {
+  return isZerodhaChannelDbName(channelDbName) && isInternalRole(role)
+}
+
+/** Only LearnApp internal team may move Zerodha requests to Ready to Produce. */
+export function canMarkReadyToProduce(role: Role | string, channelDbName: string | null | undefined): boolean {
+  if (!isZerodhaChannelDbName(channelDbName)) return true
+  return isInternalRole(role)
+}
+
+export function isBlockedReadyToProduceMove(
+  role: Role | string,
+  channelDbName: string | null | undefined,
+  newStage: string,
+): boolean {
+  return !canMarkReadyToProduce(role, channelDbName)
+    && normalizeStage(newStage) === ZERODHA_READY_TO_PRODUCE
+}
+
 export function getBoardDisplayStage(
   project: { current_stage: string } & Parameters<typeof resolveStageAssigneeId>[0],
-  options: { externalView: boolean; viewerUserId?: string; teamBoardView?: boolean },
+  options: { externalView: boolean; viewerUserId?: string; teamBoardView?: boolean; channelDbName?: string | null },
 ): string {
   if (options.externalView) {
+    if (isZerodhaChannelDbName(options.channelDbName ?? null)) {
+      return mapZerodhaInternalToExternalStage(project.current_stage)
+    }
     return mapInternalToExternalStage(project.current_stage)
   }
   if (options.teamBoardView && options.viewerUserId) {
@@ -185,7 +225,13 @@ export function getStagesForRole(role: Role | string): readonly string[] {
   return isInternalRole(role) ? STAGES_INTERNAL : STAGES_EXTERNAL
 }
 
-export function mapInternalToExternalStage(internalStage: string): string {
+export function mapInternalToExternalStage(
+  internalStage: string,
+  channelDbName?: string | null,
+): string {
+  if (isZerodhaChannelDbName(channelDbName ?? null)) {
+    return mapZerodhaInternalToExternalStage(internalStage)
+  }
   const stage = normalizeStage(internalStage)
   const idx = STAGES_INTERNAL.indexOf(stage as typeof STAGES_INTERNAL[number])
   if (idx < 0) return STAGES_EXTERNAL[0]

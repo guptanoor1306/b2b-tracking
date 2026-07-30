@@ -1,10 +1,10 @@
 'use client'
 
-import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { EnterChannelButton } from '@/components/studios/EnterChannelButton'
 import {
-  ArrowUpRight, GitBranch, CheckCircle2, PauseCircle, Sparkles, Lock,
+  GitBranch, CheckCircle2, PauseCircle, Sparkles, Lock,
 } from 'lucide-react'
 import { ChannelStats, computeOverviewTotals, periodLabel } from '@/lib/data/channel-stats'
 
@@ -181,13 +181,11 @@ export function ChannelOverviewClient({
                     </td>
                     <td className="px-3 py-3">
                       {hasAccess ? (
-                        <Link
-                          href={`/studios/enter/${s.slug}`}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 opacity-0 transition-all hover:bg-violet-50 hover:text-violet-600 group-hover:opacity-100"
+                        <EnterChannelButton
+                          slug={s.slug}
                           title={`Enter ${s.name}`}
-                        >
-                          <ArrowUpRight size={14} />
-                        </Link>
+                          className="h-7 w-7 opacity-0 group-hover:opacity-100 hover:bg-violet-50 hover:text-violet-600"
+                        />
                       ) : (
                         <span
                           className="inline-flex h-7 w-7 items-center justify-center text-zinc-300"

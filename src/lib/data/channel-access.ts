@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { Profile, ChannelMember, ChannelMemberRole } from '@/lib/types'
 import { allChannelSlugs } from '@/lib/channels'
@@ -26,20 +27,24 @@ function mapProfileChannelRow(row: {
   }
 }
 
-export async function fetchUserChannelSlugs(profile: Pick<Profile, 'id' | 'role'>): Promise<string[]> {
-  if (isSuperAdmin(profile.role)) return allChannelSlugs()
+const fetchUserChannelSlugsCached = cache(async (profileId: string, role: string): Promise<string[]> => {
+  if (isSuperAdmin(role)) return allChannelSlugs()
 
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('profile_channels')
     .select('channel_slug')
-    .eq('profile_id', profile.id)
+    .eq('profile_id', profileId)
 
   if (error || !data?.length) return []
   return data.map(r => r.channel_slug)
+})
+
+export async function fetchUserChannelSlugs(profile: Pick<Profile, 'id' | 'role'>): Promise<string[]> {
+  return fetchUserChannelSlugsCached(profile.id, profile.role)
 }
 
-export async function fetchChannelRole(profileId: string, channelSlug: string): Promise<ChannelMemberRole | null> {
+export const fetchChannelRole = cache(async (profileId: string, channelSlug: string): Promise<ChannelMemberRole | null> => {
   const supabase = await createClient()
   const { data } = await supabase
     .from('profile_channels')
@@ -49,7 +54,7 @@ export async function fetchChannelRole(profileId: string, channelSlug: string): 
     .maybeSingle()
 
   return (data?.channel_role as ChannelMemberRole) ?? null
-}
+})
 
 export async function fetchChannelMembers(slug: string): Promise<ChannelMember[]> {
   const supabase = await createClient()

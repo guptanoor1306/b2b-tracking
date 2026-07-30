@@ -12,6 +12,8 @@ import { FINAL_STAGE } from '@/lib/constants'
 import {
   usesActionItemsDashboardForChannel,
   usesFullAdminDashboardForChannel,
+  canCreateExternalRequest,
+  effectiveRoleForChannel,
 } from '@/lib/views'
 
 type SearchParams = Promise<Record<string, string | undefined>>
@@ -20,16 +22,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const profile = await getSessionProfile()
   if (!profile) redirect('/login')
 
-  const [projects, holidays, stageSla, channelName, holdStarters] = await Promise.all([
+  const channelName = await getActiveChannelDbName()
+  const [projects, holidays, stageSla, holdStarters] = await Promise.all([
     fetchProjects(),
     fetchHolidayDates(),
-    getActiveChannelDbName().then(name => fetchStageSlaConfig(name)),
-    getActiveChannelDbName(),
+    fetchStageSlaConfig(channelName),
     fetchOpenHoldStarters(),
   ])
   setStageSlaCache(stageSla, channelName)
 
   const channelRole = await getActiveChannelRole(profile)
+  const effectiveRole = effectiveRoleForChannel(channelRole, profile.role)
+  const showCreateRequest = canCreateExternalRequest(effectiveRole, channelName)
 
   if (usesActionItemsDashboardForChannel(channelRole)) {
     return (
@@ -39,6 +43,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
         userName={profile.name}
         holidays={holidays}
         showAssignedSections={channelRole === 'Channel Team'}
+        showCreateRequest={showCreateRequest}
         holdStarters={holdStarters}
       />
     )

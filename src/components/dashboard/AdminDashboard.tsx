@@ -11,6 +11,7 @@ import { welcomeFirstName, HEALTH_PILL_V2 } from '@/lib/design/theme-v2'
 import { getProjectTimeliness } from '@/lib/timelines'
 import { CheckCircle, AlertTriangle, GitBranch, Zap, ArrowRight, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { isPendingRequestReview } from '@/lib/zerodha-sla'
 
 type Props = {
   profileName: string
@@ -32,11 +33,13 @@ const STAT_CONFIG = [
 export function AdminDashboard({
   profileName, month, counts, inPipeline, delivered, onHold, holidays, holdStarters = {},
 }: Props) {
-  const needsAttention = inPipeline
+  const newProjectsReceived = inPipeline.filter(isPendingRequestReview)
+  const pipelineProjects = inPipeline.filter(p => !isPendingRequestReview(p))
+  const needsAttention = pipelineProjects
     .filter(p => p.status_health === 'Delayed' || p.status_health === 'At risk')
     .slice(0, 4)
 
-  const totalActive = inPipeline.length + onHold.length
+  const totalActive = pipelineProjects.length + onHold.length + newProjectsReceived.length
 
   return (
     <div className="theme-v2 -mx-6 -mt-2 min-h-[calc(100vh-4rem)] px-6 pb-10 pt-2">
@@ -131,9 +134,19 @@ export function AdminDashboard({
 
         <div className="space-y-4">
           <CollapsibleProjectSection
+            title="New Projects Received"
+            count={newProjectsReceived.length}
+            projects={newProjectsReceived}
+            iconName="received"
+            iconColor="bg-amber-100 text-amber-700"
+            emptyMessage="No new client requests awaiting review."
+            variant="light"
+            assigneeContext="stage"
+          />
+          <CollapsibleProjectSection
             title="In Pipeline"
-            count={inPipeline.length}
-            projects={inPipeline}
+            count={pipelineProjects.length}
+            projects={pipelineProjects}
             iconName="pipeline"
             iconColor="bg-violet-100 text-violet-600"
             emptyMessage="No projects in pipeline."

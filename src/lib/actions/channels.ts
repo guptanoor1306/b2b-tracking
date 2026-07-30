@@ -17,10 +17,10 @@ export async function enterChannel(slug: string) {
   if (!profile) redirect('/login')
 
   const channel = getChannelBySlug(slug)
-  if (!channel) return { error: 'Unknown channel' }
+  if (!channel) redirect('/studios')
 
   const allowed = await fetchUserChannelSlugs(profile)
-  if (!allowed.includes(slug)) return { error: 'You do not have access to this channel' }
+  if (!allowed.includes(slug)) redirect('/studios')
 
   const jar = await cookies()
   jar.set(ACTIVE_CHANNEL_COOKIE, slug, {

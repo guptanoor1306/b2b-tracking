@@ -23,6 +23,15 @@ body {
   overflow-x: clip;
 }
 
+a,
+button,
+input,
+select,
+textarea,
+[role="button"] {
+  touch-action: manipulation;
+}
+
 html {
   min-width: 0;
 }

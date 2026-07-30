@@ -3,7 +3,11 @@
 import { Project, Profile, StageHistory, Comment, HoldPeriod, RpCut } from '@/lib/types'
 import { Button } from '@/components/ui/Button'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
-import { ProjectSectionsGrid, pendingContentCount } from '@/components/projects/ProjectSectionsGrid'
+import { ProjectSectionsGrid, pendingContentCount, isProjectIntakeView } from '@/components/projects/ProjectSectionsGrid'
+import { RequestReviewBar, DeclinedRequestNotice, PendingRequestNotice } from '@/components/projects/RequestReviewBar'
+import {
+  isPendingRequestReview, isDeclinedRequest, suppressProductionMetrics,
+} from '@/lib/zerodha-sla'
 import { ProjectEditModal } from '@/components/projects/ProjectEditModal'
 import { DeleteProjectButton } from '@/components/projects/DeleteProjectButton'
 import { ProjectHoldButton } from '@/components/projects/ProjectHoldButton'
@@ -25,9 +29,11 @@ type Props = {
   canEdit?: boolean
   canEditLinks?: boolean
   canEditCopy?: boolean
+  canEditIntakeMaterials?: boolean
   canViewRpCuts?: boolean
   canEditRpCuts?: boolean
   canSendReminder?: boolean
+  canReviewRequest?: boolean
   holidays?: string[]
   users: Profile[]
   graphicsDesigners: Profile[]
@@ -39,20 +45,51 @@ type Props = {
 
 export function ProjectDetailLayout({
   project, displayStage, internal, canEdit = true,
-  canEditLinks = false, canEditCopy = false,
+  canEditLinks = false, canEditCopy = false, canEditIntakeMaterials = false,
   canViewRpCuts = false, canEditRpCuts = false,
-  canSendReminder = false,
+  canSendReminder = false, canReviewRequest = false,
   holidays = [], users, graphicsDesigners, history, holdPeriods = [], comments, rpCuts = [],
 }: Props) {
   const currentAssignee = project.stage_assignee?.name ?? null
   const assigneeId = project.stage_assignee?.id
   const [editOpen, setEditOpen] = useState(false)
-  const targetRelease = resolveTargetReleaseDate(project, holidays)
-  const progress = pipelineProgressPercent(project.current_stage)
+  const hideMetrics = suppressProductionMetrics(project)
+  const pendingReview = isPendingRequestReview(project)
+  const declined = isDeclinedRequest(project)
+  const targetRelease = hideMetrics ? null : resolveTargetReleaseDate(project, holidays)
+  const progress = hideMetrics ? 0 : pipelineProgressPercent(project.current_stage)
   const healthPill = HEALTH_PILL_V2[project.status_health] ?? 'bg-zinc-100 text-zinc-600 border-zinc-200'
 
-  const pendingLinks = pendingContentCount(project, { checkLinks: canEditLinks, checkCopy: false })
-  const pendingCopy = pendingContentCount(project, { checkLinks: false, checkCopy: canEditCopy })
+  const intakeView = isProjectIntakeView(project)
+  const pendingLinks = pendingContentCount(project, { checkLinks: canEditLinks, checkCopy: false, intakeView })
+  const pendingCopy = pendingContentCount(project, { checkLinks: false, checkCopy: canEditCopy, intakeView })
+
+  const pipelineSection = (
+    <section className="w-full min-w-0 overflow-x-auto">
+      <div className="mb-3">
+        <h2 className="text-base font-semibold text-zinc-900">Pipeline timeline</h2>
+        {!internal && (
+          <p className="mt-0.5 text-xs text-zinc-500">Your view of production stages</p>
+        )}
+        {internal && canEdit && (
+          <p className="mt-0.5 text-xs text-zinc-500">Drag to move dates · resize edges</p>
+        )}
+      </div>
+      <StagePipelineGantt
+        history={history}
+        holdPeriods={holdPeriods}
+        project={project}
+        currentStage={project.current_stage}
+        projectId={project.id}
+        currentAssignee={currentAssignee}
+        currentAssigneeId={assigneeId}
+        canSendReminder={canSendReminder && internal}
+        canEdit={canEdit && internal}
+        holidays={holidays}
+        externalView={!internal}
+      />
+    </section>
+  )
 
   return (
     <div className="theme-v2 min-h-0 max-w-full space-y-4 pb-8 pt-1">
@@ -75,7 +112,7 @@ export function ProjectDetailLayout({
             </h1>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-            {internal && (
+            {internal && !hideMetrics && (
               <span className={cn(
                 'rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
                 healthPill,
@@ -83,7 +120,17 @@ export function ProjectDetailLayout({
                 {healthLabel(project.status_health)}
               </span>
             )}
-            {canEdit && internal && (
+            {pendingReview && !internal && (
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                Awaiting review
+              </span>
+            )}
+            {declined && (
+              <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
+                Declined
+              </span>
+            )}
+            {canEdit && internal && !pendingReview && (
               <>
                 <ProjectHoldButton projectId={project.id} isOnHold={!!project.is_on_hold} />
                 <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)} className="v2-btn-secondary h-7 text-xs px-2">
@@ -108,14 +155,16 @@ export function ProjectDetailLayout({
             )}
           </span>
           <span><span className="text-zinc-400">Stage</span> <span className="font-medium text-zinc-800">{displayStage}</span></span>
-          <span><span className="text-zinc-400">Release</span> <span className="font-medium text-zinc-800">{targetRelease ? formatDate(targetRelease, 'dd MMM yyyy') : '—'}</span></span>
+          {!hideMetrics && (
+            <span><span className="text-zinc-400">Release</span> <span className="font-medium text-zinc-800">{targetRelease ? formatDate(targetRelease, 'dd MMM yyyy') : '—'}</span></span>
+          )}
           <span><span className="text-zinc-400">IP</span> <span className="font-medium text-zinc-800">{project.ip}{project.content_type ? ` · ${project.content_type}` : ''}</span></span>
           {internal && project.editor && (
             <span><span className="text-zinc-400">Editor</span> <span className="font-medium text-zinc-800">{project.editor}</span></span>
           )}
         </div>
 
-        {internal && (
+        {internal && !hideMetrics && (
           <div className="mt-2.5 flex items-center gap-3">
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-100">
               <div className="h-full rounded-full bg-violet-600 transition-all" style={{ width: `${progress}%` }} />
@@ -131,40 +180,29 @@ export function ProjectDetailLayout({
         )}
       </div>
 
+      {canReviewRequest && pendingReview && (
+        <RequestReviewBar projectId={project.id} />
+      )}
+      {!internal && pendingReview && (
+        <PendingRequestNotice />
+      )}
+      {declined && (
+        <DeclinedRequestNotice />
+      )}
+
       <ProjectSectionsGrid
         project={project}
         comments={comments}
         rpCuts={rpCuts}
         canEditLinks={canEditLinks}
         canEditCopy={canEditCopy}
+        canEditIntakeMaterials={canEditIntakeMaterials}
         canViewRpCuts={canViewRpCuts}
         canEditRpCuts={canEditRpCuts}
+        pipeline={intakeView ? pipelineSection : undefined}
       />
 
-      <section className="w-full min-w-0 overflow-x-auto">
-          <div className="mb-3">
-            <h2 className="text-base font-semibold text-zinc-900">Pipeline timeline</h2>
-            {!internal && (
-              <p className="mt-0.5 text-xs text-zinc-500">Your view of production stages</p>
-            )}
-            {internal && canEdit && (
-              <p className="mt-0.5 text-xs text-zinc-500">Drag to move dates · resize edges</p>
-            )}
-          </div>
-          <StagePipelineGantt
-            history={history}
-            holdPeriods={holdPeriods}
-            project={project}
-            currentStage={project.current_stage}
-            projectId={project.id}
-            currentAssignee={currentAssignee}
-            currentAssigneeId={assigneeId}
-            canSendReminder={canSendReminder && internal}
-            canEdit={canEdit && internal}
-            holidays={holidays}
-            externalView={!internal}
-          />
-        </section>
+      {!intakeView && pipelineSection}
 
       {internal && (
         <ProjectEditModal

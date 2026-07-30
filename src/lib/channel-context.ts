@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { ACTIVE_CHANNEL_COOKIE, getChannelBySlug, slugToDbName, type StudioChannel } from '@/lib/channels'
@@ -6,16 +7,16 @@ import { fetchUserChannelSlugs, fetchChannelRole } from '@/lib/data/channel-acce
 import { Profile, ChannelMemberRole } from '@/lib/types'
 import { isSuperAdmin } from '@/lib/views'
 
-export async function getActiveChannelSlug(): Promise<string | null> {
+export const getActiveChannelSlug = cache(async (): Promise<string | null> => {
   const jar = await cookies()
   return jar.get(ACTIVE_CHANNEL_COOKIE)?.value ?? null
-}
+})
 
-export async function getActiveChannelDbName(): Promise<string> {
+export const getActiveChannelDbName = cache(async (): Promise<string> => {
   const slug = await getActiveChannelSlug()
   if (!slug) return 'Varsity'
   return slugToDbName(slug) ?? 'Varsity'
-}
+})
 
 export async function getActiveChannel(): Promise<StudioChannel | null> {
   const slug = await getActiveChannelSlug()

@@ -67,6 +67,9 @@ export type Project = {
   assigned_agency_id: string | null
   internal_owner_id: string | null
   assets_link: string | null
+  script_link: string | null
+  screen_captures_link: string | null
+  audio_link: string | null
   drive_link: string | null
   final_file_link: string | null
   thumbnail_copy: string | null
@@ -83,6 +86,7 @@ export type Project = {
   created_at: string
   updated_at: string
   last_status_update_at: string
+  request_status?: 'pending' | 'approved' | 'declined' | null
   agency?: Agency | null
   owner?: Profile | null
   graphic_designer?: Profile | null
@@ -160,6 +164,7 @@ export type Comment = {
   project_id: string
   comment: string
   parent_id: string | null
+  kind?: 'general' | 'decline' | string | null
   created_by: string | null
   created_at: string
   author?: Profile | null

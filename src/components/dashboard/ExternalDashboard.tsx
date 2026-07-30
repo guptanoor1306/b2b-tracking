@@ -1,15 +1,26 @@
+'use client'
+
+import { useState } from 'react'
 import Link from 'next/link'
 import { isUserOnProjectTeam } from '@/lib/projects/team'
 import { Project } from '@/lib/types'
 import { DisplayProfile } from '@/lib/projects/display-assignee'
 import { formatWaitingSince, formatDate } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { resolveTargetReleaseDate } from '@/lib/timelines'
 import { FINAL_STAGE } from '@/lib/constants'
+import {
+  isZerodhaChannelDbName,
+  isZerodhaIntakeStage,
+  isDeclinedRequest,
+} from '@/lib/zerodha-sla'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { CollapsibleProjectSection } from '@/components/dashboard/CollapsibleProjectSection'
+import { ExternalRequestModal } from '@/components/board/ExternalRequestModal'
 import { welcomeFirstName } from '@/lib/design/theme-v2'
+import { Button } from '@/components/ui/Button'
 import {
-  PlayCircle, CheckCircle2, Zap, ArrowRight, Clock,
+  PlayCircle, CheckCircle2, Zap, ArrowRight, Clock, Plus,
 } from 'lucide-react'
 
 type Props = {
@@ -18,21 +29,31 @@ type Props = {
   userName: string
   holidays?: string[]
   showAssignedSections?: boolean
+  showCreateRequest?: boolean
   holdStarters?: Record<string, DisplayProfile>
 }
 
 export function ExternalDashboard({
-  projects, userId, userName, holidays = [], showAssignedSections = false, holdStarters = {},
+  projects, userId, userName, holidays = [], showAssignedSections = false,
+  showCreateRequest = false, holdStarters = {},
 }: Props) {
+  const [requestOpen, setRequestOpen] = useState(false)
   const myProjects = projects.filter(p => isUserOnProjectTeam(p, userId))
   const inPipeline = myProjects.filter(
     p => p.current_stage !== FINAL_STAGE && p.status_health !== 'On hold'
   )
   const delivered = myProjects.filter(p => p.current_stage === FINAL_STAGE)
   const onHold = myProjects.filter(p => p.status_health === 'On hold')
-  const actionItems = projects.filter(
-    p => p.stage_assignee_id === userId && p.current_stage !== FINAL_STAGE
+  const declinedItems = projects.filter(p =>
+    p.external_team_member_id === userId
+    && isDeclinedRequest(p)
   )
+  const assignedItems = projects.filter(p => {
+    if (p.stage_assignee_id !== userId || p.current_stage === FINAL_STAGE) return false
+    if (isZerodhaChannelDbName(p.channel) && isZerodhaIntakeStage(p.current_stage)) return false
+    return true
+  })
+  const actionItems = [...declinedItems, ...assignedItems]
 
   const statCards = [
     { key: 'pipeline', label: 'In Pipeline', count: inPipeline.length, icon: PlayCircle, iconBg: 'bg-violet-100 text-violet-600', href: '/board' },
@@ -42,13 +63,24 @@ export function ExternalDashboard({
   return (
     <div className="theme-v2 -mx-6 -mt-2 min-h-[calc(100vh-4rem)] px-6 pb-10 pt-2">
       <div className="mx-auto max-w-5xl space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
-            Welcome, {welcomeFirstName(userName)}
-          </h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            Your workspace · {actionItems.length} action item{actionItems.length !== 1 ? 's' : ''}
-          </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
+              Welcome, {welcomeFirstName(userName)}
+            </h1>
+            <p className="text-sm text-zinc-500 mt-1">
+              Your workspace · {actionItems.length} action item{actionItems.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+          {showCreateRequest && (
+            <Button
+              size="sm"
+              onClick={() => setRequestOpen(true)}
+              className="v2-btn-primary shrink-0 font-semibold self-start"
+            >
+              <Plus size={16} /> Create request
+            </Button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -84,31 +116,45 @@ export function ExternalDashboard({
           ) : (
             <div className="grid gap-2">
               {actionItems.map(p => {
-                const target = resolveTargetReleaseDate(p, holidays)
+                const declined = isDeclinedRequest(p)
+                const target = declined ? null : resolveTargetReleaseDate(p, holidays)
                 return (
                   <Link
                     key={p.id}
                     href={`/projects/${p.id}`}
-                    className="group flex items-center gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-3.5 hover:border-zinc-300 hover:shadow-sm transition-all border-l-2 border-l-amber-500"
+                    className={cn(
+                      'group flex items-center gap-3 rounded-lg border bg-white px-4 py-3.5 hover:border-zinc-300 hover:shadow-sm transition-all border-l-2',
+                      declined ? 'border-l-red-500 border-red-100' : 'border-l-amber-500 border-zinc-200',
+                    )}
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-zinc-900 truncate group-hover:text-violet-700">
                         {p.title}
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                        <span className="text-[11px] text-zinc-500">{p.current_stage}</span>
-                        <span className="text-[11px] font-medium text-orange-600">
-                          {formatWaitingSince(p.last_status_update_at)} waiting
-                        </span>
-                        {target && (
-                          <span className="flex items-center gap-1 text-[11px] text-zinc-500">
-                            <Clock size={11} />
-                            {formatDate(target, 'dd MMM')}
+                        {declined ? (
+                          <span className="text-[11px] font-medium text-red-700">
+                            Request declined — see comments for details
                           </span>
+                        ) : (
+                          <>
+                            <span className="text-[11px] text-zinc-500">{p.current_stage}</span>
+                            <span className="text-[11px] font-medium text-orange-600">
+                              {formatWaitingSince(p.last_status_update_at)} waiting
+                            </span>
+                            {target && (
+                              <span className="flex items-center gap-1 text-[11px] text-zinc-500">
+                                <Clock size={11} />
+                                {formatDate(target, 'dd MMM')}
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
-                    <AssigneeAvatar name={userName} id={userId} size="md" theme="light" />
+                    {!declined && (
+                      <AssigneeAvatar name={userName} id={userId} size="md" theme="light" />
+                    )}
                     <span className="text-xs font-semibold text-violet-600 shrink-0 group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-0.5">
                       Open <ArrowRight size={14} />
                     </span>
@@ -155,6 +201,10 @@ export function ExternalDashboard({
           </div>
         )}
       </div>
+
+      {showCreateRequest && (
+        <ExternalRequestModal open={requestOpen} onClose={() => setRequestOpen(false)} />
+      )}
     </div>
   )
 }
