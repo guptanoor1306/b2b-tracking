@@ -10,9 +10,9 @@ import { cn } from '@/lib/utils'
 import { resolveTargetReleaseDate } from '@/lib/timelines'
 import { FINAL_STAGE } from '@/lib/constants'
 import {
-  isZerodhaChannelDbName,
-  isZerodhaIntakeStage,
   isDeclinedRequest,
+  isPendingRequestReview,
+  ZERODHA_REQUEST_RECEIVED,
 } from '@/lib/zerodha-sla'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { CollapsibleProjectSection } from '@/components/dashboard/CollapsibleProjectSection'
@@ -49,9 +49,11 @@ export function ExternalDashboard({
     && isDeclinedRequest(p)
   )
   const assignedItems = projects.filter(p => {
-    if (p.stage_assignee_id !== userId || p.current_stage === FINAL_STAGE) return false
-    if (isZerodhaChannelDbName(p.channel) && isZerodhaIntakeStage(p.current_stage)) return false
-    return true
+    if (p.current_stage === FINAL_STAGE) return false
+    if (isPendingRequestReview(p) || isDeclinedRequest(p)) return false
+    if (p.stage_assignee_id === userId) return true
+    if (isUserOnProjectTeam(p, userId) && p.current_stage !== ZERODHA_REQUEST_RECEIVED) return true
+    return false
   })
   const actionItems = [...declinedItems, ...assignedItems]
 

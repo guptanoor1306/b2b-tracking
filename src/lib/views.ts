@@ -46,6 +46,8 @@ export function resolveStageAssigneeId(
     case 'Video/Thumbnail Review':
     case 'Request Received':
       return project.external_team_member_id ?? editor
+    case 'Ready to Produce':
+      return editor ?? project.stage_assignee_id ?? null
     default:
       return project.stage_assignee_id ?? editor
   }

@@ -21,7 +21,7 @@ import {
   canReviewExternalRequest,
   canEditIntakeMaterials,
 } from '@/lib/views'
-import { hasIntakeMaterials } from '@/lib/zerodha-sla'
+import { hasIntakeMaterials, ZERODHA_REQUEST_RECEIVED, ZERODHA_READY_TO_PRODUCE, isPendingRequestReview } from '@/lib/zerodha-sla'
 import { FIRST_CUT_STAGE } from '@/lib/constants'
 import { normalizeStage } from '@/lib/timelines'
 import {
@@ -35,7 +35,6 @@ import { notifyProjectTeamOnCreate, notifyStageActionable } from '@/lib/email/no
 import { isEmailConfigured, sendEmail } from '@/lib/email/send'
 import { insertStageHistoryRecord } from '@/lib/data/stage-history'
 import { Project } from '@/lib/types'
-import { ZERODHA_REQUEST_RECEIVED, ZERODHA_READY_TO_PRODUCE, isPendingRequestReview } from '@/lib/zerodha-sla'
 import { format } from 'date-fns'
 
 async function getSessionEffectiveRole() {
@@ -301,7 +300,12 @@ export async function approveExternalRequest(projectId: string) {
   const holidays = await fetchHolidayDates()
   const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).single()
   if (!project) return { error: 'Project not found' }
-  if (!isPendingRequestReview(project)) return { error: 'This request is not awaiting review' }
+  if (!isZerodhaChannelDbName(project.channel) || project.current_stage !== ZERODHA_REQUEST_RECEIVED) {
+    return { error: 'This request is not awaiting review' }
+  }
+  if (project.request_status === 'declined') {
+    return { error: 'Declined requests must be resubmitted by the client' }
+  }
 
   const newStage = ZERODHA_READY_TO_PRODUCE
   const oldStage = project.current_stage
@@ -445,10 +449,14 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
   }
 
   if (isZerodhaChannelDbName(existing.channel)) {
-    const lang = input.video_language ?? existing.video_language
-    const level = input.level_of_video ?? existing.level_of_video
-    if (!lang) return { error: 'Video language is required' }
-    if (!level) return { error: 'Video level is required' }
+    const lang = input.video_language !== undefined ? input.video_language : existing.video_language
+    const level = input.level_of_video !== undefined ? input.level_of_video : existing.level_of_video
+    const settingProductionMeta =
+      (input.video_language != null && input.video_language !== '') ||
+      (input.level_of_video != null && input.level_of_video !== '')
+    if (settingProductionMeta && (!lang || !level)) {
+      return { error: 'Video language and level are both required when setting production metadata' }
+    }
   }
 
   const startDate = input.received_date ?? existing.received_date
@@ -476,6 +484,15 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
       holidays,
       existing.channel,
     )
+  }
+
+  const teamFields = [
+    'editor_id', 'editor_2_id', 'designer_id', 'designer_2_id',
+    'sound_designer_id', 'writer_id', 'external_team_member_id',
+  ] as const
+  if (teamFields.some(f => input[f] !== undefined)) {
+    const merged = { ...existing, ...patch }
+    patch.stage_assignee_id = resolveStageAssigneeId(merged, merged.current_stage as string)
   }
 
   const { error } = await supabase
@@ -560,6 +577,14 @@ export async function changeProjectStage(
 
   if (newStage === FINAL_STAGE && !project.delivered_date) {
     updates.delivered_date = new Date().toISOString().split('T')[0]
+  }
+
+  if (
+    isZerodhaChannelDbName(project.channel)
+    && project.current_stage === ZERODHA_REQUEST_RECEIVED
+    && normalizeStage(newStage) === ZERODHA_READY_TO_PRODUCE
+  ) {
+    updates.request_status = 'approved'
   }
 
   const { error } = await supabase.from('projects').update(updates).eq('id', projectId)

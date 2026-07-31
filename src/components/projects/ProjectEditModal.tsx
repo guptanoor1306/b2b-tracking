@@ -39,6 +39,7 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
     || isZerodhaChannelDbName(channel?.dbName)
     || isZerodhaChannelDbName(project.channel)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [form, setForm] = useState({
     title: project.title,
     ip: project.ip === '—' ? '' : project.ip,
@@ -118,23 +119,29 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
   const handleSave = async () => {
     if (stageChangingToFirstCut && !form.uses_teleprompter) return
     setLoading(true)
+    setError('')
 
     if (form.current_stage !== project.current_stage) {
-      await changeProjectStage(
+      const stageResult = await changeProjectStage(
         project.id,
         form.current_stage,
         undefined,
         undefined,
         stageChangingToFirstCut ? form.uses_teleprompter === 'yes' : undefined
       )
+      if (stageResult.error) {
+        setError(stageResult.error)
+        setLoading(false)
+        return
+      }
     }
 
-    await updateProject(project.id, {
+    const result = await updateProject(project.id, {
       title: form.title.trim() || 'Untitled project',
       ip: form.ip.trim() || '—',
       content_type: form.content_type || CONTENT_TYPES[0],
-      video_language: form.video_language || null,
-      level_of_video: form.level_of_video || null,
+      ...(form.video_language ? { video_language: form.video_language } : {}),
+      ...(form.level_of_video ? { level_of_video: form.level_of_video } : {}),
       priority: form.priority,
       editor_id: form.editor_id || null,
       editor_2_id: form.editor_2_id || null,
@@ -153,6 +160,10 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
       notes: form.notes || null,
     })
     setLoading(false)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
     onClose()
     router.refresh()
   }
@@ -173,6 +184,9 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
         </div>
       }
     >
+      {error && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+      )}
       <div className="space-y-8">
         <SlideOverSection title="Basics">
           <Input label="Project name" value={form.title} onChange={e => set('title', e.target.value)} />
