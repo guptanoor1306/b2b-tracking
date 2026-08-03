@@ -1,7 +1,8 @@
 import { Suspense } from 'react'
-import { KanbanBoard } from '@/components/board/KanbanBoard'
+import { KanbanBoardClient } from '@/components/board/KanbanBoardClient'
 import { BoardFiltersBar } from '@/components/board/BoardFiltersBar'
 import { BoardHeaderActions } from '@/components/board/BoardHeaderActions'
+import { MonthFilterSlot } from '@/components/dashboard/MonthFilterSlot'
 import { fetchProjects } from '@/lib/data/projects'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig } from '@/lib/data/stage-sla'
@@ -10,6 +11,7 @@ import { setStageSlaCache } from '@/lib/timelines'
 import { getSessionProfile } from '@/lib/auth'
 import { getActiveChannelRole, getActiveChannelDbName, getActiveChannelSlug } from '@/lib/channel-context'
 import { redirect } from 'next/navigation'
+import { ALL_MONTHS, filterProjectsByMonth } from '@/lib/utils'
 import { isZerodhaChannelDbName, externalStagesForChannel, internalStagesForChannel, VIDEO_LANGUAGES } from '@/lib/zerodha-sla'
 import {
   canSeeBoardAssigneeFilter,
@@ -31,6 +33,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   if (!profile) redirect('/login')
 
   const params = await searchParams
+  const month = params.month ?? ALL_MONTHS
   const [projects, users, holidays, stageSla, channelName] = await Promise.all([
     fetchProjects(),
     getActiveChannelSlug().then(slug => fetchChannelMembers(slug ?? '')),
@@ -55,15 +58,16 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
       )
     )
 
-  const boardIps = [...new Set(projects.map(p => p.ip).filter(ip => ip && ip !== '—'))].sort()
+  const monthScoped = filterProjectsByMonth(projects, month)
+  const boardIps = [...new Set(monthScoped.map(p => p.ip).filter(ip => ip && ip !== '—'))].sort()
   const isZerodha = isZerodhaChannelDbName(channelName)
   const boardLanguages = isZerodha
-    ? [...new Set(projects.map(p => p.video_language).filter(Boolean))].sort() as string[]
+    ? [...new Set(monthScoped.map(p => p.video_language).filter(Boolean))].sort() as string[]
     : []
   const internalStages = internalStagesForChannel(channelName)
   const externalStages = externalStagesForChannel(channelName)
 
-  let filtered = projects
+  let filtered = monthScoped
   const teamBoard = shouldFilterBoardForViewer(profile.role, channelRole)
 
   if (teamBoard) {
@@ -80,7 +84,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
     filtered = filtered.filter(p => p.video_language === params.language)
   }
 
-  const boardKey = `${params.assignee ?? 'all'}-${params.ip ?? 'all'}-${params.language ?? 'all'}`
+  const boardKey = `${month}-${params.assignee ?? 'all'}-${params.ip ?? 'all'}-${params.language ?? 'all'}`
 
   return (
     <div className="theme-v2 -mx-6 -mt-2 min-h-[calc(100vh-4rem)] px-6 pb-10 pt-2">
@@ -91,9 +95,12 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
             {filtered.length} project{filtered.length !== 1 ? 's' : ''} · drag cards to update stages
           </p>
         </div>
-        {canChangeStages(role) && (
-          <BoardHeaderActions users={users} holidays={holidays} />
-        )}
+        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
+          <MonthFilterSlot month={month} />
+          {canChangeStages(role) && (
+            <BoardHeaderActions users={users} holidays={holidays} />
+          )}
+        </div>
       </div>
 
       <Suspense fallback={null}>
@@ -110,7 +117,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
       {teamBoard && (
         <p className="text-xs text-zinc-500 mb-3">Showing projects you&apos;re assigned to</p>
       )}
-      <KanbanBoard
+      <KanbanBoardClient
         key={boardKey}
         projects={filtered}
         users={users}

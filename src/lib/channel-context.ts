@@ -59,7 +59,11 @@ export async function requireChannelAdmin(): Promise<{
   const channel = await requireActiveChannel()
   const channelRole = await getActiveChannelRole(profile)
 
-  if (!isSuperAdmin(profile.role) && channelRole !== 'Channel Admin') {
+  if (
+    !isSuperAdmin(profile.role)
+    && channelRole !== 'Channel Admin'
+    && channelRole !== 'External Client Admin'
+  ) {
     redirect('/board')
   }
 

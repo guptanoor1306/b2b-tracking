@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import { useActiveChannel, useActiveChannelRole } from '@/context/ChannelContext'
 import { useSidebar } from '@/context/SidebarContext'
-import { isSuperAdmin } from '@/lib/views'
+import { isSuperAdmin, canManageUsers, isExternalClientAdmin } from '@/lib/views'
 import {
   Home, LayoutDashboard, LogOut, Grid3X3,
   PanelLeftClose, PanelLeft, Settings, UserCircle, Loader2,
@@ -21,7 +21,8 @@ const NAV = [
     label: 'Settings',
     icon: Settings,
     show: (channelRole: string | null, globalRole?: string) =>
-      isSuperAdmin(globalRole ?? '') || channelRole === 'Channel Admin',
+      !isExternalClientAdmin(channelRole ?? '')
+      && (isSuperAdmin(globalRole ?? '') || canManageUsers(channelRole ?? '')),
   },
 ] as const
 

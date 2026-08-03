@@ -9,8 +9,9 @@ import {
   SUPER_ADMIN_ROLES,
   CHANNEL_ADMIN_ROLES,
   FINAL_STAGE,
+  STAGE_PIPELINE,
 } from '@/lib/constants'
-import { isZerodhaChannelDbName, mapZerodhaInternalToExternalStage, ZERODHA_READY_TO_PRODUCE, hasIntakeMaterials } from '@/lib/zerodha-sla'
+import { isZerodhaChannelDbName, mapZerodhaInternalToExternalStage, ZERODHA_READY_TO_PRODUCE, hasIntakeMaterials, isDeclinedRequest, normalizeZerodhaBoardStage, ZERODHA_FIRST_CUT_REVIEW, ZERODHA_FIRST_DRAFT_REVIEW, ZERODHA_SECOND_DRAFT_REVIEW } from '@/lib/zerodha-sla'
 import { Role, Project } from '@/lib/types'
 import { isUserOnProjectTeam } from '@/lib/projects/team'
 
@@ -31,7 +32,9 @@ export function resolveStageAssigneeId(
   const editor = project.editor_id ?? project.editor_2_id ?? null
   switch (s) {
     case 'First Cut':
+    case '1st Cut':
     case 'First Cut Changes':
+    case '1st Review Changes':
     case 'Animation & VD':
     case 'Final Changes':
       return editor
@@ -42,10 +45,20 @@ export function resolveStageAssigneeId(
     case 'Sound':
       return project.sound_designer_id ?? editor
     case 'First Cut sent for Review':
+    case '1st Cut Review':
+    case '1st Draft Review':
+    case '2nd Draft Review':
     case 'Thumbnail Copy + RP Cuts':
     case 'Video/Thumbnail Review':
+    case 'First Review':
+    case '2nd Review':
     case 'Request Received':
       return project.external_team_member_id ?? editor
+    case '1st Cut Review Done':
+      return project.writer_id ?? editor
+    case '1st Draft Review Done':
+    case '2nd Draft Review Done':
+      return editor
     case 'Ready to Produce':
       return editor ?? project.stage_assignee_id ?? null
     default:
@@ -59,6 +72,33 @@ export function isInternalRole(role: Role | string): boolean {
 
 export function isExternalRole(role: Role | string): boolean {
   return (EXTERNAL_ROLES as readonly string[]).includes(role)
+}
+
+export function isExternalClientAdmin(role: Role | string): boolean {
+  return role === 'External Client Admin'
+}
+
+export function usesExternalAdminDashboard(role: Role | string): boolean {
+  return isExternalClientAdmin(role)
+}
+
+const ZERODHA_CLIENT_REVIEW_STAGES = new Set([
+  ZERODHA_FIRST_CUT_REVIEW,
+  ZERODHA_FIRST_DRAFT_REVIEW,
+  ZERODHA_SECOND_DRAFT_REVIEW,
+])
+
+/** External-facing items awaiting client action — not internal delay/at-risk signals. */
+export function needsExternalClientAttention(
+  project: Pick<Project, 'current_stage' | 'channel' | 'request_status'>,
+  channelDbName?: string | null,
+): boolean {
+  if (isDeclinedRequest(project)) return true
+  if (isZerodhaChannelDbName(channelDbName ?? project.channel)) {
+    return ZERODHA_CLIENT_REVIEW_STAGES.has(normalizeZerodhaBoardStage(project.current_stage))
+  }
+  const meta = STAGE_PIPELINE[normalizeStage(project.current_stage)]
+  return meta?.owner === 'external'
 }
 
 export function isSuperAdmin(role: Role | string): boolean {
@@ -78,11 +118,13 @@ export function isChannelAdmin(role: Role | string): boolean {
 }
 
 export function usesActionItemsDashboard(role: Role | string): boolean {
+  if (isExternalClientAdmin(role)) return false
   return isExternalRole(role) || role === 'Channel Team'
 }
 
 export function usesActionItemsDashboardForChannel(channelRole: string | null): boolean {
   if (!channelRole) return false
+  if (isExternalClientAdmin(channelRole)) return false
   return isExternalRole(channelRole) || channelRole === 'Channel Team'
 }
 
@@ -95,7 +137,7 @@ export function usesFullAdminDashboardForChannel(
   globalRole?: Role | string,
 ): boolean {
   if (globalRole && isSuperAdmin(globalRole)) return true
-  return channelRole === 'Channel Admin'
+  return channelRole === 'Channel Admin' || channelRole === 'External Client Admin'
 }
 
 export function usesIpOverviewDashboard(role: Role | string): boolean {
@@ -103,7 +145,7 @@ export function usesIpOverviewDashboard(role: Role | string): boolean {
 }
 
 export function canManageUsers(role: Role | string): boolean {
-  return (CHANNEL_ADMIN_ROLES as readonly string[]).includes(role)
+  return (CHANNEL_ADMIN_ROLES as readonly string[]).includes(role) || isExternalClientAdmin(role)
 }
 
 export function canEditProjects(role: Role | string): boolean {
@@ -128,7 +170,7 @@ export function canEditProjectLinks(role: Role | string): boolean {
 }
 
 export function canEditProjectCopy(role: Role | string): boolean {
-  return role === 'Zerodha Viewer'
+  return role === 'Zerodha Viewer' || isExternalClientAdmin(role)
 }
 
 /** Client submitter or internal team may edit Zerodha request materials (links + copy). */
@@ -144,19 +186,20 @@ export function canEditIntakeMaterials(
 }
 
 export function canViewRpCuts(role: Role | string): boolean {
-  return isInternalRole(role) || role === 'Agency' || role === 'Zerodha Viewer'
+  return isInternalRole(role) || role === 'Agency' || role === 'Zerodha Viewer' || isExternalClientAdmin(role)
 }
 
 export function canEditRpCuts(role: Role | string): boolean {
-  return role === 'Zerodha Viewer'
+  return role === 'Zerodha Viewer' || isExternalClientAdmin(role)
 }
 
 export function canSeeBoardAssigneeFilter(role: Role | string): boolean {
-  return (BOARD_FULL_ACCESS_ROLES as readonly string[]).includes(role)
+  return (BOARD_FULL_ACCESS_ROLES as readonly string[]).includes(role) || isExternalClientAdmin(role)
 }
 
 export function shouldFilterBoardToSelf(role: Role | string): boolean {
   if (isSuperAdmin(role)) return false
+  if (isExternalClientAdmin(role)) return false
   return isExternalRole(role) || role === 'Channel Team'
 }
 
@@ -182,7 +225,9 @@ export function usesInternalBoardView(globalRole: Role | string, channelRole: st
 export const shouldFilterBoardToTeam = shouldFilterBoardToSelf
 
 export function canCreateExternalRequest(role: Role | string, channelDbName: string | null | undefined): boolean {
-  return isZerodhaChannelDbName(channelDbName) && (role === 'Agency' || role === 'Zerodha Viewer')
+  return isZerodhaChannelDbName(channelDbName) && (
+    role === 'Agency' || role === 'Zerodha Viewer' || isExternalClientAdmin(role)
+  )
 }
 
 export function canReviewExternalRequest(role: Role | string, channelDbName: string | null | undefined): boolean {

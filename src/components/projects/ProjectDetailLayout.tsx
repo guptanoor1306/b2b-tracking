@@ -15,8 +15,9 @@ import { StagePipelineGantt } from '@/components/projects/StagePipelineGantt'
 import { resolveTargetReleaseDate } from '@/lib/timelines'
 import { formatDate } from '@/lib/utils'
 import {
-  healthLabel, HEALTH_PILL_V2, pipelineProgressPercent,
+  healthLabel, HEALTH_PILL_V2,
 } from '@/lib/design/theme-v2'
+import { pipelineProgressPercentForChannel } from '@/lib/zerodha-sla'
 import { Pencil } from 'lucide-react'
 import { useState } from 'react'
 import Link from 'next/link'
@@ -57,7 +58,9 @@ export function ProjectDetailLayout({
   const pendingReview = isPendingRequestReview(project)
   const declined = isDeclinedRequest(project)
   const targetRelease = hideMetrics ? null : resolveTargetReleaseDate(project, holidays)
-  const progress = hideMetrics ? 0 : pipelineProgressPercent(project.current_stage)
+  const progress = hideMetrics
+    ? 0
+    : pipelineProgressPercentForChannel(project.current_stage, project.channel)
   const healthPill = HEALTH_PILL_V2[project.status_health] ?? 'bg-zinc-100 text-zinc-600 border-zinc-200'
 
   const intakeView = isProjectIntakeView(project)

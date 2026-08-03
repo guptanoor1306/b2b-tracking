@@ -66,16 +66,60 @@ export function currentMonth(): string {
 }
 
 export function monthLabel(month: string): string {
+  if (isAllMonths(month)) return 'All time'
   const [y, m] = month.split('-').map(Number)
   return format(new Date(y, m - 1), 'MMMM yyyy')
 }
 
+export const ALL_MONTHS = 'all'
+
+export function isAllMonths(month: string | null | undefined): boolean {
+  return !month || month === ALL_MONTHS
+}
+
 export function isDateInMonth(dateStr: string | null | undefined, month: string): boolean {
-  if (!dateStr || !month) return false
+  if (!dateStr || !month || isAllMonths(month)) return false
   const [year, m] = month.split('-').map(Number)
   const start = format(startOfMonth(new Date(year, m - 1)), 'yyyy-MM-dd')
   const end = format(endOfMonth(new Date(year, m - 1)), 'yyyy-MM-dd')
   return dateStr >= start && dateStr <= end
+}
+
+type MonthFilterProject = {
+  received_date: string | null
+  picked_up_date: string | null
+  delivered_date: string | null
+  last_status_update_at?: string | null
+  on_hold_since?: string | null
+  target_delivery_date?: string | null
+}
+
+/** Project received, picked up, updated, or targeted in the given month. */
+export function isProjectRelevantInMonth(project: MonthFilterProject, month: string): boolean {
+  if (isAllMonths(month)) return true
+  return (
+    isDateInMonth(project.received_date, month)
+    || isDateInMonth(project.picked_up_date, month)
+    || isDateInMonth(project.last_status_update_at, month)
+    || isDateInMonth(project.on_hold_since, month)
+    || isDateInMonth(project.target_delivery_date, month)
+  )
+}
+
+export function isDeliveredInMonth(project: Pick<MonthFilterProject, 'delivered_date'>, month: string): boolean {
+  if (isAllMonths(month)) return true
+  return isDateInMonth(project.delivered_date, month)
+}
+
+type MonthFilterableProject = MonthFilterProject & { current_stage: string }
+
+/** Filter board/home lists: delivered by delivery date; active by activity in month. */
+export function filterProjectsByMonth<T extends MonthFilterableProject>(projects: T[], month: string): T[] {
+  if (isAllMonths(month)) return projects
+  return projects.filter(p => {
+    if (p.current_stage === FINAL_STAGE) return isDeliveredInMonth(p, month)
+    return isProjectRelevantInMonth(p, month)
+  })
 }
 
 export type StageDuration = {

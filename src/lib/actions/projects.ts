@@ -20,6 +20,7 @@ import {
   isBlockedReadyToProduceMove,
   canReviewExternalRequest,
   canEditIntakeMaterials,
+  isExternalClientAdmin,
 } from '@/lib/views'
 import { hasIntakeMaterials, ZERODHA_REQUEST_RECEIVED, ZERODHA_READY_TO_PRODUCE, isPendingRequestReview } from '@/lib/zerodha-sla'
 import { FIRST_CUT_STAGE } from '@/lib/constants'
@@ -408,7 +409,7 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
     const allowed =
       session.role === 'Agency'
         ? ['drive_link', 'assets_link', 'final_file_link', ...zerodhaIntakeFields, ...shared]
-        : session.role === 'Zerodha Viewer'
+        : session.role === 'Zerodha Viewer' || isExternalClientAdmin(session.role)
           ? [...zerodhaIntakeFields, ...shared]
           : []
     const keys = Object.keys(input)

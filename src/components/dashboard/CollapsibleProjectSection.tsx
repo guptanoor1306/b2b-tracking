@@ -8,6 +8,7 @@ import {
   ChevronDown, Inbox, Package, CheckCircle2, GitBranch, PauseCircle, ClipboardList,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { mapInternalToExternalStage } from '@/lib/views'
 
 const PREVIEW_LIMIT = 5
 
@@ -31,11 +32,22 @@ type Props = {
   variant?: 'dark' | 'light'
   assigneeContext?: AssigneeContext
   holdStarters?: Record<string, DisplayProfile>
+  externalView?: boolean
+  channelDbName?: string | null
+}
+
+function resolveStageLabel(
+  project: Project,
+  externalView?: boolean,
+  channelDbName?: string | null,
+): string | undefined {
+  if (!externalView) return undefined
+  return mapInternalToExternalStage(project.current_stage, channelDbName ?? project.channel)
 }
 
 export function CollapsibleProjectSection({
   title, count, projects, iconName, iconColor, emptyMessage, variant = 'dark',
-  assigneeContext = 'stage', holdStarters,
+  assigneeContext = 'stage', holdStarters, externalView, channelDbName,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const hasMore = projects.length > PREVIEW_LIMIT
@@ -91,6 +103,7 @@ export function CollapsibleProjectSection({
                   variant={light ? 'light' : 'dark'}
                   assigneeContext={assigneeContext}
                   holdStarter={holdStarters?.[p.id]}
+                  stageLabel={resolveStageLabel(p, externalView, channelDbName)}
                 />
               ))}
             </div>

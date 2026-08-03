@@ -1,5 +1,5 @@
-export type Role = 'Super Admin' | 'Member' | 'Channel Admin' | 'Channel Team' | 'Agency' | 'Zerodha Viewer'
-export type ChannelMemberRole = 'Channel Admin' | 'Channel Team' | 'Agency' | 'Zerodha Viewer'
+export type Role = 'Super Admin' | 'Member' | 'Channel Admin' | 'Channel Team' | 'Agency' | 'Zerodha Viewer' | 'External Client Admin'
+export type ChannelMemberRole = 'Channel Admin' | 'Channel Team' | 'Agency' | 'Zerodha Viewer' | 'External Client Admin'
 
 export type ChannelMember = Profile & {
   channel_role: ChannelMemberRole

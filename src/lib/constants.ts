@@ -34,6 +34,7 @@ export const ROLES = [
   'Channel Team',
   'Agency',
   'Zerodha Viewer',
+  'External Client Admin',
   'Super Admin',
 ] as const
 
@@ -43,6 +44,7 @@ export const CHANNEL_MEMBER_ROLES = [
   'Channel Team',
   'Agency',
   'Zerodha Viewer',
+  'External Client Admin',
 ] as const
 
 export const GLOBAL_ROLES = ['Super Admin', 'Member'] as const
@@ -52,6 +54,7 @@ export const ROLE_LABELS: Record<string, string> = {
   'Channel Team': 'Channel Team',
   'Agency': 'External Agency',
   'Zerodha Viewer': 'External Client',
+  'External Client Admin': 'External Client Admin',
   'Super Admin': 'Super Admin',
   'Member': 'Member',
 }
@@ -61,7 +64,7 @@ export const CHANNEL_ADMIN_ROLES = ['Channel Admin', 'Super Admin'] as const
 /** @deprecated use CHANNEL_ADMIN_ROLES */
 export const ADMIN_ROLES = CHANNEL_ADMIN_ROLES
 export const INTERNAL_ROLES = ['Channel Admin', 'Channel Team', 'Super Admin'] as const
-export const EXTERNAL_ROLES = ['Agency', 'Zerodha Viewer'] as const
+export const EXTERNAL_ROLES = ['Agency', 'Zerodha Viewer', 'External Client Admin'] as const
 export const BOARD_FULL_ACCESS_ROLES = ['Channel Admin', 'Channel Team', 'Super Admin'] as const
 
 export const STAGES_INTERNAL = [

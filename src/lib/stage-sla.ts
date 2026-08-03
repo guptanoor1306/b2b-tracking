@@ -83,14 +83,15 @@ export function resolveStageHours(
 
 /** Total pipeline hours for target release (respects parallel groups) */
 export function totalPipelineHoursFromSla(
-  rows: Pick<StageSlaRow, 'stage_name' | 'duration_hours' | 'level_0_hours' | 'level_1_hours' | 'level_2_hours' | 'level_3_hours' | 'level_4_hours' | 'parallel_group'>[],
+  rows: Pick<StageSlaRow, 'stage_name' | 'duration_hours' | 'level_0_hours' | 'level_1_hours' | 'level_2_hours' | 'level_3_hours' | 'level_4_hours' | 'parallel_group' | 'sort_order'>[],
   level: string | null | undefined,
   project?: ProjectTeamContext
 ): number {
   const sorted = [...rows].sort((a, b) => {
     const ai = STAGES_INTERNAL.indexOf(a.stage_name as typeof STAGES_INTERNAL[number])
     const bi = STAGES_INTERNAL.indexOf(b.stage_name as typeof STAGES_INTERNAL[number])
-    return ai - bi
+    if (ai >= 0 && bi >= 0) return ai - bi
+    return a.sort_order - b.sort_order
   })
 
   const seenGroups = new Set<string>()

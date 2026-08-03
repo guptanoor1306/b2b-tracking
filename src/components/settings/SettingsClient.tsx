@@ -20,6 +20,7 @@ type Props = {
   holidays: OrgHoliday[]
   currentUserId: string
   canManageRoles: boolean
+  showSlaSettings?: boolean
   stageSla: StageSlaRow[]
   slaActivity: SettingsActivityLog[]
   channelDbName: string
@@ -52,10 +53,11 @@ const TABS: {
 ]
 
 export function SettingsClient({
-  members, channelSlug, channelName, holidays, currentUserId, canManageRoles, stageSla, slaActivity, channelDbName,
+  members, channelSlug, channelName, holidays, currentUserId, canManageRoles, showSlaSettings = true, stageSla, slaActivity, channelDbName,
 }: Props) {
+  const visibleTabs = showSlaSettings ? TABS : TABS.filter(t => t.id === 'users')
   const [tab, setTab] = useState<Tab>('users')
-  const activeTab = TABS.find(t => t.id === tab)!
+  const activeTab = visibleTabs.find(t => t.id === tab) ?? visibleTabs[0]
 
   return (
     <div className="theme-v2 -mx-6 -mt-2 min-h-[calc(100vh-4rem)] px-6 pb-10 pt-2">
@@ -68,8 +70,9 @@ export function SettingsClient({
         </header>
 
         <div className="mb-6 border-b border-zinc-200">
+          {visibleTabs.length > 1 && (
           <nav className="-mb-px flex gap-1 overflow-x-auto" aria-label="Settings tabs">
-            {TABS.map(t => {
+            {visibleTabs.map(t => {
               const Icon = t.icon
               const active = tab === t.id
               return (
@@ -90,6 +93,7 @@ export function SettingsClient({
               )
             })}
           </nav>
+          )}
         </div>
 
         <div className="rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-sm sm:p-8">

@@ -26,7 +26,7 @@ async function assertCanManageChannel(channelSlug: string) {
   if (!channelSlug) throw new Error('No channel specified')
   if (isSuperAdmin(profile.role)) return { profile, slug: channelSlug }
   const role = await fetchChannelRole(profile.id, channelSlug)
-  if (role !== 'Channel Admin') throw new Error('Unauthorized')
+  if (role !== 'Channel Admin' && role !== 'External Client Admin') throw new Error('Unauthorized')
   return { profile, slug: channelSlug }
 }
 
@@ -96,7 +96,7 @@ export async function updateChannelMember(
     const slug = await getActiveChannelSlug()
     if (slug !== channelSlug) return { error: 'Unauthorized' }
     const role = await fetchChannelRole(profile.id, channelSlug)
-    if (role !== 'Channel Admin') return { error: 'Unauthorized' }
+    if (role !== 'Channel Admin' && role !== 'External Client Admin') return { error: 'Unauthorized' }
   }
 
   const supabase = await createClient()
@@ -133,7 +133,7 @@ export async function removeChannelMemberFromChannel(profileId: string, channelS
     const slug = await getActiveChannelSlug()
     if (slug !== channelSlug) return { error: 'Unauthorized' }
     const role = await fetchChannelRole(profile.id, channelSlug)
-    if (role !== 'Channel Admin') return { error: 'Unauthorized' }
+    if (role !== 'Channel Admin' && role !== 'External Client Admin') return { error: 'Unauthorized' }
   }
 
   const supabase = await createClient()

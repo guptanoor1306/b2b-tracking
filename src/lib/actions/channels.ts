@@ -45,7 +45,7 @@ async function assertCanManageChannel(channelSlug: string) {
   if (!profile) throw new Error('Unauthorized')
   if (isSuperAdmin(profile.role)) return profile
   const role = await fetchChannelRole(profile.id, channelSlug)
-  if (role !== 'Channel Admin') throw new Error('Unauthorized')
+  if (role !== 'Channel Admin' && role !== 'External Client Admin') throw new Error('Unauthorized')
   return profile
 }
 

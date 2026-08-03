@@ -483,6 +483,7 @@ export function KanbanBoard({
       )}
       <div className="rounded-2xl border border-zinc-200/80 bg-white/60 shadow-sm overflow-hidden">
         <DndContext
+          id="production-kanban-board"
           sensors={sensors}
           collisionDetection={boardCollisionDetection}
           onDragStart={handleDragStart}

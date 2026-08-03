@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { isUserOnProjectTeam } from '@/lib/projects/team'
 import { Project } from '@/lib/types'
 import { DisplayProfile } from '@/lib/projects/display-assignee'
-import { formatWaitingSince, formatDate } from '@/lib/utils'
+import { formatWaitingSince, formatDate, isAllMonths, isProjectRelevantInMonth, isDeliveredInMonth } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { resolveTargetReleaseDate } from '@/lib/timelines'
 import { FINAL_STAGE } from '@/lib/constants'
@@ -27,6 +27,8 @@ type Props = {
   projects: Project[]
   userId: string
   userName: string
+  month: string
+  monthFilter: ReactNode
   holidays?: string[]
   showAssignedSections?: boolean
   showCreateRequest?: boolean
@@ -34,7 +36,7 @@ type Props = {
 }
 
 export function ExternalDashboard({
-  projects, userId, userName, holidays = [], showAssignedSections = false,
+  projects, userId, userName, month, monthFilter, holidays = [], showAssignedSections = false,
   showCreateRequest = false, holdStarters = {},
 }: Props) {
   const [requestOpen, setRequestOpen] = useState(false)
@@ -44,6 +46,21 @@ export function ExternalDashboard({
   )
   const delivered = myProjects.filter(p => p.current_stage === FINAL_STAGE)
   const onHold = myProjects.filter(p => p.status_health === 'On hold')
+  const filterByMonth = !isAllMonths(month)
+  const inPipelineView = filterByMonth
+    ? inPipeline.filter(p => isProjectRelevantInMonth(p, month))
+    : inPipeline
+  const deliveredView = filterByMonth
+    ? delivered.filter(p => isDeliveredInMonth(p, month))
+    : delivered
+  const onHoldView = filterByMonth
+    ? onHold.filter(p => isProjectRelevantInMonth(p, month))
+    : onHold
+
+  const statCards = [
+    { key: 'pipeline', label: 'In Pipeline', count: inPipelineView.length, icon: PlayCircle, iconBg: 'bg-violet-100 text-violet-600', href: '/board' },
+    { key: 'delivered', label: 'Delivered', count: deliveredView.length, icon: CheckCircle2, iconBg: 'bg-emerald-100 text-emerald-600', href: '/board' },
+  ]
   const declinedItems = projects.filter(p =>
     p.external_team_member_id === userId
     && isDeclinedRequest(p)
@@ -57,11 +74,6 @@ export function ExternalDashboard({
   })
   const actionItems = [...declinedItems, ...assignedItems]
 
-  const statCards = [
-    { key: 'pipeline', label: 'In Pipeline', count: inPipeline.length, icon: PlayCircle, iconBg: 'bg-violet-100 text-violet-600', href: '/board' },
-    { key: 'delivered', label: 'Delivered', count: delivered.length, icon: CheckCircle2, iconBg: 'bg-emerald-100 text-emerald-600', href: '/board' },
-  ]
-
   return (
     <div className="theme-v2 -mx-6 -mt-2 min-h-[calc(100vh-4rem)] px-6 pb-10 pt-2">
       <div className="mx-auto max-w-5xl space-y-6">
@@ -74,15 +86,18 @@ export function ExternalDashboard({
               Your workspace · {actionItems.length} action item{actionItems.length !== 1 ? 's' : ''}
             </p>
           </div>
-          {showCreateRequest && (
-            <Button
-              size="sm"
-              onClick={() => setRequestOpen(true)}
-              className="v2-btn-primary shrink-0 font-semibold self-start"
-            >
-              <Plus size={16} /> Create request
-            </Button>
-          )}
+          <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
+            {monthFilter}
+            {showCreateRequest && (
+              <Button
+                size="sm"
+                onClick={() => setRequestOpen(true)}
+                className="v2-btn-primary shrink-0 font-semibold"
+              >
+                <Plus size={16} /> Create request
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -171,8 +186,8 @@ export function ExternalDashboard({
           <div className="space-y-4">
             <CollapsibleProjectSection
               title="In Pipeline"
-              count={inPipeline.length}
-              projects={inPipeline}
+              count={inPipelineView.length}
+              projects={inPipelineView}
               iconName="pipeline"
               iconColor="bg-violet-100 text-violet-600"
               emptyMessage="No projects in pipeline assigned to you."
@@ -181,8 +196,8 @@ export function ExternalDashboard({
             />
             <CollapsibleProjectSection
               title="Delivered"
-              count={delivered.length}
-              projects={delivered}
+              count={deliveredView.length}
+              projects={deliveredView}
               iconName="delivered"
               iconColor="bg-emerald-100 text-emerald-600"
               emptyMessage="No delivered projects assigned to you."
@@ -191,8 +206,8 @@ export function ExternalDashboard({
             />
             <CollapsibleProjectSection
               title="On Hold"
-              count={onHold.length}
-              projects={onHold}
+              count={onHoldView.length}
+              projects={onHoldView}
               iconName="hold"
               iconColor="bg-zinc-100 text-zinc-600"
               emptyMessage="No projects on hold assigned to you."

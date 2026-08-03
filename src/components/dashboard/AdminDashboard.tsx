@@ -1,9 +1,7 @@
 import Link from 'next/link'
-import { Suspense } from 'react'
 import { Project } from '@/lib/types'
 import { DisplayProfile } from '@/lib/projects/display-assignee'
 import { CollapsibleProjectSection } from '@/components/dashboard/CollapsibleProjectSection'
-import { MonthFilter } from '@/components/dashboard/MonthFilter'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { resolveTargetReleaseDate } from '@/lib/timelines'
 import { formatDate } from '@/lib/utils'
@@ -12,16 +10,23 @@ import { getProjectTimeliness } from '@/lib/timelines'
 import { CheckCircle, AlertTriangle, GitBranch, Zap, ArrowRight, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isPendingRequestReview } from '@/lib/zerodha-sla'
+import { mapInternalToExternalStage, needsExternalClientAttention } from '@/lib/views'
+import type { ReactNode } from 'react'
 
 type Props = {
   profileName: string
   month: string
+  monthFilter: ReactNode
   counts: [number, number, number]
   inPipeline: Project[]
   delivered: Project[]
   onHold: Project[]
+  allInPipeline?: Project[]
   holidays: string[]
   holdStarters?: Record<string, DisplayProfile>
+  externalView?: boolean
+  channelDbName?: string | null
+  workspaceLabel?: string
 }
 
 const STAT_CONFIG = [
@@ -31,15 +36,24 @@ const STAT_CONFIG = [
 ]
 
 export function AdminDashboard({
-  profileName, month, counts, inPipeline, delivered, onHold, holidays, holdStarters = {},
+  profileName, month, monthFilter, counts, inPipeline, delivered, onHold, allInPipeline, holidays, holdStarters = {},
+  externalView = false, channelDbName = null, workspaceLabel,
 }: Props) {
+  const stageLabel = (project: Project) => {
+    if (!externalView) return project.current_stage
+    return mapInternalToExternalStage(project.current_stage, channelDbName ?? project.channel)
+  }
+
+  const attentionPool = allInPipeline ?? inPipeline
   const newProjectsReceived = inPipeline.filter(isPendingRequestReview)
   const pipelineProjects = inPipeline.filter(p => !isPendingRequestReview(p))
-  const needsAttention = pipelineProjects
-    .filter(p => p.status_health === 'Delayed' || p.status_health === 'At risk')
-    .slice(0, 4)
+  const needsAttention = (externalView
+    ? attentionPool.filter(p => needsExternalClientAttention(p, channelDbName))
+    : pipelineProjects.filter(p => p.status_health === 'Delayed' || p.status_health === 'At risk')
+  ).slice(0, 6)
 
   const totalActive = pipelineProjects.length + onHold.length + newProjectsReceived.length
+  const subtitle = workspaceLabel ?? (externalView ? 'Client production overview' : 'Varsity production')
 
   return (
     <div className="theme-v2 -mx-6 -mt-2 min-h-[calc(100vh-4rem)] px-6 pb-10 pt-2">
@@ -50,12 +64,12 @@ export function AdminDashboard({
               Welcome, {welcomeFirstName(profileName)}
             </h1>
             <p className="text-sm text-zinc-500 mt-1">
-              Varsity production · {totalActive} active · {delivered.length} delivered
+              {subtitle} · {totalActive} active · {delivered.length} delivered
             </p>
           </div>
-          <Suspense fallback={null}>
-            <MonthFilter month={month} variant="light" />
-          </Suspense>
+          <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
+            {monthFilter}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -82,7 +96,9 @@ export function AdminDashboard({
               <Zap size={16} className="text-orange-500" />
               <div>
                 <h2 className="text-sm font-bold text-zinc-900">Needs attention</h2>
-                <p className="text-xs text-zinc-500">Delayed or at-risk projects</p>
+                <p className="text-xs text-zinc-500">
+                  {externalView ? 'Reviews awaiting your team\'s action' : 'Delayed or at-risk projects'}
+                </p>
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -101,22 +117,24 @@ export function AdminDashboard({
                         {p.title}
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-semibold', pill)}>
-                          {p.status_health}
-                        </span>
-                        <span className="text-[11px] text-zinc-500">{p.current_stage}</span>
-                        {t.showLabel && (
+                        {!externalView && (
+                          <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-semibold', pill)}>
+                            {p.status_health}
+                          </span>
+                        )}
+                        <span className="text-[11px] text-zinc-500">{stageLabel(p)}</span>
+                        {!externalView && t.showLabel && (
                           <span className="text-[11px] font-medium text-orange-600">{t.label}</span>
                         )}
                       </div>
-                      {target && (
+                      {!externalView && target && (
                         <p className="mt-1 flex items-center gap-1 text-[11px] text-zinc-500">
                           <Clock size={11} />
                           Release {formatDate(target, 'dd MMM')}
                         </p>
                       )}
                     </div>
-                    {p.stage_assignee && (
+                    {!externalView && p.stage_assignee && (
                       <AssigneeAvatar
                         name={p.stage_assignee.name}
                         id={p.stage_assignee.id}
@@ -133,6 +151,7 @@ export function AdminDashboard({
         )}
 
         <div className="space-y-4">
+          {!externalView && (
           <CollapsibleProjectSection
             title="New Projects Received"
             count={newProjectsReceived.length}
@@ -143,6 +162,7 @@ export function AdminDashboard({
             variant="light"
             assigneeContext="stage"
           />
+          )}
           <CollapsibleProjectSection
             title="In Pipeline"
             count={pipelineProjects.length}
@@ -152,6 +172,8 @@ export function AdminDashboard({
             emptyMessage="No projects in pipeline."
             variant="light"
             assigneeContext="stage"
+            externalView={externalView}
+            channelDbName={channelDbName}
           />
           <CollapsibleProjectSection
             title="Delivered"
@@ -162,6 +184,8 @@ export function AdminDashboard({
             emptyMessage="No delivered projects."
             variant="light"
             assigneeContext="stage"
+            externalView={externalView}
+            channelDbName={channelDbName}
           />
           <CollapsibleProjectSection
             title="On Hold"
@@ -173,6 +197,8 @@ export function AdminDashboard({
             variant="light"
             assigneeContext="hold"
             holdStarters={holdStarters}
+            externalView={externalView}
+            channelDbName={channelDbName}
           />
         </div>
       </div>

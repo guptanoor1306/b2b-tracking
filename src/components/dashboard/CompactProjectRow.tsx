@@ -13,15 +13,17 @@ type Props = {
   variant?: 'dark' | 'light'
   assigneeContext?: AssigneeContext
   holdStarter?: DisplayProfile | null
+  stageLabel?: string
 }
 
 export function CompactProjectRow({
-  project, variant = 'dark', assigneeContext = 'stage', holdStarter,
+  project, variant = 'dark', assigneeContext = 'stage', holdStarter, stageLabel,
 }: Props) {
   const light = variant === 'light'
   const pendingReview = isPendingRequestReview(project)
   const pill = pendingReview ? null : HEALTH_PILL_V2[project.status_health]
   const displayAssignee = pendingReview ? null : getProjectDisplayAssignee(project, assigneeContext, holdStarter)
+  const stageText = stageLabel ?? project.current_stage
 
   return (
     <Link
@@ -39,7 +41,7 @@ export function CompactProjectRow({
           {project.title}
         </p>
         <p className={cn('text-[11px] mt-0.5 truncate', light ? 'text-zinc-500' : 'text-zinc-600')}>
-          {pendingReview ? 'Awaiting internal review' : project.current_stage}
+          {pendingReview ? 'Awaiting internal review' : stageText}
         </p>
       </div>
       {pendingReview && light ? (
@@ -52,7 +54,7 @@ export function CompactProjectRow({
         </span>
       ) : (
         <>
-          <Badge label={project.current_stage} variant="stage" className="shrink-0 max-w-[120px] truncate hidden sm:inline-flex" />
+          <Badge label={stageText} variant="stage" className="shrink-0 max-w-[120px] truncate hidden sm:inline-flex" />
           <Badge label={project.status_health} variant="health" className="shrink-0" />
         </>
       )}

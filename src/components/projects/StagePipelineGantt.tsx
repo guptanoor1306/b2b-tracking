@@ -331,13 +331,14 @@ function GanttBar({
 function collapseRowsForExternalView(
   rows: Omit<StageRow, 'leftPct' | 'widthPct'>[],
   currentStage: string | undefined,
+  channelDbName?: string | null,
 ): Omit<StageRow, 'leftPct' | 'widthPct'>[] {
   const filtered = rows.filter(r => !r.key.includes('-parallel-animation'))
-  const currentExt = currentStage ? mapInternalToExternalStage(currentStage) : ''
+  const currentExt = currentStage ? mapInternalToExternalStage(currentStage, channelDbName) : ''
   const collapsed: Omit<StageRow, 'leftPct' | 'widthPct'>[] = []
 
   for (const row of filtered) {
-    const extStage = mapInternalToExternalStage(row.stage)
+    const extStage = mapInternalToExternalStage(row.stage, channelDbName)
     const last = collapsed[collapsed.length - 1]
     if (last && last.stage === extStage) {
       if (row.end > last.end) {
@@ -497,7 +498,7 @@ export function StagePipelineGantt({
     })
 
     const finalBuilt = externalView
-      ? collapseRowsForExternalView(built, currentStage)
+      ? collapseRowsForExternalView(built, currentStage, project.channel)
       : built
 
     if (atFinalDelivery) {
