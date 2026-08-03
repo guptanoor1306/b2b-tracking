@@ -120,24 +120,24 @@ export function AdminDashboard({
                         {p.title}
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
-                        {!externalView && (
+                        {(p.status_health === 'Delayed' || p.status_health === 'At risk') && (
                           <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-semibold', pill)}>
                             {p.status_health}
                           </span>
                         )}
                         <span className="text-[11px] text-zinc-500">{stageLabel(p)}</span>
-                        {!externalView && t.showLabel && (
+                        {t.showLabel && (
                           <span className="text-[11px] font-medium text-orange-600">{t.label}</span>
                         )}
                       </div>
-                      {!externalView && target && (
+                      {target && (
                         <p className="mt-1 flex items-center gap-1 text-[11px] text-zinc-500">
                           <Clock size={11} />
                           Release {formatDate(target, 'dd MMM')}
                         </p>
                       )}
                     </div>
-                    {!externalView && p.stage_assignee && (
+                    {p.stage_assignee && (
                       <AssigneeAvatar
                         name={p.stage_assignee.name}
                         id={p.stage_assignee.id}
