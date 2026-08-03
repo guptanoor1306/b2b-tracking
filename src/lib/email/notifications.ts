@@ -6,6 +6,10 @@ import {
   stageReminderEmail,
   channelAccessEmail,
   userWelcomeEmail,
+  requestApprovedEmail,
+  requestDeclinedEmail,
+  commentDigestEmail,
+  type CommentDigestItem,
 } from '@/lib/email/templates'
 import { getProjectTeamMemberIds } from '@/lib/projects/team'
 import { getChannelByDbName, getChannelBySlug } from '@/lib/channels'
@@ -19,6 +23,9 @@ export type NotificationType =
   | 'stage_reminder'
   | 'channel_access'
   | 'user_welcome'
+  | 'request_approved'
+  | 'request_declined'
+  | 'comment_digest'
 
 const REMINDER_THRESHOLDS_HOURS = [24, 48, 72, 96, 120] as const
 
@@ -309,6 +316,203 @@ export async function processAutomatedStageReminders(): Promise<{ sent: number; 
           reminderNumber,
         })
         sent++
+      }
+    }
+  }
+
+  return { sent, skipped }
+}
+
+async function fetchRequestSubmitter(submitterId: string | null): Promise<ProfileRow | null> {
+  if (!submitterId) return null
+  const [profile] = await fetchProfiles([submitterId])
+  return profile ?? null
+}
+
+export async function notifyRequestApproved(project: Pick<Project, 'id' | 'title' | 'channel' | 'external_team_member_id' | 'created_by' | 'target_delivery_date'>): Promise<void> {
+  const submitterId = project.external_team_member_id ?? project.created_by
+  const profile = await fetchRequestSubmitter(submitterId)
+  if (!profile) return
+
+  if (await wasNotificationSent({
+    type: 'request_approved',
+    recipientId: profile.id,
+    projectId: project.id,
+  })) return
+
+  const channelName = channelNameFromProject(project)
+  const channelSlug = channelSlugFromProject(project)
+  const { subject, text, html } = requestApprovedEmail({
+    recipientName: profile.name,
+    projectTitle: project.title,
+    channelName,
+    projectId: project.id,
+    releaseDate: project.target_delivery_date,
+  })
+
+  const result = await sendEmail({ to: profile.email, subject, text, html })
+  if (result.sent) {
+    await logNotification({
+      type: 'request_approved',
+      recipientId: profile.id,
+      recipientEmail: profile.email,
+      projectId: project.id,
+      channelSlug,
+    })
+  }
+}
+
+export async function notifyRequestDeclined(
+  project: Pick<Project, 'id' | 'title' | 'channel' | 'external_team_member_id' | 'created_by'>,
+  reason: string,
+): Promise<void> {
+  const submitterId = project.external_team_member_id ?? project.created_by
+  const profile = await fetchRequestSubmitter(submitterId)
+  if (!profile) return
+
+  const channelName = channelNameFromProject(project)
+  const channelSlug = channelSlugFromProject(project)
+  const { subject, text, html } = requestDeclinedEmail({
+    recipientName: profile.name,
+    projectTitle: project.title,
+    channelName,
+    projectId: project.id,
+    reason,
+  })
+
+  const result = await sendEmail({ to: profile.email, subject, text, html })
+  if (result.sent) {
+    await logNotification({
+      type: 'request_declined',
+      recipientId: profile.id,
+      recipientEmail: profile.email,
+      projectId: project.id,
+      channelSlug,
+      metadata: { reason },
+    })
+  }
+}
+
+async function fetchInternalAdminsForChannel(channelSlug: string): Promise<ProfileRow[]> {
+  const admin = createAdminClient()
+  const { data: channelAdmins } = await admin
+    .from('profile_channels')
+    .select('profile:profiles(id, name, email, is_active)')
+    .eq('channel_slug', channelSlug)
+    .eq('channel_role', 'Channel Admin')
+
+  const { data: superAdmins } = await admin
+    .from('profiles')
+    .select('id, name, email, is_active')
+    .eq('role', 'Super Admin')
+    .eq('is_active', true)
+
+  const byId = new Map<string, ProfileRow>()
+  for (const row of channelAdmins ?? []) {
+    const raw = row.profile as ProfileRow | ProfileRow[] | null
+    const p = Array.isArray(raw) ? raw[0] : raw
+    if (p?.is_active && p.email) byId.set(p.id, p)
+  }
+  for (const p of superAdmins ?? []) {
+    if (p.is_active && p.email) byId.set(p.id, p)
+  }
+  return [...byId.values()]
+}
+
+async function wasDigestSentToday(recipientId: string, digestDate: string): Promise<boolean> {
+  const admin = createAdminClient()
+  const start = `${digestDate}T00:00:00.000Z`
+  const end = `${digestDate}T23:59:59.999Z`
+  const { data } = await admin
+    .from('email_notifications')
+    .select('id')
+    .eq('notification_type', 'comment_digest')
+    .eq('recipient_id', recipientId)
+    .gte('sent_at', start)
+    .lte('sent_at', end)
+    .limit(1)
+    .maybeSingle()
+  return Boolean(data)
+}
+
+export async function processDailyCommentDigest(): Promise<{ sent: number; skipped: number }> {
+  const admin = createAdminClient()
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const digestDate = new Date().toISOString().slice(0, 10)
+
+  const { data: comments } = await admin
+    .from('comments')
+    .select(`
+      id, comment, created_at, kind,
+      author:profiles!comments_created_by_fkey(id, name),
+      project:projects(id, title, channel)
+    `)
+    .gte('created_at', since)
+    .neq('kind', 'decline')
+    .order('created_at', { ascending: true })
+
+  if (!comments?.length) return { sent: 0, skipped: 0 }
+
+  type Row = {
+    comment: string
+    created_at: string
+    author: { name: string } | { name: string }[] | null
+    project: { id: string; title: string; channel: string } | { id: string; title: string; channel: string }[] | null
+  }
+
+  const byChannel = new Map<string, CommentDigestItem[]>()
+  for (const row of comments as Row[]) {
+    const rawProject = row.project
+    const project = Array.isArray(rawProject) ? rawProject[0] : rawProject
+    if (!project) continue
+    const rawAuthor = row.author
+    const author = Array.isArray(rawAuthor) ? rawAuthor[0] : rawAuthor
+    const channel = getChannelByDbName(project.channel)
+    if (!channel) continue
+    const items = byChannel.get(channel.slug) ?? []
+    items.push({
+      projectTitle: project.title,
+      projectId: project.id,
+      authorName: author?.name ?? 'Unknown',
+      comment: row.comment,
+      createdAt: new Date(row.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+    })
+    byChannel.set(channel.slug, items)
+  }
+
+  let sent = 0
+  let skipped = 0
+
+  for (const [channelSlug, items] of byChannel) {
+    const channel = getChannelBySlug(channelSlug)
+    if (!channel || !items.length) continue
+
+    const admins = await fetchInternalAdminsForChannel(channelSlug)
+    for (const adminProfile of admins) {
+      if (await wasDigestSentToday(adminProfile.id, digestDate)) {
+        skipped++
+        continue
+      }
+
+      const { subject, text, html } = commentDigestEmail({
+        recipientName: adminProfile.name,
+        channelName: channel.name,
+        digestDate,
+        items,
+      })
+
+      const result = await sendEmail({ to: adminProfile.email, subject, text, html })
+      if (result.sent) {
+        await logNotification({
+          type: 'comment_digest',
+          recipientId: adminProfile.id,
+          recipientEmail: adminProfile.email,
+          channelSlug,
+          metadata: { digestDate, commentCount: items.length },
+        })
+        sent++
+      } else {
+        skipped++
       }
     }
   }

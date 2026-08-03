@@ -18,6 +18,7 @@ import {
   healthLabel, HEALTH_PILL_V2,
 } from '@/lib/design/theme-v2'
 import { pipelineProgressPercentForChannel } from '@/lib/zerodha-sla'
+import { DuplicateRequestButton } from '@/components/projects/DuplicateRequestButton'
 import { Pencil } from 'lucide-react'
 import { useState } from 'react'
 import Link from 'next/link'
@@ -35,6 +36,7 @@ type Props = {
   canEditRpCuts?: boolean
   canSendReminder?: boolean
   canReviewRequest?: boolean
+  canDuplicateRequest?: boolean
   holidays?: string[]
   users: Profile[]
   graphicsDesigners: Profile[]
@@ -48,7 +50,7 @@ export function ProjectDetailLayout({
   project, displayStage, internal, canEdit = true,
   canEditLinks = false, canEditCopy = false, canEditIntakeMaterials = false,
   canViewRpCuts = false, canEditRpCuts = false,
-  canSendReminder = false, canReviewRequest = false,
+  canSendReminder = false, canReviewRequest = false, canDuplicateRequest = false,
   holidays = [], users, graphicsDesigners, history, holdPeriods = [], comments, rpCuts = [],
 }: Props) {
   const currentAssignee = project.stage_assignee?.name ?? null
@@ -132,6 +134,9 @@ export function ProjectDetailLayout({
               <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
                 Declined
               </span>
+            )}
+            {canDuplicateRequest && !internal && (
+              <DuplicateRequestButton project={project} />
             )}
             {canEdit && internal && !pendingReview && (
               <>

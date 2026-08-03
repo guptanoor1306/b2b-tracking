@@ -19,6 +19,7 @@ import {
   canEditRpCuts,
   canReviewExternalRequest,
   canEditIntakeMaterials,
+  canCreateExternalRequest,
 } from '@/lib/views'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig, fetchProjectHoldPeriods } from '@/lib/data/stage-sla'
@@ -78,6 +79,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       canEditRpCuts={canEditRpCuts(role)}
       canSendReminder={canSendStageReminder(role)}
       canReviewRequest={canReviewExternalRequest(role, channelName)}
+      canDuplicateRequest={canCreateExternalRequest(role, channelName)}
       holidays={holidays}
       users={users}
       graphicsDesigners={graphicsDesigners.length ? graphicsDesigners : users}

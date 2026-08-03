@@ -17,6 +17,10 @@ import {
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { CollapsibleProjectSection } from '@/components/dashboard/CollapsibleProjectSection'
 import { CreateRequestButton } from '@/components/board/CreateRequestButton'
+import { ReleaseScheduleButton } from '@/components/dashboard/ReleaseScheduleButton'
+import type { ReleaseScheduleItem } from '@/components/dashboard/ReleaseScheduleModal'
+import { RecentCommentsSection } from '@/components/dashboard/RecentCommentsSection'
+import type { RecentCommentFeedItem } from '@/lib/data/comments'
 import { welcomeFirstName } from '@/lib/design/theme-v2'
 import {
   PlayCircle, CheckCircle2, Zap, ArrowRight, Clock,
@@ -32,11 +36,15 @@ type Props = {
   showAssignedSections?: boolean
   showCreateRequest?: boolean
   holdStarters?: Record<string, DisplayProfile>
+  releaseScheduleItems?: ReleaseScheduleItem[]
+  recentComments?: RecentCommentFeedItem[]
 }
 
 export function ExternalDashboard({
   projects, userId, userName, month, monthFilter, holidays = [], showAssignedSections = false,
   showCreateRequest = false, holdStarters = {},
+  releaseScheduleItems = [],
+  recentComments = [],
 }: Props) {
   const myProjects = projects.filter(p => isUserOnProjectTeam(p, userId))
   const inPipeline = myProjects.filter(
@@ -86,6 +94,7 @@ export function ExternalDashboard({
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
             {monthFilter}
+            <ReleaseScheduleButton items={releaseScheduleItems} />
             {showCreateRequest && <CreateRequestButton />}
           </div>
         </div>
@@ -172,6 +181,8 @@ export function ExternalDashboard({
           )}
         </section>
 
+        <RecentCommentsSection items={recentComments} />
+
         {showAssignedSections && (
           <div className="space-y-4">
             <CollapsibleProjectSection
@@ -183,6 +194,7 @@ export function ExternalDashboard({
               emptyMessage="No projects in pipeline assigned to you."
               variant="light"
               assigneeContext="stage"
+              defaultExpanded={false}
             />
             <CollapsibleProjectSection
               title="Delivered"
@@ -193,6 +205,7 @@ export function ExternalDashboard({
               emptyMessage="No delivered projects assigned to you."
               variant="light"
               assigneeContext="stage"
+              defaultExpanded={false}
             />
             <CollapsibleProjectSection
               title="On Hold"
@@ -204,6 +217,7 @@ export function ExternalDashboard({
               variant="light"
               assigneeContext="hold"
               holdStarters={holdStarters}
+              defaultExpanded={false}
             />
           </div>
         )}

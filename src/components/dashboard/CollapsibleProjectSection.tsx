@@ -34,6 +34,8 @@ type Props = {
   holdStarters?: Record<string, DisplayProfile>
   externalView?: boolean
   channelDbName?: string | null
+  /** When false, section starts fully collapsed (no preview rows). Default true. */
+  defaultExpanded?: boolean
 }
 
 function resolveStageLabel(
@@ -48,12 +50,19 @@ function resolveStageLabel(
 export function CollapsibleProjectSection({
   title, count, projects, iconName, iconColor, emptyMessage, variant = 'dark',
   assigneeContext = 'stage', holdStarters, externalView, channelDbName,
+  defaultExpanded = true,
 }: Props) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const hasMore = projects.length > PREVIEW_LIMIT
-  const visible = expanded ? projects : projects.slice(0, PREVIEW_LIMIT)
+  const fullyCollapsed = !defaultExpanded && !expanded
+  const visible = fullyCollapsed
+    ? []
+    : expanded || !defaultExpanded
+      ? projects
+      : projects.slice(0, PREVIEW_LIMIT)
   const Icon = ICONS[iconName]
   const light = variant === 'light'
+  const canToggle = defaultExpanded ? (hasMore || expanded) : true
 
   return (
     <div className={cn(
@@ -62,12 +71,12 @@ export function CollapsibleProjectSection({
     )}>
       <button
         type="button"
-        onClick={() => (hasMore || expanded) && setExpanded(e => !e)}
+        onClick={() => canToggle && setExpanded(e => !e)}
         className={cn(
           'w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors border-b',
           light ? 'border-zinc-100 hover:bg-zinc-50/50' : 'border-white/[0.06] hover:bg-white/[0.02]',
-          (hasMore || expanded) && 'cursor-pointer',
-          !hasMore && !expanded && 'cursor-default'
+          canToggle && 'cursor-pointer',
+          !canToggle && 'cursor-default'
         )}
       >
         <div className={cn('p-2 rounded-xl shrink-0', iconColor)}>
@@ -79,7 +88,7 @@ export function CollapsibleProjectSection({
             {count} project{count !== 1 ? 's' : ''}
           </p>
         </div>
-        {(hasMore || expanded) && (
+        {(canToggle && (defaultExpanded ? (hasMore || expanded) : true)) && (
           <ChevronDown
             size={16}
             className={cn('shrink-0 transition-transform pointer-events-none', light ? 'text-zinc-400' : 'text-zinc-600', expanded && 'rotate-180')}
@@ -87,6 +96,7 @@ export function CollapsibleProjectSection({
         )}
       </button>
 
+      {!fullyCollapsed && (
       <div className="px-3 py-3">
         {projects.length === 0 ? (
           <div className="py-8 text-center">
@@ -107,7 +117,7 @@ export function CollapsibleProjectSection({
                 />
               ))}
             </div>
-            {hasMore && !expanded && (
+            {defaultExpanded && hasMore && !expanded && (
               <button
                 type="button"
                 onClick={() => setExpanded(true)}
@@ -122,6 +132,7 @@ export function CollapsibleProjectSection({
           </>
         )}
       </div>
+      )}
     </div>
   )
 }

@@ -1,34 +1,57 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
+import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
-import { createExternalProjectRequest } from '@/lib/actions/projects'
+import { createExternalProjectRequest, type ExternalRequestInput } from '@/lib/actions/projects'
+import { VIDEO_LANGUAGES } from '@/lib/zerodha-sla'
+
+export type ExternalRequestFormValues = ExternalRequestInput
 
 type Props = {
   open: boolean
   onClose: () => void
+  initialValues?: Partial<ExternalRequestFormValues>
+  title?: string
+  submitLabel?: string
+  description?: string
 }
 
-const emptyForm = () => ({
+const emptyForm = (): ExternalRequestFormValues => ({
   title: '',
   script_link: '',
   drive_link: '',
   screen_captures_link: '',
   audio_link: '',
   thumbnail_copy: '',
+  target_delivery_date: '',
+  video_language: '',
 })
 
-export function ExternalRequestModal({ open, onClose }: Props) {
+export function ExternalRequestModal({
+  open,
+  onClose,
+  initialValues,
+  title = 'Create production request',
+  submitLabel = 'Submit request',
+  description = 'Submit a new video request. It will appear on the board in Request Received for internal review.',
+}: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState(emptyForm())
 
-  const set = (k: keyof ReturnType<typeof emptyForm>, v: string) =>
+  useEffect(() => {
+    if (!open) return
+    setForm({ ...emptyForm(), ...initialValues })
+    setError('')
+  }, [open, initialValues])
+
+  const set = (k: keyof ExternalRequestFormValues, v: string) =>
     setForm(f => ({ ...f, [k]: v }))
 
   const handleClose = () => {
@@ -52,10 +75,8 @@ export function ExternalRequestModal({ open, onClose }: Props) {
   }
 
   return (
-    <Modal open={open} onClose={handleClose} title="Create production request" size="lg">
-      <p className="mb-4 text-sm text-zinc-500">
-        Submit a new video request. It will appear on the board in <strong>Request Received</strong> for internal review.
-      </p>
+    <Modal open={open} onClose={handleClose} title={title} size="lg">
+      <p className="mb-4 text-sm text-zinc-500">{description}</p>
       <div className="space-y-3">
         <Input
           label="Title *"
@@ -63,6 +84,21 @@ export function ExternalRequestModal({ open, onClose }: Props) {
           value={form.title}
           onChange={e => set('title', e.target.value)}
         />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Input
+            label="Release date *"
+            type="date"
+            value={form.target_delivery_date}
+            onChange={e => set('target_delivery_date', e.target.value)}
+          />
+          <Select
+            label="Language *"
+            placeholder="Select language"
+            value={form.video_language}
+            onChange={e => set('video_language', e.target.value)}
+            options={VIDEO_LANGUAGES.map(l => ({ value: l, label: l }))}
+          />
+        </div>
         <Input
           label="Script link *"
           placeholder="https://..."
@@ -78,7 +114,7 @@ export function ExternalRequestModal({ open, onClose }: Props) {
         <Input
           label="Screen captures link"
           placeholder="https://... (optional)"
-          value={form.screen_captures_link}
+          value={form.screen_captures_link ?? ''}
           onChange={e => set('screen_captures_link', e.target.value)}
         />
         <Input
@@ -101,7 +137,7 @@ export function ExternalRequestModal({ open, onClose }: Props) {
       <div className="mt-6 flex justify-end gap-2">
         <Button variant="secondary" onClick={handleClose}>Cancel</Button>
         <Button loading={loading} onClick={handleSubmit} className="v2-btn-primary">
-          Submit request
+          {submitLabel}
         </Button>
       </div>
     </Modal>

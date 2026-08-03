@@ -2,12 +2,14 @@ import { redirect } from 'next/navigation'
 import { getSessionProfile } from '@/lib/auth'
 import { getActiveChannelRole, getActiveChannelDbName } from '@/lib/channel-context'
 import { fetchProjects } from '@/lib/data/projects'
+import { fetchRecentComments } from '@/lib/data/comments'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig, fetchOpenHoldStarters } from '@/lib/data/stage-sla'
 import { setStageSlaCache } from '@/lib/timelines'
 import { AdminDashboard } from '@/components/dashboard/AdminDashboard'
 import { ExternalDashboard } from '@/components/dashboard/ExternalDashboard'
 import { MonthFilterSlot } from '@/components/dashboard/MonthFilterSlot'
+import type { ReleaseScheduleItem } from '@/components/dashboard/ReleaseScheduleModal'
 import {
   ALL_MONTHS,
   isAllMonths,
@@ -44,6 +46,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const params = await searchParams
   const month = params.month ?? ALL_MONTHS
   const monthFilter = <MonthFilterSlot month={month} />
+  const releaseScheduleItems: ReleaseScheduleItem[] = projects
+    .filter(p => p.target_delivery_date)
+    .map(p => ({
+      id: p.id,
+      title: p.title,
+      target_delivery_date: p.target_delivery_date!,
+      video_language: p.video_language,
+      request_status: p.request_status,
+    }))
+
+  const recentComments = await fetchRecentComments(projects.map(p => p.id))
 
   if (usesActionItemsDashboardForChannel(channelRole)) {
     return (
@@ -57,6 +70,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
         showAssignedSections={channelRole === 'Channel Team'}
         showCreateRequest={showCreateRequest}
         holdStarters={holdStarters}
+        releaseScheduleItems={releaseScheduleItems}
+        recentComments={recentComments}
       />
     )
   }
@@ -111,6 +126,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       channelDbName={channelName}
       workspaceLabel={usesExternalAdminDashboard(effectiveRole) ? 'Client production overview' : undefined}
       showCreateRequest={showCreateRequest}
+      releaseScheduleItems={releaseScheduleItems}
+      recentComments={recentComments}
     />
   )
 }

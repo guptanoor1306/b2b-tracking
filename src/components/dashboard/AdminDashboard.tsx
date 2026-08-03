@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Project } from '@/lib/types'
 import { DisplayProfile } from '@/lib/projects/display-assignee'
 import { CollapsibleProjectSection } from '@/components/dashboard/CollapsibleProjectSection'
+import { NewProjectsReceivedSection } from '@/components/dashboard/NewProjectsReceivedSection'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { resolveTargetReleaseDate } from '@/lib/timelines'
 import { formatDate } from '@/lib/utils'
@@ -9,9 +10,13 @@ import { welcomeFirstName, HEALTH_PILL_V2 } from '@/lib/design/theme-v2'
 import { getProjectTimeliness } from '@/lib/timelines'
 import { CheckCircle, AlertTriangle, GitBranch, Zap, ArrowRight, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { isPendingRequestReview } from '@/lib/zerodha-sla'
+import { isPendingRequestReview, isZerodhaChannelDbName } from '@/lib/zerodha-sla'
 import { mapInternalToExternalStage, needsExternalClientAttention } from '@/lib/views'
 import { CreateRequestButton } from '@/components/board/CreateRequestButton'
+import { ReleaseScheduleButton } from '@/components/dashboard/ReleaseScheduleButton'
+import type { ReleaseScheduleItem } from '@/components/dashboard/ReleaseScheduleModal'
+import { RecentCommentsSection } from '@/components/dashboard/RecentCommentsSection'
+import type { RecentCommentFeedItem } from '@/lib/data/comments'
 import type { ReactNode } from 'react'
 
 type Props = {
@@ -29,6 +34,8 @@ type Props = {
   channelDbName?: string | null
   workspaceLabel?: string
   showCreateRequest?: boolean
+  releaseScheduleItems?: ReleaseScheduleItem[]
+  recentComments?: RecentCommentFeedItem[]
 }
 
 const STAT_CONFIG = [
@@ -40,15 +47,20 @@ const STAT_CONFIG = [
 export function AdminDashboard({
   profileName, month, monthFilter, counts, inPipeline, delivered, onHold, allInPipeline, holidays, holdStarters = {},
   externalView = false, channelDbName = null, workspaceLabel, showCreateRequest = false,
+  releaseScheduleItems = [],
+  recentComments = [],
 }: Props) {
+  const isZerodha = isZerodhaChannelDbName(channelDbName)
   const stageLabel = (project: Project) => {
     if (!externalView) return project.current_stage
     return mapInternalToExternalStage(project.current_stage, channelDbName ?? project.channel)
   }
 
   const attentionPool = allInPipeline ?? inPipeline
-  const newProjectsReceived = inPipeline.filter(isPendingRequestReview)
-  const pipelineProjects = inPipeline.filter(p => !isPendingRequestReview(p))
+  const newProjectsReceived = isZerodha ? inPipeline.filter(isPendingRequestReview) : []
+  const pipelineProjects = isZerodha
+    ? inPipeline.filter(p => !isPendingRequestReview(p))
+    : inPipeline
   const needsAttention = (() => {
     if (!externalView) {
       return pipelineProjects
@@ -88,10 +100,12 @@ export function AdminDashboard({
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
             {monthFilter}
+            <ReleaseScheduleButton items={releaseScheduleItems} />
             {showCreateRequest && <CreateRequestButton />}
           </div>
         </div>
 
+        {/* 1. Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {STAT_CONFIG.map((s, i) => {
             const Icon = s.icon
@@ -110,6 +124,7 @@ export function AdminDashboard({
           })}
         </div>
 
+        {/* 2. Needs attention */}
         {needsAttention.length > 0 && (
           <section className="rounded-2xl border border-orange-200/80 bg-white p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
@@ -177,19 +192,19 @@ export function AdminDashboard({
           </section>
         )}
 
-        <div className="space-y-4">
-          {!externalView && (
-          <CollapsibleProjectSection
-            title="New Projects Received"
-            count={newProjectsReceived.length}
-            projects={newProjectsReceived}
-            iconName="received"
-            iconColor="bg-amber-100 text-amber-700"
-            emptyMessage="No new client requests awaiting review."
-            variant="light"
-            assigneeContext="stage"
-          />
+        {/* 3. New projects + recent comments */}
+        <div className={cn(
+          'grid gap-4',
+          isZerodha && !externalView ? 'lg:grid-cols-2' : 'grid-cols-1',
+        )}>
+          {isZerodha && !externalView && (
+            <NewProjectsReceivedSection projects={newProjectsReceived} />
           )}
+          <RecentCommentsSection items={recentComments} />
+        </div>
+
+        {/* 4. Collapsed project lists */}
+        <div className="space-y-4">
           <CollapsibleProjectSection
             title="In Pipeline"
             count={pipelineProjects.length}
@@ -201,6 +216,7 @@ export function AdminDashboard({
             assigneeContext="stage"
             externalView={externalView}
             channelDbName={channelDbName}
+            defaultExpanded={false}
           />
           <CollapsibleProjectSection
             title="Delivered"
@@ -213,6 +229,7 @@ export function AdminDashboard({
             assigneeContext="stage"
             externalView={externalView}
             channelDbName={channelDbName}
+            defaultExpanded={false}
           />
           <CollapsibleProjectSection
             title="On Hold"
@@ -226,6 +243,7 @@ export function AdminDashboard({
             holdStarters={holdStarters}
             externalView={externalView}
             channelDbName={channelDbName}
+            defaultExpanded={false}
           />
         </div>
       </div>

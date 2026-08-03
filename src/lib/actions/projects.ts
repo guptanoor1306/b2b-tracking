@@ -26,13 +26,11 @@ import { hasIntakeMaterials, ZERODHA_REQUEST_RECEIVED, ZERODHA_READY_TO_PRODUCE,
 import { FIRST_CUT_STAGE } from '@/lib/constants'
 import { normalizeStage } from '@/lib/timelines'
 import {
-  computeTargetReleaseDateString,
   computeProjectHealth,
-  computeProjectTargetDate,
   isProjectTimelineLocked,
 } from '@/lib/timelines'
 import { fetchHolidayDates } from '@/lib/data/holidays'
-import { notifyProjectTeamOnCreate, notifyStageActionable } from '@/lib/email/notifications'
+import { notifyProjectTeamOnCreate, notifyStageActionable, notifyRequestApproved, notifyRequestDeclined } from '@/lib/email/notifications'
 import { isEmailConfigured, sendEmail } from '@/lib/email/send'
 import { insertStageHistoryRecord } from '@/lib/data/stage-history'
 import { Project } from '@/lib/types'
@@ -118,23 +116,12 @@ export async function createProject(input: ProjectInput) {
   if (isZerodhaChannelDbName(channelName)) {
     if (!input.video_language) return { error: 'Video language is required' }
     if (!input.level_of_video) return { error: 'Video level is required' }
+    if (!input.target_delivery_date) return { error: 'Release date is required' }
   }
 
   const initialStage = isZerodhaChannelDbName(channelName) ? ZERODHA_READY_TO_PRODUCE : 'Video received'
   const now = new Date().toISOString()
-  const teamCtx = {
-    level_of_video: input.level_of_video,
-    video_language: input.video_language,
-    channel: channelName,
-    editor_id: input.editor_id,
-    editor_2_id: input.editor_2_id,
-    designer_id: input.designer_id,
-    designer_2_id: input.designer_2_id,
-    uses_teleprompter: input.uses_teleprompter,
-  }
-  const target_delivery_date = input.received_date
-    ? computeTargetReleaseDateString(input.received_date, holidays, input.level_of_video, teamCtx, channelName)
-    : null
+  const target_delivery_date = input.target_delivery_date ?? null
 
   const editorName = input.editor_id
     ? (await supabase.from('profiles').select('name').eq('id', input.editor_id).single()).data?.name
@@ -211,6 +198,8 @@ export type ExternalRequestInput = {
   screen_captures_link?: string
   audio_link: string
   thumbnail_copy: string
+  target_delivery_date: string
+  video_language: string
 }
 
 export async function createExternalProjectRequest(input: ExternalRequestInput) {
@@ -228,12 +217,16 @@ export async function createExternalProjectRequest(input: ExternalRequestInput) 
   const screen_captures_link = input.screen_captures_link?.trim()
   const audio_link = input.audio_link?.trim()
   const thumbnail_copy = input.thumbnail_copy?.trim()
+  const target_delivery_date = input.target_delivery_date?.trim()
+  const video_language = input.video_language?.trim()
 
   if (!title) return { error: 'Title is required' }
   if (!script_link) return { error: 'Script link is required' }
   if (!drive_link) return { error: 'Video link is required' }
   if (!audio_link) return { error: 'Audio link is required' }
   if (!thumbnail_copy) return { error: 'Thumbnail copy is required' }
+  if (!target_delivery_date) return { error: 'Release date is required' }
+  if (!video_language) return { error: 'Language is required' }
 
   const { profile } = session
   const supabase = await createClient()
@@ -254,6 +247,8 @@ export async function createExternalProjectRequest(input: ExternalRequestInput) 
       screen_captures_link: screen_captures_link || null,
       audio_link,
       thumbnail_copy,
+      target_delivery_date,
+      video_language,
       received_date: today,
       channel: channelName,
       current_stage: initialStage,
@@ -264,7 +259,7 @@ export async function createExternalProjectRequest(input: ExternalRequestInput) 
       updated_by: profile.id,
       status_health: computeProjectHealth({
         current_stage: initialStage,
-        target_delivery_date: null,
+        target_delivery_date,
         received_date: today,
         last_status_update_at: now,
       }, holidays),
@@ -345,6 +340,8 @@ export async function approveExternalRequest(projectId: string) {
 
   await logActivity(projectId, profile.id, 'stage_change', 'current_stage', oldStage, newStage)
 
+  void notifyRequestApproved({ ...project, request_status: 'approved' } as Project).catch(() => {})
+
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/dashboard')
   revalidatePath('/board')
@@ -386,6 +383,8 @@ export async function declineExternalRequest(projectId: string, reason: string) 
 
   await logActivity(projectId, profile.id, 'request_declined', 'request_status', 'pending', 'declined')
 
+  void notifyRequestDeclined(project as Project, text).catch(() => {})
+
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/dashboard')
   revalidatePath('/board')
@@ -405,7 +404,10 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
 
   if (!isInternal) {
     const shared = ['notes', 'blocker', 'next_action', 'next_action_due_date']
-    const zerodhaIntakeFields = ['script_link', 'screen_captures_link', 'audio_link', 'drive_link', 'thumbnail_copy', 'title_copy']
+    const zerodhaIntakeFields = ['script_link', 'screen_captures_link', 'audio_link', 'drive_link', 'thumbnail_copy', 'title_copy', 'video_language']
+    if (isZerodhaChannelDbName(existing.channel)) {
+      zerodhaIntakeFields.push('target_delivery_date')
+    }
     const allowed =
       session.role === 'Agency'
         ? ['drive_link', 'assets_link', 'final_file_link', ...zerodhaIntakeFields, ...shared]
@@ -423,7 +425,7 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
     }
   }
 
-  const patch: Partial<ProjectInput> = { ...input }
+  const patch: Partial<ProjectInput> & { status_health?: string } = { ...input }
   const holidays = await fetchHolidayDates()
 
   if (input.editor_id !== undefined) {
@@ -438,17 +440,6 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
     patch.graphic_designer_id = input.designer_id
   }
 
-  const teamCtx = {
-    level_of_video: (input.level_of_video ?? existing.level_of_video) as string | null,
-    video_language: (input.video_language ?? existing.video_language) as string | null,
-    channel: existing.channel as string,
-    editor_id: (input.editor_id ?? existing.editor_id) as string | null,
-    editor_2_id: (input.editor_2_id ?? existing.editor_2_id) as string | null,
-    designer_id: (input.designer_id ?? existing.designer_id) as string | null,
-    designer_2_id: (input.designer_2_id ?? existing.designer_2_id) as string | null,
-    uses_teleprompter: (input.uses_teleprompter ?? existing.uses_teleprompter) as boolean | null,
-  }
-
   if (isZerodhaChannelDbName(existing.channel)) {
     const lang = input.video_language !== undefined ? input.video_language : existing.video_language
     const level = input.level_of_video !== undefined ? input.level_of_video : existing.level_of_video
@@ -460,31 +451,19 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
     }
   }
 
-  const startDate = input.received_date ?? existing.received_date
-  const timelineLocked = isProjectTimelineLocked(existing)
-  if (!timelineLocked && startDate && (
-    input.received_date !== existing.received_date ||
-    input.level_of_video !== undefined ||
-    input.video_language !== undefined ||
-    input.editor_id !== undefined ||
-    input.editor_2_id !== undefined ||
-    input.designer_id !== undefined ||
-    input.designer_2_id !== undefined ||
-    input.uses_teleprompter !== undefined
-  )) {
-    patch.target_delivery_date = computeProjectTargetDate(
-      { ...existing, ...patch, received_date: startDate },
-      holidays,
-      existing.channel,
-    )
-  }
-
-  if (!timelineLocked && input.received_date && input.received_date !== existing.received_date) {
-    patch.target_delivery_date = computeProjectTargetDate(
-      { ...existing, ...patch, received_date: input.received_date },
-      holidays,
-      existing.channel,
-    )
+  if (
+    input.target_delivery_date !== undefined
+    || input.received_date !== undefined
+    || input.level_of_video !== undefined
+  ) {
+    patch.status_health = computeProjectHealth({
+      current_stage: existing.current_stage,
+      target_delivery_date: (patch.target_delivery_date ?? existing.target_delivery_date) as string | null,
+      received_date: (patch.received_date ?? existing.received_date) as string | null,
+      last_status_update_at: existing.last_status_update_at,
+      is_on_hold: existing.is_on_hold,
+      level_of_video: (patch.level_of_video ?? existing.level_of_video) as string | null,
+    }, holidays)
   }
 
   const teamFields = [
@@ -563,16 +542,7 @@ export async function changeProjectStage(
   if (
     normalizeStage(newStage) === FIRST_CUT_STAGE
     && usesTeleprompter != null
-    && !isProjectTimelineLocked(project)
-    && project.received_date
   ) {
-    updates.uses_teleprompter = usesTeleprompter
-    updates.target_delivery_date = computeProjectTargetDate(
-      { ...project, uses_teleprompter: usesTeleprompter },
-      holidays,
-      project.channel,
-    )
-  } else if (normalizeStage(newStage) === FIRST_CUT_STAGE && usesTeleprompter != null) {
     updates.uses_teleprompter = usesTeleprompter
   }
 
@@ -662,11 +632,6 @@ export async function updateStageHistoryDate(
     if (isFirst && !isProjectTimelineLocked(project)) {
       projectPatch.received_date = dateStr
       projectPatch.picked_up_date = dateStr
-      projectPatch.target_delivery_date = computeProjectTargetDate(
-        { ...project, received_date: dateStr },
-        holidays,
-        project.channel,
-      )
     }
     if (isLast) {
       projectPatch.last_status_update_at = changedAt

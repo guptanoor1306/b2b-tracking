@@ -151,34 +151,9 @@ export function projectTeamContext(project: {
 export function computeProjectTargetDate(
   project: {
     target_delivery_date?: string | null
-    received_date?: string | null
-    level_of_video?: string | null
-    video_language?: string | null
-    channel?: string | null
-    editor_id?: string | null
-    editor_2_id?: string | null
-    designer_id?: string | null
-    designer_2_id?: string | null
-    uses_teleprompter?: boolean | null
-    current_stage?: string | null
-    delivered_date?: string | null
   },
-  holidays: string[] = [],
-  channelDbName?: string | null,
 ): string | null {
-  if (isProjectTimelineLocked(project)) {
-    return project.target_delivery_date ?? null
-  }
-  if (!project.received_date) {
-    return project.target_delivery_date ?? null
-  }
-  return computeTargetReleaseDateString(
-    project.received_date,
-    holidays,
-    project.level_of_video,
-    projectTeamContext(project),
-    channelDbName ?? project.channel,
-  )
+  return project.target_delivery_date ?? null
 }
 
 export function totalPipelineHours(
@@ -220,21 +195,10 @@ export function computeTargetReleaseDateString(
 export function resolveTargetReleaseDate(
   project: {
     target_delivery_date: string | null
-    received_date: string | null
-    level_of_video?: string | null
-    video_language?: string | null
-    channel?: string | null
-    editor_id?: string | null
-    editor_2_id?: string | null
-    designer_id?: string | null
-    designer_2_id?: string | null
-    uses_teleprompter?: boolean | null
-    current_stage?: string | null
-    delivered_date?: string | null
   },
-  holidays: string[] = [],
+  _holidays?: string[],
 ): string | null {
-  return computeProjectTargetDate(project, holidays, project.channel)
+  return project.target_delivery_date ?? null
 }
 
 export function formatSlaDuration(hours: number): string {

@@ -219,19 +219,6 @@ export function ProjectSectionsGrid({
     </SectionCard>
   )
 
-  const feedbackSection = (
-    <SectionCard
-      title="Feedback & Changes"
-      badge={comments.length > 0 ? (
-        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
-          {comments.length}
-        </span>
-      ) : undefined}
-    >
-      <CommentsSection projectId={project.id} comments={comments} canAdd variant="light" compact />
-    </SectionCard>
-  )
-
   const rpCutsSection = canViewRpCuts ? (
     <SectionCard
       title="RP Cuts"
@@ -300,7 +287,7 @@ export function ProjectSectionsGrid({
           {cuts.filter(c => c.timestamps.trim() || c.thumbnail.trim()).map((cut, index) => (
             <div key={cut.id ?? index} className="rounded-lg border border-zinc-100 bg-zinc-50/60 px-3 py-2">
               <p className="text-[11px] font-semibold text-zinc-500 mb-1.5">Cut {index + 1}</p>
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="space-y-2 text-xs">
                 <div>
                   <p className="text-[10px] uppercase tracking-wide text-zinc-400">Timestamps</p>
                   <p className="mt-0.5 text-zinc-800">{cut.timestamps.trim() || '—'}</p>
@@ -319,8 +306,36 @@ export function ProjectSectionsGrid({
     </SectionCard>
   ) : null
 
+  const reviewMaterialsCard = (
+    <div className="rounded-xl border border-zinc-200/90 bg-white shadow-sm">
+      <div className="border-b border-zinc-100 px-4 py-2.5">
+        <h3 className="text-sm font-semibold text-zinc-900">Review materials</h3>
+        <p className="mt-0.5 text-[11px] text-zinc-500">Internal client review link</p>
+      </div>
+      <div className="px-4 py-3">
+        {canEditLinks ? (
+          <Input
+            label="Review link"
+            placeholder="Paste review link"
+            value={links.assets_link}
+            onChange={e => setLinks(l => ({ ...l, assets_link: e.target.value }))}
+          />
+        ) : (
+          <TruncatedLink label="Review link" url={project.assets_link} />
+        )}
+      </div>
+      {canEditLinks && (
+        <div className="border-t border-zinc-100 px-4 py-2.5">
+          <Button size="sm" loading={linksLoading} onClick={saveReviewLink} className="w-full">
+            Save review link
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+
   const materialsSidebar = (
-    <aside className="rounded-xl border border-zinc-200/90 bg-white shadow-sm lg:sticky lg:top-4">
+    <div className="rounded-xl border border-zinc-200/90 bg-white shadow-sm">
       <div className="border-b border-zinc-100 px-4 py-2.5">
         <h3 className="text-sm font-semibold text-zinc-900">Submitted materials</h3>
         <p className="mt-0.5 text-[11px] text-zinc-500">Links and copy from the request</p>
@@ -365,21 +380,35 @@ export function ProjectSectionsGrid({
           </Button>
         </div>
       )}
+    </div>
+  )
+
+  const intakeRightColumn = (
+    <aside className="space-y-4 lg:sticky lg:top-4">
+      {materialsSidebar}
+      {reviewMaterialsCard}
+      {rpCutsSection}
     </aside>
   )
 
   if (showIntakeSidebar) {
     return (
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
-        <div className="min-w-0 space-y-4">
-          {reviewSection}
-          <div className={cn('grid gap-4', canViewRpCuts && 'md:grid-cols-2')}>
-            {feedbackSection}
-            {rpCutsSection}
-          </div>
+        <div className="flex min-w-0 flex-col gap-4">
+          <SectionCard
+            title="Feedback & Changes"
+            badge={comments.length > 0 ? (
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
+                {comments.length}
+              </span>
+            ) : undefined}
+            className="min-h-[min(560px,72vh)]"
+          >
+            <CommentsSection projectId={project.id} comments={comments} canAdd variant="light" />
+          </SectionCard>
           {pipeline}
         </div>
-        {materialsSidebar}
+        {intakeRightColumn}
       </div>
     )
   }

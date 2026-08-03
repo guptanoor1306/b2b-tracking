@@ -4,9 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Project, Profile } from '@/lib/types'
 import { CONTENT_TYPES, PRIORITIES, FIRST_CUT_STAGE } from '@/lib/constants'
-import { computeProjectTargetDate, isProjectTimelineLocked } from '@/lib/timelines'
 import { needsTeleprompterPrompt } from '@/components/projects/StageChangeModal'
-import { formatDate } from '@/lib/utils'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
@@ -61,6 +59,7 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
     assets_link: project.assets_link ?? '',
     current_stage: project.current_stage,
     received_date: project.received_date ?? '',
+    target_delivery_date: project.target_delivery_date ?? '',
     notes: project.notes ?? '',
   })
 
@@ -84,20 +83,6 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
     designer_2_id: form.designer_2_id || null,
     uses_teleprompter: form.uses_teleprompter === 'yes' ? true : form.uses_teleprompter === 'no' ? false : null,
   }
-
-  const computedTarget = isProjectTimelineLocked(project)
-    ? project.target_delivery_date
-    : computeProjectTargetDate({
-        ...project,
-        received_date: form.received_date || null,
-        level_of_video: form.level_of_video || null,
-        video_language: form.video_language || null,
-        editor_id: form.editor_id || null,
-        editor_2_id: form.editor_2_id || null,
-        designer_id: form.designer_id || null,
-        designer_2_id: form.designer_2_id || null,
-        uses_teleprompter: form.uses_teleprompter === 'yes' ? true : form.uses_teleprompter === 'no' ? false : null,
-      }, holidays, project.channel)
 
   const set = (k: string, v: string) => setForm(f => {
     const next = { ...f, [k]: v }
@@ -157,6 +142,7 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
       assets_link: form.assets_link || null,
       received_date: form.received_date || null,
       picked_up_date: form.received_date || null,
+      ...(isZerodha ? { target_delivery_date: form.target_delivery_date || null } : {}),
       notes: form.notes || null,
     })
     setLoading(false)
@@ -243,11 +229,8 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
           )}
 
           <Input label="Start date" type="date" value={form.received_date} onChange={e => set('received_date', e.target.value)} />
-          {computedTarget && (
-            <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
-              Target release {isProjectTimelineLocked(project) ? '(locked)' : '(auto)'}:{' '}
-              <span className="font-semibold text-zinc-800">{formatDate(computedTarget)}</span>
-            </p>
+          {isZerodha && (
+            <Input label="Release date" type="date" value={form.target_delivery_date} onChange={e => set('target_delivery_date', e.target.value)} />
           )}
         </SlideOverSection>
 

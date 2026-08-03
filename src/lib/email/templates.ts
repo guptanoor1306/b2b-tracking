@@ -173,3 +173,114 @@ ${ctaButton(signInUrl, 'Open LearnApp Studios')}
 
   return { subject, text, html }
 }
+
+export function requestApprovedEmail(opts: {
+  recipientName: string
+  projectTitle: string
+  channelName: string
+  projectId: string
+  releaseDate?: string | null
+}) {
+  const url = projectUrl(opts.projectId)
+  const releaseLine = opts.releaseDate
+    ? `\nTarget release: ${opts.releaseDate}\n`
+    : ''
+  const subject = `[${opts.channelName}] Request approved: ${opts.projectTitle}`
+  const text = `Hi ${opts.recipientName},
+
+Your production request "${opts.projectTitle}" has been approved and moved into production.${releaseLine}
+
+View project: ${url}
+
+— LearnApp Studios`
+
+  const html = emailShell('Request approved', `
+<p>Hi ${opts.recipientName},</p>
+<p>Your production request <strong>${opts.projectTitle}</strong> has been approved and moved into production.</p>
+${opts.releaseDate ? `<p>Target release: <strong>${opts.releaseDate}</strong></p>` : ''}
+${ctaButton(url, 'View project')}
+`)
+
+  return { subject, text, html }
+}
+
+export function requestDeclinedEmail(opts: {
+  recipientName: string
+  projectTitle: string
+  channelName: string
+  projectId: string
+  reason: string
+}) {
+  const url = projectUrl(opts.projectId)
+  const subject = `[${opts.channelName}] Request declined: ${opts.projectTitle}`
+  const text = `Hi ${opts.recipientName},
+
+Your production request "${opts.projectTitle}" was declined.
+
+Reason: ${opts.reason}
+
+You can duplicate the request from the project page to submit a revised version.
+
+View project: ${url}
+
+— LearnApp Studios`
+
+  const html = emailShell('Request declined', `
+<p>Hi ${opts.recipientName},</p>
+<p>Your production request <strong>${opts.projectTitle}</strong> was declined.</p>
+<div style="background:#fef2f2;border-radius:8px;padding:12px 16px;margin:16px 0;border:1px solid #fecaca">
+  <p style="margin:0;font-size:14px"><strong>Reason:</strong> ${opts.reason}</p>
+</div>
+<p style="font-size:14px;color:#71717a">You can duplicate the request from the project page to submit a revised version.</p>
+${ctaButton(url, 'View project')}
+`)
+
+  return { subject, text, html }
+}
+
+export type CommentDigestItem = {
+  projectTitle: string
+  projectId: string
+  authorName: string
+  comment: string
+  createdAt: string
+}
+
+export function commentDigestEmail(opts: {
+  recipientName: string
+  channelName: string
+  digestDate: string
+  items: CommentDigestItem[]
+}) {
+  const subject = `[${opts.channelName}] Daily comment digest — ${opts.digestDate}`
+  const lines = opts.items.map(i =>
+    `- ${i.projectTitle} (${i.authorName}): ${i.comment.slice(0, 120)}${i.comment.length > 120 ? '…' : ''}`
+  ).join('\n')
+  const text = `Hi ${opts.recipientName},
+
+${opts.items.length} comment${opts.items.length !== 1 ? 's' : ''} on ${opts.channelName} projects in the last 24 hours:
+
+${lines}
+
+View board: ${boardUrl()}
+
+— LearnApp Studios`
+
+  const rows = opts.items.map(i => `
+<tr>
+  <td style="padding:8px 12px;border-bottom:1px solid #e4e4e7;vertical-align:top">
+    <a href="${projectUrl(i.projectId)}" style="color:#7c3aed;font-weight:600;text-decoration:none">${i.projectTitle}</a>
+    <div style="font-size:12px;color:#71717a;margin-top:2px">${i.authorName} · ${i.createdAt}</div>
+  </td>
+  <td style="padding:8px 12px;border-bottom:1px solid #e4e4e7;font-size:14px">${i.comment}</td>
+</tr>`).join('')
+
+  const html = emailShell(`Comment digest — ${opts.digestDate}`, `
+<p>Hi ${opts.recipientName},</p>
+<p><strong>${opts.items.length}</strong> comment${opts.items.length !== 1 ? 's' : ''} on <strong>${opts.channelName}</strong> projects in the last 24 hours:</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0">${rows}</table>
+${ctaButton(boardUrl(), 'View board')}
+`)
+
+  return { subject, text, html }
+}
