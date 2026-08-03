@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, memo } from 'react'
+import { useState, useEffect, useMemo, useCallback, memo, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
 import {
   DndContext, DragEndEvent, DragOverlay, DragStartEvent, DragCancelEvent,
@@ -243,7 +243,7 @@ function KanbanColumn({
   return (
     <div
       className={cn(
-        'flex flex-col w-[268px] shrink-0 max-h-[520px]',
+        'flex flex-col w-[268px] shrink-0',
         !isLast && 'border-r border-zinc-200 pr-5 mr-1'
       )}
     >
@@ -259,7 +259,7 @@ function KanbanColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          'flex-1 min-h-[160px] max-h-[480px] overflow-y-auto space-y-3 p-2 rounded-xl transition-colors duration-150',
+          'min-h-[160px] space-y-3 p-2 rounded-xl transition-colors duration-150',
           accent.bg,
           isOver && 'ring-2 ring-violet-400 ring-offset-2 ring-offset-[#f4f4f5] bg-violet-50/70'
         )}
@@ -333,6 +333,40 @@ type Props = {
   externalView?: boolean
   viewerUserId?: string
   blockReadyToProduce?: boolean
+  topChrome?: ReactNode
+}
+
+function StageHeaderRow({
+  stages,
+  byStage,
+}: {
+  stages: readonly string[]
+  byStage: (stage: string) => Project[]
+}) {
+  return (
+    <div className="flex min-w-max px-4 pt-3 pb-0">
+      {stages.map((stage, i) => {
+        const accent = getColumnAccent(i)
+        return (
+          <div
+            key={`head-${stage}`}
+            className={cn(
+              'w-[268px] shrink-0 mb-0',
+              i < stages.length - 1 && 'border-r border-zinc-200 pr-5 mr-1'
+            )}
+          >
+            <div className={cn('pb-2 border-b-2', accent.border)}>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', accent.dot)} />
+                <h3 className="text-sm font-bold text-zinc-900 truncate leading-tight">{stage}</h3>
+                <span className="text-sm font-normal text-zinc-400 shrink-0">({byStage(stage).length})</span>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 export function KanbanBoard({
@@ -344,6 +378,7 @@ export function KanbanBoard({
   externalView = false,
   viewerUserId,
   blockReadyToProduce = false,
+  topChrome,
 }: Props) {
   const channel = useActiveChannel()
   const [projects, setProjects] = useState(initialProjects)
@@ -474,6 +509,21 @@ export function KanbanBoard({
 
   const byStage = (stage: string) => projectsByStage.get(stage) ?? []
 
+  const headerScrollRef = useRef<HTMLDivElement>(null)
+  const bodyScrollRef = useRef<HTMLDivElement>(null)
+
+  const syncBodyScroll = useCallback(() => {
+    const header = headerScrollRef.current
+    const body = bodyScrollRef.current
+    if (header && body) body.scrollLeft = header.scrollLeft
+  }, [])
+
+  const syncHeaderScroll = useCallback(() => {
+    const header = headerScrollRef.current
+    const body = bodyScrollRef.current
+    if (header && body) header.scrollLeft = body.scrollLeft
+  }, [])
+
   return (
     <>
       {dragError && (
@@ -481,7 +531,19 @@ export function KanbanBoard({
           Could not move card: {dragError}
         </p>
       )}
-      <div className="rounded-2xl border border-zinc-200/80 bg-white/60 shadow-sm overflow-hidden">
+      <div className="sticky top-0 z-30 bg-zinc-100">
+        {topChrome && <div className="space-y-4 pb-4">{topChrome}</div>}
+        <div className="rounded-t-2xl border border-b-0 border-zinc-200/80 bg-white/60 shadow-sm overflow-hidden">
+          <div
+            ref={headerScrollRef}
+            className="overflow-x-auto bg-[#fafafa] border-b border-zinc-200"
+            onScroll={syncBodyScroll}
+          >
+            <StageHeaderRow stages={stages} byStage={byStage} />
+          </div>
+        </div>
+      </div>
+      <div className="rounded-b-2xl border border-zinc-200/80 bg-white/60 shadow-sm overflow-hidden">
         <DndContext
           id="production-kanban-board"
           sensors={sensors}
@@ -490,65 +552,26 @@ export function KanbanBoard({
           onDragCancel={handleDragCancel}
           onDragEnd={handleDragEnd}
         >
-          <div className="max-h-[calc(100vh-14rem)] flex flex-col">
-            <div
-              id="board-scroll-top"
-              className="overflow-x-auto overflow-y-hidden shrink-0 border-b border-zinc-100 h-3"
-              onScroll={e => {
-                const main = document.getElementById('board-scroll-main')
-                if (main) main.scrollLeft = e.currentTarget.scrollLeft
-              }}
-            >
-              <div className="h-1" style={{ width: stages.length * 280 }} />
-            </div>
-
-            <div
-              id="board-scroll-main"
-              className="overflow-auto flex-1"
-              onScroll={e => {
-                const top = document.getElementById('board-scroll-top')
-                if (top) top.scrollLeft = e.currentTarget.scrollLeft
-              }}
-            >
-              <div className="flex min-w-max sticky top-0 z-20 bg-[#fafafa] border-b border-zinc-200 px-4 pt-3 pb-0">
-                {stages.map((stage, i) => {
-                  const accent = getColumnAccent(i)
-                  return (
-                    <div
-                      key={`head-${stage}`}
-                      className={cn(
-                        'w-[268px] shrink-0 mb-0',
-                        i < stages.length - 1 && 'border-r border-zinc-200 pr-5 mr-1'
-                      )}
-                    >
-                      <div className={cn('pb-2 border-b-2', accent.border)}>
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', accent.dot)} />
-                          <h3 className="text-sm font-bold text-zinc-900 truncate leading-tight">{stage}</h3>
-                          <span className="text-sm font-normal text-zinc-400 shrink-0">({byStage(stage).length})</span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              <div className="flex px-4 pb-4 pt-2 gap-1 min-w-max">
-                {stages.map((stage, i) => (
-                  <KanbanColumn
-                    key={stage}
-                    stage={stage}
-                    index={i}
-                    isLast={i === stages.length - 1}
-                    projects={byStage(stage)}
-                    readOnly={readOnly}
-                    holidays={holidays}
-                    hideHeader
-                    channelDbName={channel?.dbName}
-                    users={users}
-                  />
-                ))}
-              </div>
+          <div
+            ref={bodyScrollRef}
+            className="overflow-x-auto"
+            onScroll={syncHeaderScroll}
+          >
+            <div className="flex px-4 pb-4 pt-2 gap-1 min-w-max">
+              {stages.map((stage, i) => (
+                <KanbanColumn
+                  key={stage}
+                  stage={stage}
+                  index={i}
+                  isLast={i === stages.length - 1}
+                  projects={byStage(stage)}
+                  readOnly={readOnly}
+                  holidays={holidays}
+                  hideHeader
+                  channelDbName={channel?.dbName}
+                  users={users}
+                />
+              ))}
             </div>
           </div>
           <DragOverlay

@@ -1,9 +1,51 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { Profile } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
+
+function MemberFilterChip({
+  tooltip,
+  label,
+  active,
+  onClick,
+  className,
+  children,
+}: {
+  tooltip: string
+  label?: string
+  active: boolean
+  onClick: () => void
+  className?: string
+  children?: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={tooltip}
+      className={cn('relative group', className)}
+    >
+      {children ?? (
+        <span
+          className={cn(
+            'inline-flex h-8 items-center rounded-full border px-2.5 text-[10px] font-semibold transition-all',
+            active
+              ? 'bg-violet-600 border-violet-600 text-white'
+              : 'border-zinc-200 text-zinc-600 hover:border-violet-200 bg-white',
+          )}
+        >
+          {label}
+        </span>
+      )}
+      <span className="pointer-events-none absolute bottom-[calc(100%+6px)] left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded-md bg-zinc-900 px-2 py-1 text-[11px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
+        {tooltip}
+      </span>
+    </button>
+  )
+}
 
 type Props = {
   users: Profile[]
@@ -48,25 +90,19 @@ export function BoardAssigneeFilter({
           All
         </button>
         {showMeShortcut && (
-          <button
-            type="button"
+          <MemberFilterChip
+            label="Me"
+            tooltip={users.find(u => u.id === currentUserId)?.name ?? 'My assignments'}
+            active={active === currentUserId}
             onClick={() => setAssignee(currentUserId)}
-            title="My assignments"
-            className={cn(
-              'h-8 px-2.5 rounded-full text-[10px] font-semibold border transition-all inline-flex items-center gap-1.5',
-              active === currentUserId
-                ? 'bg-violet-600 border-violet-600 text-white'
-                : 'border-zinc-200 text-zinc-600 hover:border-violet-200 bg-white'
-            )}
-          >
-            Me
-          </button>
+            className="h-8 px-2.5 text-[10px] font-semibold"
+          />
         )}
         {users.map(u => (
-          <button
+          <MemberFilterChip
             key={u.id}
-            type="button"
-            title={u.name}
+            tooltip={u.name}
+            active={active === u.id}
             onClick={() => setAssignee(u.id)}
             className="rounded-full transition-transform hover:scale-105"
           >
@@ -77,7 +113,7 @@ export function BoardAssigneeFilter({
               theme="light"
               active={active === u.id}
             />
-          </button>
+          </MemberFilterChip>
         ))}
       </div>
       {!embedded && active && (

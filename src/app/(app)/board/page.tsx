@@ -91,36 +91,6 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
 
   return (
     <div className="theme-v2 -mx-6 -mt-2 min-h-[calc(100vh-4rem)] px-6 pb-10 pt-2">
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Production board</h1>
-          <p className="mt-1 text-sm font-medium text-zinc-500">
-            {filtered.length} project{filtered.length !== 1 ? 's' : ''} · drag cards to update stages
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
-          <MonthFilterSlot month={month} />
-          {showCreateRequest && <CreateRequestButton />}
-          {canChangeStages(role) && (
-            <BoardHeaderActions users={users} holidays={holidays} />
-          )}
-        </div>
-      </div>
-
-      <Suspense fallback={null}>
-        <BoardFiltersBar
-          ips={boardIps}
-          languages={boardLanguages.length ? boardLanguages : [...VIDEO_LANGUAGES]}
-          users={filterUsers}
-          currentUserId={profile.id}
-          showAssigneeFilter={superAdmin || canSeeBoardAssigneeFilter(role)}
-          showLanguageFilter={isZerodha}
-          matchCount={filtered.length}
-        />
-      </Suspense>
-      {teamBoard && (
-        <p className="text-xs text-zinc-500 mb-3">Showing projects you&apos;re assigned to</p>
-      )}
       <KanbanBoardClient
         key={boardKey}
         projects={filtered}
@@ -131,6 +101,41 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         externalView={!internal}
         viewerUserId={profile.id}
         blockReadyToProduce={!canMarkReadyToProduce(role, channelName)}
+        topChrome={(
+          <>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Production board</h1>
+                <p className="mt-1 text-sm font-medium text-zinc-500">
+                  {filtered.length} project{filtered.length !== 1 ? 's' : ''} · drag cards to update stages
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
+                <MonthFilterSlot month={month} />
+                {showCreateRequest && <CreateRequestButton />}
+                {canChangeStages(role) && (
+                  <BoardHeaderActions users={users} holidays={holidays} />
+                )}
+              </div>
+            </div>
+
+            <Suspense fallback={null}>
+              <BoardFiltersBar
+                ips={boardIps}
+                languages={boardLanguages.length ? boardLanguages : [...VIDEO_LANGUAGES]}
+                users={filterUsers}
+                currentUserId={profile.id}
+                showAssigneeFilter={superAdmin || canSeeBoardAssigneeFilter(role)}
+                showLanguageFilter={isZerodha}
+                matchCount={filtered.length}
+              />
+            </Suspense>
+
+            {teamBoard && (
+              <p className="text-xs text-zinc-500">Showing projects you&apos;re assigned to</p>
+            )}
+          </>
+        )}
       />
     </div>
   )
