@@ -49,10 +49,27 @@ export function AdminDashboard({
   const attentionPool = allInPipeline ?? inPipeline
   const newProjectsReceived = inPipeline.filter(isPendingRequestReview)
   const pipelineProjects = inPipeline.filter(p => !isPendingRequestReview(p))
-  const needsAttention = (externalView
-    ? attentionPool.filter(p => needsExternalClientAttention(p, channelDbName))
-    : pipelineProjects.filter(p => p.status_health === 'Delayed' || p.status_health === 'At risk')
-  ).slice(0, 6)
+  const needsAttention = (() => {
+    if (!externalView) {
+      return pipelineProjects
+        .filter(p => p.status_health === 'Delayed' || p.status_health === 'At risk')
+        .slice(0, 6)
+    }
+    const seen = new Set<string>()
+    const items: Project[] = []
+    const add = (project: Project) => {
+      if (seen.has(project.id)) return
+      seen.add(project.id)
+      items.push(project)
+    }
+    for (const project of attentionPool) {
+      if (needsExternalClientAttention(project, channelDbName)) add(project)
+    }
+    for (const project of attentionPool) {
+      if (project.status_health === 'Delayed' || project.status_health === 'At risk') add(project)
+    }
+    return items.slice(0, 6)
+  })()
 
   const totalActive = pipelineProjects.length + onHold.length + newProjectsReceived.length
   const subtitle = workspaceLabel ?? (externalView ? 'Client production overview' : 'Varsity production')
@@ -100,7 +117,7 @@ export function AdminDashboard({
               <div>
                 <h2 className="text-sm font-bold text-zinc-900">Needs attention</h2>
                 <p className="text-xs text-zinc-500">
-                  {externalView ? 'Reviews awaiting your team\'s action' : 'Delayed or at-risk projects'}
+                  {externalView ? 'Reviews and overdue items awaiting action' : 'Delayed or at-risk projects'}
                 </p>
               </div>
             </div>
@@ -108,7 +125,14 @@ export function AdminDashboard({
               {needsAttention.map(p => {
                 const t = getProjectTimeliness(p, holidays)
                 const target = resolveTargetReleaseDate(p, holidays)
-                const pill = HEALTH_PILL_V2[p.status_health] ?? 'bg-zinc-100 text-zinc-600 border-zinc-200'
+                const healthLabel = p.status_health === 'At risk'
+                  ? 'At risk'
+                  : (p.status_health === 'Delayed' || t.status === 'delayed')
+                    ? 'Delayed'
+                    : null
+                const pill = healthLabel
+                  ? (HEALTH_PILL_V2[healthLabel] ?? 'bg-zinc-100 text-zinc-600 border-zinc-200')
+                  : ''
                 return (
                   <Link
                     key={p.id}
@@ -120,9 +144,9 @@ export function AdminDashboard({
                         {p.title}
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
-                        {(p.status_health === 'Delayed' || p.status_health === 'At risk') && (
+                        {healthLabel && (
                           <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-semibold', pill)}>
-                            {p.status_health}
+                            {healthLabel}
                           </span>
                         )}
                         <span className="text-[11px] text-zinc-500">{stageLabel(p)}</span>
