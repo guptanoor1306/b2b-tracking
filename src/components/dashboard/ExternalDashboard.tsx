@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import Link from 'next/link'
 import { isUserOnProjectTeam } from '@/lib/projects/team'
 import { Project } from '@/lib/types'
@@ -16,11 +16,10 @@ import {
 } from '@/lib/zerodha-sla'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { CollapsibleProjectSection } from '@/components/dashboard/CollapsibleProjectSection'
-import { ExternalRequestModal } from '@/components/board/ExternalRequestModal'
+import { CreateRequestButton } from '@/components/board/CreateRequestButton'
 import { welcomeFirstName } from '@/lib/design/theme-v2'
-import { Button } from '@/components/ui/Button'
 import {
-  PlayCircle, CheckCircle2, Zap, ArrowRight, Clock, Plus,
+  PlayCircle, CheckCircle2, Zap, ArrowRight, Clock,
 } from 'lucide-react'
 
 type Props = {
@@ -39,7 +38,6 @@ export function ExternalDashboard({
   projects, userId, userName, month, monthFilter, holidays = [], showAssignedSections = false,
   showCreateRequest = false, holdStarters = {},
 }: Props) {
-  const [requestOpen, setRequestOpen] = useState(false)
   const myProjects = projects.filter(p => isUserOnProjectTeam(p, userId))
   const inPipeline = myProjects.filter(
     p => p.current_stage !== FINAL_STAGE && p.status_health !== 'On hold'
@@ -88,15 +86,7 @@ export function ExternalDashboard({
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
             {monthFilter}
-            {showCreateRequest && (
-              <Button
-                size="sm"
-                onClick={() => setRequestOpen(true)}
-                className="v2-btn-primary shrink-0 font-semibold"
-              >
-                <Plus size={16} /> Create request
-              </Button>
-            )}
+            {showCreateRequest && <CreateRequestButton />}
           </div>
         </div>
 
@@ -218,10 +208,6 @@ export function ExternalDashboard({
           </div>
         )}
       </div>
-
-      {showCreateRequest && (
-        <ExternalRequestModal open={requestOpen} onClose={() => setRequestOpen(false)} />
-      )}
     </div>
   )
 }

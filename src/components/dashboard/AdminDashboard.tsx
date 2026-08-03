@@ -11,6 +11,7 @@ import { CheckCircle, AlertTriangle, GitBranch, Zap, ArrowRight, Clock } from 'l
 import { cn } from '@/lib/utils'
 import { isPendingRequestReview } from '@/lib/zerodha-sla'
 import { mapInternalToExternalStage, needsExternalClientAttention } from '@/lib/views'
+import { CreateRequestButton } from '@/components/board/CreateRequestButton'
 import type { ReactNode } from 'react'
 
 type Props = {
@@ -27,6 +28,7 @@ type Props = {
   externalView?: boolean
   channelDbName?: string | null
   workspaceLabel?: string
+  showCreateRequest?: boolean
 }
 
 const STAT_CONFIG = [
@@ -37,7 +39,7 @@ const STAT_CONFIG = [
 
 export function AdminDashboard({
   profileName, month, monthFilter, counts, inPipeline, delivered, onHold, allInPipeline, holidays, holdStarters = {},
-  externalView = false, channelDbName = null, workspaceLabel,
+  externalView = false, channelDbName = null, workspaceLabel, showCreateRequest = false,
 }: Props) {
   const stageLabel = (project: Project) => {
     if (!externalView) return project.current_stage
@@ -69,6 +71,7 @@ export function AdminDashboard({
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
             {monthFilter}
+            {showCreateRequest && <CreateRequestButton />}
           </div>
         </div>
 

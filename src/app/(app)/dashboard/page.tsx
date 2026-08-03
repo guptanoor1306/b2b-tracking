@@ -110,6 +110,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       externalView={usesExternalAdminDashboard(effectiveRole)}
       channelDbName={channelName}
       workspaceLabel={usesExternalAdminDashboard(effectiveRole) ? 'Client production overview' : undefined}
+      showCreateRequest={showCreateRequest}
     />
   )
 }

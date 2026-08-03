@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { KanbanBoardClient } from '@/components/board/KanbanBoardClient'
 import { BoardFiltersBar } from '@/components/board/BoardFiltersBar'
 import { BoardHeaderActions } from '@/components/board/BoardHeaderActions'
+import { CreateRequestButton } from '@/components/board/CreateRequestButton'
 import { MonthFilterSlot } from '@/components/dashboard/MonthFilterSlot'
 import { fetchProjects } from '@/lib/data/projects'
 import { fetchHolidayDates } from '@/lib/data/holidays'
@@ -20,6 +21,7 @@ import {
   filterProjectsByAssignee,
   canChangeStages,
   canMoveBoardCards,
+  canCreateExternalRequest,
   effectiveRoleForChannel,
   isSuperAdmin,
   canMarkReadyToProduce,
@@ -47,6 +49,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   const role = effectiveRoleForChannel(channelRole, profile.role)
   const superAdmin = isSuperAdmin(profile.role)
   const internal = usesInternalBoardView(profile.role, channelRole)
+  const showCreateRequest = canCreateExternalRequest(role, channelName)
 
   const canFilterByMember = superAdmin || canSeeBoardAssigneeFilter(role)
   const filterUsers = canFilterByMember
@@ -97,6 +100,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
           <MonthFilterSlot month={month} />
+          {showCreateRequest && <CreateRequestButton />}
           {canChangeStages(role) && (
             <BoardHeaderActions users={users} holidays={holidays} />
           )}

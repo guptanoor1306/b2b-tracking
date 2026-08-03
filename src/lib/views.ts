@@ -225,9 +225,7 @@ export function usesInternalBoardView(globalRole: Role | string, channelRole: st
 export const shouldFilterBoardToTeam = shouldFilterBoardToSelf
 
 export function canCreateExternalRequest(role: Role | string, channelDbName: string | null | undefined): boolean {
-  return isZerodhaChannelDbName(channelDbName) && (
-    role === 'Agency' || role === 'Zerodha Viewer' || isExternalClientAdmin(role)
-  )
+  return isZerodhaChannelDbName(channelDbName) && isExternalRole(role)
 }
 
 export function canReviewExternalRequest(role: Role | string, channelDbName: string | null | undefined): boolean {
