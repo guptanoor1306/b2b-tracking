@@ -23,6 +23,7 @@ import {
   usesExternalAdminDashboard,
   canCreateExternalRequest,
   effectiveRoleForChannel,
+  isChannelSuperAdmin,
 } from '@/lib/views'
 
 type SearchParams = Promise<Record<string, string | undefined>>
@@ -43,6 +44,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const channelRole = await getActiveChannelRole(profile)
   const effectiveRole = effectiveRoleForChannel(channelRole, profile.role)
   const showCreateRequest = canCreateExternalRequest(effectiveRole, channelName)
+  const showCreateReport = isChannelSuperAdmin(channelRole ?? '')
   const params = await searchParams
   const month = params.month ?? ALL_MONTHS
   const monthFilter = <MonthFilterSlot month={month} />
@@ -126,6 +128,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       channelDbName={channelName}
       workspaceLabel={usesExternalAdminDashboard(effectiveRole) ? 'Client production overview' : undefined}
       showCreateRequest={showCreateRequest}
+      showCreateReport={showCreateReport}
       releaseScheduleItems={releaseScheduleItems}
       recentComments={recentComments}
     />

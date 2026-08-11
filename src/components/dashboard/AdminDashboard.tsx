@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { isPendingRequestReview, isZerodhaChannelDbName } from '@/lib/zerodha-sla'
 import { mapInternalToExternalStage, needsExternalClientAttention } from '@/lib/views'
 import { CreateRequestButton } from '@/components/board/CreateRequestButton'
+import { CreateReportButton } from '@/components/reports/ChannelReportModal'
 import { ReleaseScheduleButton } from '@/components/dashboard/ReleaseScheduleButton'
 import type { ReleaseScheduleItem } from '@/components/dashboard/ReleaseScheduleModal'
 import { RecentCommentsSection } from '@/components/dashboard/RecentCommentsSection'
@@ -35,6 +36,7 @@ type Props = {
   channelDbName?: string | null
   workspaceLabel?: string
   showCreateRequest?: boolean
+  showCreateReport?: boolean
   releaseScheduleItems?: ReleaseScheduleItem[]
   recentComments?: RecentCommentFeedItem[]
 }
@@ -48,6 +50,7 @@ const STAT_CONFIG = [
 export function AdminDashboard({
   profileName, month, monthFilter, counts, inPipeline, delivered, onHold, allInPipeline, holidays, holdStarters = {},
   externalView = false, channelDbName = null, workspaceLabel, showCreateRequest = false,
+  showCreateReport = false,
   releaseScheduleItems = [],
   recentComments = [],
 }: Props) {
@@ -102,6 +105,7 @@ export function AdminDashboard({
           <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
             {monthFilter}
             <ReleaseScheduleButton items={releaseScheduleItems} />
+            {showCreateReport && <CreateReportButton />}
             {showCreateRequest && <CreateRequestButton />}
           </div>
         </div>
