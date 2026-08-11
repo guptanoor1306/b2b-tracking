@@ -7,7 +7,7 @@ import { requireProfile, getSessionProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { ACTIVE_CHANNEL_COOKIE, getChannelBySlug } from '@/lib/channels'
 import { fetchUserChannelSlugs, fetchChannelRole } from '@/lib/data/channel-access'
-import { isSuperAdmin } from '@/lib/views'
+import { isSuperAdmin, canManageChannelMembers } from '@/lib/views'
 import { ChannelMemberRole } from '@/lib/types'
 import { getActiveChannelSlug } from '@/lib/channel-context'
 import { notifyChannelAccess } from '@/lib/email/notifications'
@@ -45,7 +45,7 @@ async function assertCanManageChannel(channelSlug: string) {
   if (!profile) throw new Error('Unauthorized')
   if (isSuperAdmin(profile.role)) return profile
   const role = await fetchChannelRole(profile.id, channelSlug)
-  if (role !== 'Channel Admin' && role !== 'External Client Admin') throw new Error('Unauthorized')
+  if (!canManageChannelMembers(role ?? '')) throw new Error('Unauthorized')
   return profile
 }
 

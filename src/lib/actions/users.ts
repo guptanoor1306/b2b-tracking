@@ -7,7 +7,7 @@ import { fetchChannelRole } from '@/lib/data/channel-access'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { ChannelMemberRole } from '@/lib/types'
-import { isSuperAdmin } from '@/lib/views'
+import { isSuperAdmin, canManageChannelMembers } from '@/lib/views'
 import { notifyChannelAccess, notifyUserWelcome } from '@/lib/email/notifications'
 import { saveInitialPasswordHint } from '@/lib/actions/account'
 import { reconcileAuthAndProfile, ensureProfileForUser } from '@/lib/users/reconcile'
@@ -26,7 +26,7 @@ async function assertCanManageChannel(channelSlug: string) {
   if (!channelSlug) throw new Error('No channel specified')
   if (isSuperAdmin(profile.role)) return { profile, slug: channelSlug }
   const role = await fetchChannelRole(profile.id, channelSlug)
-  if (role !== 'Channel Admin' && role !== 'External Client Admin') throw new Error('Unauthorized')
+  if (!canManageChannelMembers(role ?? '')) throw new Error('Unauthorized')
   return { profile, slug: channelSlug }
 }
 
@@ -96,7 +96,7 @@ export async function updateChannelMember(
     const slug = await getActiveChannelSlug()
     if (slug !== channelSlug) return { error: 'Unauthorized' }
     const role = await fetchChannelRole(profile.id, channelSlug)
-    if (role !== 'Channel Admin' && role !== 'External Client Admin') return { error: 'Unauthorized' }
+    if (!canManageChannelMembers(role ?? '')) return { error: 'Unauthorized' }
   }
 
   const supabase = await createClient()
@@ -133,7 +133,7 @@ export async function removeChannelMemberFromChannel(profileId: string, channelS
     const slug = await getActiveChannelSlug()
     if (slug !== channelSlug) return { error: 'Unauthorized' }
     const role = await fetchChannelRole(profile.id, channelSlug)
-    if (role !== 'Channel Admin' && role !== 'External Client Admin') return { error: 'Unauthorized' }
+    if (!canManageChannelMembers(role ?? '')) return { error: 'Unauthorized' }
   }
 
   const supabase = await createClient()

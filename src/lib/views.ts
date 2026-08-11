@@ -122,7 +122,11 @@ export function effectiveRoleForChannel(
 }
 
 export function isChannelAdmin(role: Role | string): boolean {
-  return role === 'Channel Admin'
+  return role === 'Channel Admin' || role === 'Channel Super Admin'
+}
+
+export function canManageChannelMembers(role: Role | string): boolean {
+  return isChannelAdmin(role) || isExternalClientAdmin(role)
 }
 
 export function usesActionItemsDashboard(role: Role | string): boolean {
@@ -159,11 +163,11 @@ export function canManageUsers(role: Role | string): boolean {
 }
 
 export function canEditProjects(role: Role | string): boolean {
-  return role === 'Channel Admin' || role === 'Channel Team'
+  return isChannelAdmin(role) || role === 'Channel Team'
 }
 
 export function canChangeStages(role: Role | string): boolean {
-  return role === 'Channel Admin' || role === 'Channel Team'
+  return isChannelAdmin(role) || role === 'Channel Team'
 }
 
 /** External users cannot drag cards on Zerodha — feedback is submitted on project detail instead. */
@@ -195,7 +199,7 @@ export function canSubmitClientReviewFeedback(
 }
 
 export function canSendStageReminder(role: Role | string): boolean {
-  return role === 'Channel Admin' || role === 'Channel Team' || isSuperAdmin(role)
+  return isChannelAdmin(role) || role === 'Channel Team' || isSuperAdmin(role)
 }
 
 export function canEditProjectLinks(role: Role | string): boolean {

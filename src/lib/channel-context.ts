@@ -5,7 +5,7 @@ import { ACTIVE_CHANNEL_COOKIE, getChannelBySlug, slugToDbName, type StudioChann
 import { getSessionProfile } from '@/lib/auth'
 import { fetchUserChannelSlugs, fetchChannelRole } from '@/lib/data/channel-access'
 import { Profile, ChannelMemberRole } from '@/lib/types'
-import { isSuperAdmin } from '@/lib/views'
+import { isSuperAdmin, isChannelAdmin } from '@/lib/views'
 
 export const getActiveChannelSlug = cache(async (): Promise<string | null> => {
   const jar = await cookies()
@@ -61,7 +61,7 @@ export async function requireChannelAdmin(): Promise<{
 
   if (
     !isSuperAdmin(profile.role)
-    && channelRole !== 'Channel Admin'
+    && !isChannelAdmin(channelRole ?? '')
     && channelRole !== 'External Client Admin'
   ) {
     redirect('/board')
