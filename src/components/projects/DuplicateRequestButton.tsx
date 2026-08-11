@@ -13,6 +13,7 @@ type Props = {
 function projectToFormValues(project: Project): Partial<ExternalRequestFormValues> {
   return {
     title: project.title,
+    content_type: project.content_type ?? '',
     script_link: project.script_link ?? '',
     drive_link: project.drive_link ?? '',
     screen_captures_link: project.screen_captures_link ?? '',

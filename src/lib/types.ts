@@ -1,5 +1,5 @@
 export type Role = 'Super Admin' | 'Member' | 'Channel Admin' | 'Channel Team' | 'Agency' | 'Zerodha Viewer' | 'External Client Admin'
-export type ChannelMemberRole = 'Channel Admin' | 'Channel Team' | 'Agency' | 'Zerodha Viewer' | 'External Client Admin'
+export type ChannelMemberRole = 'Channel Admin' | 'Channel Team' | 'Agency' | 'Zerodha Viewer' | 'External Client Admin' | 'Channel Super Admin'
 
 export type ChannelMember = Profile & {
   channel_role: ChannelMemberRole
@@ -58,6 +58,7 @@ export type Project = {
   sound_designer_id: string | null
   writer_id: string | null
   external_team_member_id: string | null
+  qc_reviewer_id: string | null
   uses_teleprompter: boolean | null
   is_on_hold?: boolean
   on_hold_since: string | null
@@ -98,6 +99,7 @@ export type Project = {
   sound_designer?: Profile | null
   writer?: Profile | null
   external_team_member?: Profile | null
+  qc_reviewer?: Profile | null
   updater?: Profile | null
 }
 
@@ -157,6 +159,42 @@ export type SettingsActivityLog = {
   updated_by: string | null
   updated_at: string
   updater?: Profile | null
+}
+
+export type QcReviewFeedbackItem = {
+  id: string
+  submission_id: string
+  comment: string
+  sort_order: number
+  created_at: string
+}
+
+export type QcReviewSubmission = {
+  id: string
+  project_id: string
+  submitted_by: string | null
+  submitted_at: string
+  is_good_to_go: boolean
+  items?: QcReviewFeedbackItem[]
+  submitter?: Profile | null
+}
+
+export type ClientReviewFeedbackItem = {
+  id: string
+  submission_id: string
+  comment: string
+  sort_order: number
+  created_at: string
+}
+
+export type ClientReviewSubmission = {
+  id: string
+  project_id: string
+  review_stage: string
+  submitted_by: string | null
+  submitted_at: string
+  items?: ClientReviewFeedbackItem[]
+  submitter?: Profile | null
 }
 
 export type Comment = {

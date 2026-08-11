@@ -9,6 +9,9 @@ import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { createExternalProjectRequest, type ExternalRequestInput } from '@/lib/actions/projects'
 import { VIDEO_LANGUAGES } from '@/lib/zerodha-sla'
+import { CONTENT_TYPES } from '@/lib/constants'
+import { minReleaseDateFromRequest } from '@/lib/businessTime'
+import { format, parseISO } from 'date-fns'
 
 export type ExternalRequestFormValues = ExternalRequestInput
 
@@ -23,6 +26,7 @@ type Props = {
 
 const emptyForm = (): ExternalRequestFormValues => ({
   title: '',
+  content_type: '',
   script_link: '',
   drive_link: '',
   screen_captures_link: '',
@@ -44,6 +48,7 @@ export function ExternalRequestModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState(emptyForm())
+  const minReleaseDate = minReleaseDateFromRequest(new Date(), 3, [])
 
   useEffect(() => {
     if (!open) return
@@ -85,11 +90,12 @@ export function ExternalRequestModal({
           onChange={e => set('title', e.target.value)}
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Input
-            label="Release date *"
-            type="date"
-            value={form.target_delivery_date}
-            onChange={e => set('target_delivery_date', e.target.value)}
+          <Select
+            label="Type of video *"
+            placeholder="Select type"
+            value={form.content_type}
+            onChange={e => set('content_type', e.target.value)}
+            options={CONTENT_TYPES.map(t => ({ value: t, label: t }))}
           />
           <Select
             label="Language *"
@@ -98,6 +104,21 @@ export function ExternalRequestModal({
             onChange={e => set('video_language', e.target.value)}
             options={VIDEO_LANGUAGES.map(l => ({ value: l, label: l }))}
           />
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <Input
+              label="Release date *"
+              type="date"
+              min={minReleaseDate}
+              value={form.target_delivery_date}
+              onChange={e => set('target_delivery_date', e.target.value)}
+            />
+            <p className="mt-1.5 text-xs text-zinc-500">
+              Must be at least <strong>3 working days</strong> from today.
+              Earliest: {format(parseISO(minReleaseDate), 'dd MMM yyyy')}.
+            </p>
+          </div>
         </div>
         <Input
           label="Script link *"

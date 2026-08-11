@@ -30,6 +30,7 @@ const PROJECT_SELECT = `
   writer:profiles!projects_writer_id_fkey(id, name, email),
   sound_designer:profiles!projects_sound_designer_id_fkey(id, name, email),
   external_team_member:profiles!projects_external_team_member_id_fkey(id, name, email),
+  qc_reviewer:profiles!projects_qc_reviewer_id_fkey(id, name, email),
   updater:profiles!projects_updated_by_fkey(id, name, email)
 `
 

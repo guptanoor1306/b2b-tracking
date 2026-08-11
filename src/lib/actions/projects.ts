@@ -30,11 +30,16 @@ import {
   isProjectTimelineLocked,
 } from '@/lib/timelines'
 import { fetchHolidayDates } from '@/lib/data/holidays'
-import { notifyProjectTeamOnCreate, notifyStageActionable, notifyRequestApproved, notifyRequestDeclined } from '@/lib/email/notifications'
+import { notifyProjectTeamOnCreate, notifyStageActionable, notifyRequestApproved, notifyRequestDeclined, notifyRequestReceived } from '@/lib/email/notifications'
 import { isEmailConfigured, sendEmail } from '@/lib/email/send'
 import { insertStageHistoryRecord } from '@/lib/data/stage-history'
 import { Project } from '@/lib/types'
 import { format } from 'date-fns'
+import { resolveZerodhaStageAssigneeId, defaultQcReviewerId } from '@/lib/actions/client-review-feedback'
+import { getActiveChannelSlug } from '@/lib/channel-context'
+import { minReleaseDateFromRequest } from '@/lib/businessTime'
+import { CONTENT_TYPES } from '@/lib/constants'
+import { ZERODHA_FIRST_DRAFT_QC, normalizeZerodhaBoardStage } from '@/lib/zerodha-sla'
 
 async function getSessionEffectiveRole() {
   const profile = await getSessionProfile()
@@ -60,6 +65,7 @@ type ProjectInput = {
   sound_designer_id?: string | null
   writer_id?: string | null
   external_team_member_id?: string | null
+  qc_reviewer_id?: string | null
   uses_teleprompter?: boolean | null
   department?: string | null
   graphic_designer_id?: string | null
@@ -193,6 +199,7 @@ export async function createProject(input: ProjectInput) {
 
 export type ExternalRequestInput = {
   title: string
+  content_type: string
   script_link: string
   drive_link: string
   screen_captures_link?: string
@@ -212,6 +219,7 @@ export async function createExternalProjectRequest(input: ExternalRequestInput) 
   }
 
   const title = input.title?.trim()
+  const content_type = input.content_type?.trim()
   const script_link = input.script_link?.trim()
   const drive_link = input.drive_link?.trim()
   const screen_captures_link = input.screen_captures_link?.trim()
@@ -221,6 +229,10 @@ export async function createExternalProjectRequest(input: ExternalRequestInput) 
   const video_language = input.video_language?.trim()
 
   if (!title) return { error: 'Title is required' }
+  if (!content_type) return { error: 'Type of video is required' }
+  if (!(CONTENT_TYPES as readonly string[]).includes(content_type)) {
+    return { error: 'Invalid video type' }
+  }
   if (!script_link) return { error: 'Script link is required' }
   if (!drive_link) return { error: 'Video link is required' }
   if (!audio_link) return { error: 'Audio link is required' }
@@ -234,13 +246,17 @@ export async function createExternalProjectRequest(input: ExternalRequestInput) 
   const initialStage = ZERODHA_REQUEST_RECEIVED
   const now = new Date().toISOString()
   const today = format(new Date(), 'yyyy-MM-dd')
+  const minRelease = minReleaseDateFromRequest(new Date(), 3, holidays)
+  if (target_delivery_date < minRelease) {
+    return { error: `Release date must be at least 3 working days from today (earliest: ${minRelease})` }
+  }
 
   const { data, error } = await supabase
     .from('projects')
     .insert({
       title,
       ip: 'TBD',
-      content_type: 'Long-Form',
+      content_type,
       priority: 'Medium',
       script_link,
       drive_link,
@@ -279,6 +295,11 @@ export async function createExternalProjectRequest(input: ExternalRequestInput) 
     note: 'Production request submitted',
     is_hold_event: false,
   })
+
+  const { data: created } = await supabase.from('projects').select('*').eq('id', data.id).single()
+  if (created) {
+    void notifyRequestReceived(created as Project).catch(() => {})
+  }
 
   revalidatePath('/dashboard')
   revalidatePath('/board')
@@ -468,7 +489,7 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
 
   const teamFields = [
     'editor_id', 'editor_2_id', 'designer_id', 'designer_2_id',
-    'sound_designer_id', 'writer_id', 'external_team_member_id',
+    'sound_designer_id', 'writer_id', 'external_team_member_id', 'qc_reviewer_id',
   ] as const
   if (teamFields.some(f => input[f] !== undefined)) {
     const merged = { ...existing, ...patch }
@@ -505,15 +526,17 @@ export async function changeProjectStage(
   usesTeleprompter?: boolean | null
 ) {
   const session = await getSessionEffectiveRole()
-  if (!session || !canMoveBoardCards(session.role)) {
-    return { error: 'Unauthorized' }
-  }
+  if (!session) return { error: 'Unauthorized' }
   const { profile } = session
 
   const supabase = await createClient()
   const holidays = await fetchHolidayDates()
   const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).single()
   if (!project) return { error: 'Project not found' }
+
+  if (!canMoveBoardCards(session.role, project.channel)) {
+    return { error: 'Unauthorized' }
+  }
 
   const oldStage = project.current_stage
   if (oldStage === newStage) return { success: true }
@@ -522,6 +545,7 @@ export async function changeProjectStage(
     return { error: 'Ready to Produce can only be marked by LearnApp.' }
   }
 
+  const channelSlug = await getActiveChannelSlug()
   const status_health = computeProjectHealth({
     current_stage: newStage,
     target_delivery_date: project.target_delivery_date,
@@ -530,14 +554,30 @@ export async function changeProjectStage(
     is_on_hold: project.is_on_hold,
     level_of_video: project.level_of_video,
   }, holidays)
-  const resolvedAssignee = resolveStageAssigneeId(project, newStage)
+  let projectForAssignee = project as Project
   const updates: Record<string, unknown> = {
     current_stage: newStage,
     status_health,
     updated_by: profile.id,
     last_status_update_at: new Date().toISOString(),
-    stage_assignee_id: resolvedAssignee,
   }
+
+  if (
+    isZerodhaChannelDbName(project.channel)
+    && normalizeZerodhaBoardStage(newStage) === ZERODHA_FIRST_DRAFT_QC
+    && !project.qc_reviewer_id
+  ) {
+    const qcId = await defaultQcReviewerId(channelSlug)
+    if (qcId) {
+      updates.qc_reviewer_id = qcId
+      projectForAssignee = { ...project, qc_reviewer_id: qcId } as Project
+    }
+  }
+
+  const resolvedAssignee = isZerodhaChannelDbName(project.channel)
+    ? await resolveZerodhaStageAssigneeId(projectForAssignee, newStage, channelSlug)
+    : resolveStageAssigneeId(project, newStage)
+  updates.stage_assignee_id = resolvedAssignee
 
   if (
     normalizeStage(newStage) === FIRST_CUT_STAGE

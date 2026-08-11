@@ -122,6 +122,21 @@ export function businessHoursBetweenExcluding(
   return total
 }
 
+export function addBusinessDays(start: Date, days: number, holidays: string[] = []): Date {
+  const holidaySet = new Set(holidays)
+  let cur = startOfDay(start)
+  let added = 0
+  while (added < days) {
+    cur = addDays(cur, 1)
+    if (isBusinessDay(cur, holidaySet)) added++
+  }
+  return cur
+}
+
+export function minReleaseDateFromRequest(requestDate: Date, workingDays = 3, holidays: string[] = []): string {
+  return format(addBusinessDays(requestDate, workingDays, holidays), 'yyyy-MM-dd')
+}
+
 export function businessDaysLate(targetDateStr: string, holidays: string[] = []): number {
   const target = parseISO(targetDateStr)
   if (!isValid(target)) return 0

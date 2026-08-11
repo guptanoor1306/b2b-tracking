@@ -8,11 +8,14 @@ import {
   userWelcomeEmail,
   requestApprovedEmail,
   requestDeclinedEmail,
+  requestReceivedInternalEmail,
+  requestStatusInternalEmail,
   commentDigestEmail,
   type CommentDigestItem,
 } from '@/lib/email/templates'
 import { getProjectTeamMemberIds } from '@/lib/projects/team'
 import { getChannelByDbName, getChannelBySlug } from '@/lib/channels'
+import { isZerodhaChannelDbName } from '@/lib/zerodha-sla'
 import { Project } from '@/lib/types'
 import { resolveStageAssigneeId } from '@/lib/views'
 import { FINAL_STAGE } from '@/lib/constants'
@@ -25,6 +28,7 @@ export type NotificationType =
   | 'user_welcome'
   | 'request_approved'
   | 'request_declined'
+  | 'request_received'
   | 'comment_digest'
 
 const REMINDER_THRESHOLDS_HOURS = [24, 48, 72, 96, 120] as const
@@ -360,6 +364,8 @@ export async function notifyRequestApproved(project: Pick<Project, 'id' | 'title
       channelSlug,
     })
   }
+
+  void notifyZerodhaSuperAdminsRequestStatus(project, 'approved').catch(() => {})
 }
 
 export async function notifyRequestDeclined(
@@ -390,6 +396,126 @@ export async function notifyRequestDeclined(
       channelSlug,
       metadata: { reason },
     })
+  }
+
+  void notifyZerodhaSuperAdminsRequestStatus(project, 'declined', reason).catch(() => {})
+}
+
+async function fetchZerodhaInternalNotificationRecipients(channelSlug: string): Promise<ProfileRow[]> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('profile_channels')
+    .select('profile:profiles(id, name, email, is_active)')
+    .eq('channel_slug', channelSlug)
+    .in('channel_role', ['Channel Admin', 'Channel Super Admin'])
+
+  const byId = new Map<string, ProfileRow>()
+  for (const row of data ?? []) {
+    const raw = row.profile as ProfileRow | ProfileRow[] | null
+    const p = Array.isArray(raw) ? raw[0] : raw
+    if (p?.is_active && p.email) byId.set(p.id, p)
+  }
+  return [...byId.values()]
+}
+
+async function fetchChannelSuperAdminsForNotifications(channelSlug: string): Promise<ProfileRow[]> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('profile_channels')
+    .select('profile:profiles(id, name, email, is_active)')
+    .eq('channel_slug', channelSlug)
+    .eq('channel_role', 'Channel Super Admin')
+
+  const profiles: ProfileRow[] = []
+  for (const row of data ?? []) {
+    const raw = row.profile as ProfileRow | ProfileRow[] | null
+    const p = Array.isArray(raw) ? raw[0] : raw
+    if (p?.is_active && p.email) profiles.push(p)
+  }
+  return profiles
+}
+
+export async function notifyRequestReceived(
+  project: Pick<Project, 'id' | 'title' | 'channel' | 'target_delivery_date' | 'content_type' | 'external_team_member_id' | 'created_by'>,
+): Promise<void> {
+  if (!isZerodhaChannelDbName(project.channel)) return
+  const channelSlug = channelSlugFromProject(project)
+  if (!channelSlug) return
+
+  const channelName = channelNameFromProject(project)
+  const submitter = await fetchRequestSubmitter(project.external_team_member_id ?? project.created_by)
+  const recipients = await fetchZerodhaInternalNotificationRecipients(channelSlug)
+
+  for (const recipient of recipients) {
+    if (await wasNotificationSent({
+      type: 'request_received',
+      recipientId: recipient.id,
+      projectId: project.id,
+    })) continue
+
+    const { subject, text, html } = requestReceivedInternalEmail({
+      recipientName: recipient.name,
+      projectTitle: project.title,
+      channelName,
+      projectId: project.id,
+      submitterName: submitter?.name,
+      releaseDate: project.target_delivery_date,
+      videoType: project.content_type,
+    })
+
+    const result = await sendEmail({ to: recipient.email, subject, text, html })
+    if (result.sent) {
+      await logNotification({
+        type: 'request_received',
+        recipientId: recipient.id,
+        recipientEmail: recipient.email,
+        projectId: project.id,
+        channelSlug,
+      })
+    }
+  }
+}
+
+async function notifyZerodhaSuperAdminsRequestStatus(
+  project: Pick<Project, 'id' | 'title' | 'channel'>,
+  status: 'approved' | 'declined',
+  reason?: string,
+): Promise<void> {
+  if (!isZerodhaChannelDbName(project.channel)) return
+  const channelSlug = channelSlugFromProject(project)
+  if (!channelSlug) return
+
+  const channelName = channelNameFromProject(project)
+  const superAdmins = await fetchChannelSuperAdminsForNotifications(channelSlug)
+  const notificationType = status === 'approved' ? 'request_approved' : 'request_declined'
+
+  for (const recipient of superAdmins) {
+    if (await wasNotificationSent({
+      type: notificationType,
+      recipientId: recipient.id,
+      projectId: project.id,
+    })) continue
+
+    const { subject, text, html } = requestStatusInternalEmail({
+      recipientName: recipient.name,
+      projectTitle: project.title,
+      channelName,
+      projectId: project.id,
+      status,
+      reason,
+    })
+
+    const result = await sendEmail({ to: recipient.email, subject, text, html })
+    if (result.sent) {
+      await logNotification({
+        type: notificationType,
+        recipientId: recipient.id,
+        recipientEmail: recipient.email,
+        projectId: project.id,
+        channelSlug,
+        metadata: reason ? { reason, audience: 'channel_super_admin' } : { audience: 'channel_super_admin' },
+      })
+    }
   }
 }
 

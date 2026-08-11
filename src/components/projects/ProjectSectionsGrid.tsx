@@ -2,11 +2,14 @@
 
 import { useState, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { Project, Comment, RpCut } from '@/lib/types'
+import { Project, Comment, RpCut, ClientReviewSubmission, QcReviewSubmission } from '@/lib/types'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Button } from '@/components/ui/Button'
 import { CommentsSection } from '@/components/projects/CommentsSection'
+import { ClientReviewFeedbackPanel } from '@/components/projects/ClientReviewFeedbackPanel'
+import { QcReviewFeedbackPanel } from '@/components/projects/QcReviewFeedbackPanel'
+import { isZerodhaClientReviewStage } from '@/lib/zerodha-sla'
 import { updateProject, saveRpCuts, RpCutInput } from '@/lib/actions/projects'
 import { ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { hasIntakeMaterials } from '@/lib/zerodha-sla'
@@ -90,12 +93,20 @@ type Props = {
   canEditIntakeMaterials?: boolean
   canViewRpCuts: boolean
   canEditRpCuts: boolean
+  clientReviewSubmissions?: ClientReviewSubmission[]
+  canSubmitClientReview?: boolean
+  internalView?: boolean
+  qcSubmissions?: QcReviewSubmission[]
+  currentQcSubmission?: QcReviewSubmission | null
+  canSubmitQcReview?: boolean
   pipeline?: ReactNode
 }
 
 export function ProjectSectionsGrid({
   project, comments, rpCuts,
   canEditLinks, canEditCopy, canEditIntakeMaterials = false, canViewRpCuts, canEditRpCuts,
+  clientReviewSubmissions = [], canSubmitClientReview = false,
+  internalView = false, qcSubmissions = [], currentQcSubmission = null, canSubmitQcReview = false,
   pipeline,
 }: Props) {
   const router = useRouter()
@@ -185,6 +196,9 @@ export function ProjectSectionsGrid({
     router.refresh()
   }
 
+  const showClientReview = showIntakeSidebar
+  const inActiveClientReview = showClientReview && isZerodhaClientReviewStage(project.current_stage)
+  const commentsCanAdd = !inActiveClientReview || !canSubmitClientReview
   const filledCuts = cuts.filter(c => c.timestamps.trim() || c.thumbnail.trim()).length
 
   const reviewSection = (
@@ -404,7 +418,29 @@ export function ProjectSectionsGrid({
             ) : undefined}
             className="min-h-[min(560px,72vh)]"
           >
-            <CommentsSection projectId={project.id} comments={comments} canAdd variant="light" />
+            {internalView && showClientReview && (
+              <div className="mb-4">
+                <QcReviewFeedbackPanel
+                  projectId={project.id}
+                  channelDbName={project.channel}
+                  currentStage={project.current_stage}
+                  canSubmit={canSubmitQcReview}
+                  qcSubmissions={qcSubmissions}
+                  currentQcSubmission={currentQcSubmission}
+                />
+              </div>
+            )}
+            {showClientReview && (
+              <div className="mb-4">
+                <ClientReviewFeedbackPanel
+                projectId={project.id}
+                currentStage={project.current_stage}
+                canSubmit={canSubmitClientReview}
+                submissions={clientReviewSubmissions}
+              />
+              </div>
+            )}
+            <CommentsSection projectId={project.id} comments={comments} canAdd={commentsCanAdd} variant="light" />
           </SectionCard>
           {pipeline}
         </div>

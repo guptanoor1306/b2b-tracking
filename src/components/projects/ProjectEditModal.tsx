@@ -52,6 +52,7 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
     sound_designer_id: project.sound_designer_id ?? '',
     writer_id: project.writer_id ?? '',
     external_team_member_id: project.external_team_member_id ?? '',
+    qc_reviewer_id: project.qc_reviewer_id ?? '',
     uses_teleprompter: project.uses_teleprompter === true ? 'yes' : project.uses_teleprompter === false ? 'no' : '',
     thumbnail_copy: project.thumbnail_copy ?? '',
     title_copy: project.title_copy ?? '',
@@ -135,6 +136,7 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
       sound_designer_id: form.sound_designer_id || null,
       writer_id: form.writer_id || null,
       external_team_member_id: form.external_team_member_id || null,
+      ...(isZerodha ? { qc_reviewer_id: form.qc_reviewer_id || null } : {}),
       uses_teleprompter: form.uses_teleprompter === 'yes' ? true : form.uses_teleprompter === 'no' ? false : null,
       thumbnail_copy: form.thumbnail_copy || null,
       title_copy: form.title_copy || null,
@@ -212,6 +214,14 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
             <UserSearchSelect label="Sound designer" users={users} value={form.sound_designer_id} onChange={v => set('sound_designer_id', v)} />
             <UserSearchSelect label="Writer" users={users} value={form.writer_id} onChange={v => set('writer_id', v)} />
             <UserSearchSelect label="External team member" users={users} value={form.external_team_member_id} onChange={v => set('external_team_member_id', v)} />
+            {isZerodha && (
+              <UserSearchSelect
+                label="Draft QC reviewer"
+                users={users}
+                value={form.qc_reviewer_id}
+                onChange={v => set('qc_reviewer_id', v)}
+              />
+            )}
           </div>
         </SlideOverSection>
 

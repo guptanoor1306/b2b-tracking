@@ -20,7 +20,12 @@ import {
   canReviewExternalRequest,
   canEditIntakeMaterials,
   canCreateExternalRequest,
+  canSubmitClientReviewFeedback,
+  canSubmitQcReviewFeedback,
 } from '@/lib/views'
+import { fetchClientReviewSubmissions } from '@/lib/data/client-review-feedback'
+import { fetchQcReviewSubmissions, fetchCurrentQcSubmission } from '@/lib/data/qc-review-feedback'
+import { isZerodhaChannelDbName } from '@/lib/zerodha-sla'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig, fetchProjectHoldPeriods } from '@/lib/data/stage-sla'
 import { fetchProjectStageHistory } from '@/lib/data/stage-history'
@@ -49,7 +54,8 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
 
   const channelName = await getActiveChannelDbName()
   const channelSlug = await getActiveChannelSlug()
-  const [history, channelMembers, commentsRes, holidays, stageSla, holdPeriods, rpCuts] = await Promise.all([
+  const isZerodha = isZerodhaChannelDbName(project.channel)
+  const [history, channelMembers, commentsRes, holidays, stageSla, holdPeriods, rpCuts, clientReviewSubmissions, qcSubmissions, currentQcSubmission] = await Promise.all([
     fetchProjectStageHistory(id, project),
     channelSlug ? fetchChannelMembers(channelSlug) : Promise.resolve([]),
     supabase.from('comments').select('*, author:profiles!comments_created_by_fkey(id, name, email)').eq('project_id', id).order('created_at', { ascending: true }),
@@ -57,6 +63,9 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     fetchStageSlaConfig(channelName),
     fetchProjectHoldPeriods(id),
     canViewRpCuts(role) ? fetchRpCuts(id) : Promise.resolve([]),
+    isZerodha ? fetchClientReviewSubmissions(id) : Promise.resolve([]),
+    isZerodha && pipelineInternal ? fetchQcReviewSubmissions(id) : Promise.resolve([]),
+    isZerodha && pipelineInternal ? fetchCurrentQcSubmission(id) : Promise.resolve(null),
   ])
   setStageSlaCache(stageSla, channelName)
 
@@ -87,6 +96,11 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       holdPeriods={holdPeriods}
       comments={(commentsRes.data ?? []) as Comment[]}
       rpCuts={rpCuts}
+      clientReviewSubmissions={clientReviewSubmissions}
+      canSubmitClientReview={canSubmitClientReviewFeedback(role, project, profile.id)}
+      qcSubmissions={qcSubmissions}
+      currentQcSubmission={currentQcSubmission}
+      canSubmitQcReview={canSubmitQcReviewFeedback(role, project, profile.id)}
     />
   )
 }

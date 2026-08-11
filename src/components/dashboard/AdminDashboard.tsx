@@ -5,7 +5,8 @@ import { CollapsibleProjectSection } from '@/components/dashboard/CollapsiblePro
 import { NewProjectsReceivedSection } from '@/components/dashboard/NewProjectsReceivedSection'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { resolveTargetReleaseDate } from '@/lib/timelines'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatWaitingSince } from '@/lib/utils'
+import { businessDaysLate } from '@/lib/businessTime'
 import { welcomeFirstName, HEALTH_PILL_V2 } from '@/lib/design/theme-v2'
 import { getProjectTimeliness } from '@/lib/timelines'
 import { CheckCircle, AlertTriangle, GitBranch, Zap, ArrowRight, Clock } from 'lucide-react'
@@ -140,11 +141,19 @@ export function AdminDashboard({
               {needsAttention.map(p => {
                 const t = getProjectTimeliness(p, holidays)
                 const target = resolveTargetReleaseDate(p, holidays)
+                const pendingDays = formatWaitingSince(p.last_status_update_at)
+                const releaseLateDays = p.target_delivery_date
+                  ? businessDaysLate(p.target_delivery_date, holidays)
+                  : 0
+                const pendingPerson = p.stage_assignee ?? p.external_team_member
                 const healthLabel = p.status_health === 'At risk'
                   ? 'At risk'
                   : (p.status_health === 'Delayed' || t.status === 'delayed')
                     ? 'Delayed'
                     : null
+                const lateLabel = externalView
+                  ? (releaseLateDays > 0 ? `${releaseLateDays}d late` : (t.showLabel ? t.label : null))
+                  : (t.showLabel ? t.label : null)
                 const pill = healthLabel
                   ? (HEALTH_PILL_V2[healthLabel] ?? 'bg-zinc-100 text-zinc-600 border-zinc-200')
                   : ''
@@ -165,8 +174,18 @@ export function AdminDashboard({
                           </span>
                         )}
                         <span className="text-[11px] text-zinc-500">{stageLabel(p)}</span>
-                        {t.showLabel && (
-                          <span className="text-[11px] font-medium text-orange-600">{t.label}</span>
+                        {externalView && (
+                          <span className="text-[11px] font-medium text-amber-700">
+                            {pendingDays} waiting
+                          </span>
+                        )}
+                        {lateLabel && (
+                          <span className={cn(
+                            'text-[11px] font-medium',
+                            lateLabel.includes('late') ? 'text-red-600' : 'text-orange-600',
+                          )}>
+                            {lateLabel}
+                          </span>
                         )}
                       </div>
                       {target && (
@@ -176,10 +195,10 @@ export function AdminDashboard({
                         </p>
                       )}
                     </div>
-                    {p.stage_assignee && (
+                    {pendingPerson && (
                       <AssigneeAvatar
-                        name={p.stage_assignee.name}
-                        id={p.stage_assignee.id}
+                        name={pendingPerson.name}
+                        id={pendingPerson.id}
                         size="md"
                         theme="light"
                       />

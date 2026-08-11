@@ -11,7 +11,7 @@ import {
   FINAL_STAGE,
   STAGE_PIPELINE,
 } from '@/lib/constants'
-import { isZerodhaChannelDbName, mapZerodhaInternalToExternalStage, ZERODHA_READY_TO_PRODUCE, hasIntakeMaterials, isDeclinedRequest, normalizeZerodhaBoardStage, ZERODHA_FIRST_CUT_REVIEW, ZERODHA_FIRST_DRAFT_REVIEW, ZERODHA_SECOND_DRAFT_REVIEW } from '@/lib/zerodha-sla'
+import { isZerodhaChannelDbName, mapZerodhaInternalToExternalStage, ZERODHA_READY_TO_PRODUCE, hasIntakeMaterials, isDeclinedRequest, normalizeZerodhaBoardStage, ZERODHA_FIRST_CUT_REVIEW, ZERODHA_FIRST_DRAFT_REVIEW, ZERODHA_SECOND_DRAFT_REVIEW, ZERODHA_FIRST_DRAFT_QC, isZerodhaClientReviewStage } from '@/lib/zerodha-sla'
 import { Role, Project } from '@/lib/types'
 import { isUserOnProjectTeam } from '@/lib/projects/team'
 
@@ -24,6 +24,7 @@ export function resolveStageAssigneeId(
     writer_id?: string | null
     sound_designer_id?: string | null
     external_team_member_id?: string | null
+    qc_reviewer_id?: string | null
     stage_assignee_id?: string | null
   },
   stage: string
@@ -48,6 +49,9 @@ export function resolveStageAssigneeId(
     case '1st Cut Review':
     case '1st Draft Review':
     case '2nd Draft Review':
+      return project.external_team_member_id ?? editor
+    case '1st Draft QC (Internal)':
+      return project.qc_reviewer_id ?? project.stage_assignee_id ?? editor
     case 'Thumbnail Copy + RP Cuts':
     case 'Video/Thumbnail Review':
     case 'First Review':
@@ -64,6 +68,10 @@ export function resolveStageAssigneeId(
     default:
       return project.stage_assignee_id ?? editor
   }
+}
+
+export function isChannelSuperAdmin(role: Role | string): boolean {
+  return role === 'Channel Super Admin'
 }
 
 export function isInternalRole(role: Role | string): boolean {
@@ -137,7 +145,9 @@ export function usesFullAdminDashboardForChannel(
   globalRole?: Role | string,
 ): boolean {
   if (globalRole && isSuperAdmin(globalRole)) return true
-  return channelRole === 'Channel Admin' || channelRole === 'External Client Admin'
+  return channelRole === 'Channel Admin'
+    || channelRole === 'External Client Admin'
+    || channelRole === 'Channel Super Admin'
 }
 
 export function usesIpOverviewDashboard(role: Role | string): boolean {
@@ -156,9 +166,32 @@ export function canChangeStages(role: Role | string): boolean {
   return role === 'Channel Admin' || role === 'Channel Team'
 }
 
-/** Any channel member can drag cards on the production board */
-export function canMoveBoardCards(role: Role | string): boolean {
+/** External users cannot drag cards on Zerodha — feedback is submitted on project detail instead. */
+export function canMoveBoardCards(role: Role | string, channelDbName?: string | null): boolean {
+  if (isZerodhaChannelDbName(channelDbName) && isExternalRole(role)) return false
   return isInternalRole(role) || isExternalRole(role)
+}
+
+export function canSubmitQcReviewFeedback(
+  role: Role | string,
+  project: Pick<Project, 'channel' | 'current_stage' | 'qc_reviewer_id'>,
+  userId: string,
+): boolean {
+  if (!isZerodhaChannelDbName(project.channel)) return false
+  if (!isInternalRole(role)) return false
+  if (normalizeZerodhaBoardStage(project.current_stage) !== ZERODHA_FIRST_DRAFT_QC) return false
+  return project.qc_reviewer_id === userId || isChannelSuperAdmin(role)
+}
+
+export function canSubmitClientReviewFeedback(
+  role: Role | string,
+  project: Pick<Project, 'channel' | 'current_stage' | 'external_team_member_id' | 'created_by'>,
+  userId: string,
+): boolean {
+  if (!isZerodhaChannelDbName(project.channel)) return false
+  if (!isExternalRole(role) && !isExternalClientAdmin(role)) return false
+  if (!isZerodhaClientReviewStage(project.current_stage)) return false
+  return project.external_team_member_id === userId || project.created_by === userId
 }
 
 export function canSendStageReminder(role: Role | string): boolean {

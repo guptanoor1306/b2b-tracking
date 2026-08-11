@@ -97,7 +97,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         users={users}
         holidays={holidays}
         stages={internal ? internalStages : externalStages}
-        readOnly={!canMoveBoardCards(role)}
+        readOnly={!canMoveBoardCards(role, channelName)}
         externalView={!internal}
         viewerUserId={profile.id}
         blockReadyToProduce={!canMarkReadyToProduce(role, channelName)}
@@ -107,7 +107,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Production board</h1>
                 <p className="mt-1 text-sm font-medium text-zinc-500">
-                  {filtered.length} project{filtered.length !== 1 ? 's' : ''} · drag cards to update stages
+                  {filtered.length} project{filtered.length !== 1 ? 's' : ''} · {canMoveBoardCards(role, channelName) ? 'drag cards to update stages' : 'view-only board'}
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">

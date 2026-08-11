@@ -238,6 +238,73 @@ ${ctaButton(url, 'View project')}
   return { subject, text, html }
 }
 
+export function requestReceivedInternalEmail(opts: {
+  recipientName: string
+  projectTitle: string
+  channelName: string
+  projectId: string
+  submitterName?: string | null
+  releaseDate?: string | null
+  videoType?: string | null
+}) {
+  const url = projectUrl(opts.projectId)
+  const subject = `[${opts.channelName}] New production request: ${opts.projectTitle}`
+  const text = `Hi ${opts.recipientName},
+
+A new production request "${opts.projectTitle}" was submitted${opts.submitterName ? ` by ${opts.submitterName}` : ''}.
+
+Type: ${opts.videoType ?? '—'}
+Release date: ${opts.releaseDate ?? '—'}
+
+Review request: ${url}
+
+— LearnApp Studios`
+
+  const html = emailShell('New production request', `
+<p>Hi ${opts.recipientName},</p>
+<p>A new production request <strong>${opts.projectTitle}</strong> was submitted${opts.submitterName ? ` by <strong>${opts.submitterName}</strong>` : ''}.</p>
+<ul style="padding-left:20px;font-size:14px">
+  <li>Type: <strong>${opts.videoType ?? '—'}</strong></li>
+  <li>Release date: <strong>${opts.releaseDate ?? '—'}</strong></li>
+</ul>
+${ctaButton(url, 'Review request')}
+`)
+
+  return { subject, text, html }
+}
+
+export function requestStatusInternalEmail(opts: {
+  recipientName: string
+  projectTitle: string
+  channelName: string
+  projectId: string
+  status: 'approved' | 'declined'
+  reason?: string | null
+}) {
+  const url = projectUrl(opts.projectId)
+  const label = opts.status === 'approved' ? 'approved' : 'declined'
+  const subject = `[${opts.channelName}] Request ${label}: ${opts.projectTitle}`
+  const reasonLine = opts.status === 'declined' && opts.reason ? `\nReason: ${opts.reason}\n` : ''
+  const text = `Hi ${opts.recipientName},
+
+The production request "${opts.projectTitle}" was ${label} by internal admin.${reasonLine}
+
+View project: ${url}
+
+— LearnApp Studios`
+
+  const html = emailShell(`Request ${label}`, `
+<p>Hi ${opts.recipientName},</p>
+<p>The production request <strong>${opts.projectTitle}</strong> was <strong>${label}</strong> by internal admin.</p>
+${opts.status === 'declined' && opts.reason
+  ? `<div style="background:#fef2f2;border-radius:8px;padding:12px 16px;margin:16px 0;border:1px solid #fecaca"><p style="margin:0;font-size:14px"><strong>Reason:</strong> ${opts.reason}</p></div>`
+  : ''}
+${ctaButton(url, 'View project')}
+`)
+
+  return { subject, text, html }
+}
+
 export type CommentDigestItem = {
   projectTitle: string
   projectId: string

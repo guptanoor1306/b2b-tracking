@@ -1,6 +1,6 @@
 'use client'
 
-import { Project, Profile, StageHistory, Comment, HoldPeriod, RpCut } from '@/lib/types'
+import { Project, Profile, StageHistory, Comment, HoldPeriod, RpCut, ClientReviewSubmission, QcReviewSubmission } from '@/lib/types'
 import { Button } from '@/components/ui/Button'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { ProjectSectionsGrid, pendingContentCount, isProjectIntakeView } from '@/components/projects/ProjectSectionsGrid'
@@ -44,6 +44,12 @@ type Props = {
   holdPeriods?: HoldPeriod[]
   comments: Comment[]
   rpCuts?: RpCut[]
+  clientReviewSubmissions?: ClientReviewSubmission[]
+  canSubmitClientReview?: boolean
+  internalView?: boolean
+  qcSubmissions?: QcReviewSubmission[]
+  currentQcSubmission?: QcReviewSubmission | null
+  canSubmitQcReview?: boolean
 }
 
 export function ProjectDetailLayout({
@@ -52,6 +58,8 @@ export function ProjectDetailLayout({
   canViewRpCuts = false, canEditRpCuts = false,
   canSendReminder = false, canReviewRequest = false, canDuplicateRequest = false,
   holidays = [], users, graphicsDesigners, history, holdPeriods = [], comments, rpCuts = [],
+  clientReviewSubmissions = [], canSubmitClientReview = false,
+  internalView = false, qcSubmissions = [], currentQcSubmission = null, canSubmitQcReview = false,
 }: Props) {
   const currentAssignee = project.stage_assignee?.name ?? null
   const assigneeId = project.stage_assignee?.id
@@ -207,6 +215,12 @@ export function ProjectDetailLayout({
         canEditIntakeMaterials={canEditIntakeMaterials}
         canViewRpCuts={canViewRpCuts}
         canEditRpCuts={canEditRpCuts}
+        clientReviewSubmissions={clientReviewSubmissions}
+        canSubmitClientReview={canSubmitClientReview}
+        internalView={internal}
+        qcSubmissions={qcSubmissions}
+        currentQcSubmission={currentQcSubmission}
+        canSubmitQcReview={canSubmitQcReview}
         pipeline={intakeView ? pipelineSection : undefined}
       />
 

@@ -71,6 +71,7 @@ export const ZERODHA_REMOVED_STAGES = [
 ] as const
 
 /** Zerodha production + review stage names. */
+export const ZERODHA_FIRST_DRAFT_QC = '1st Draft QC (Internal)'
 export const ZERODHA_FIRST_CUT = '1st Cut'
 export const ZERODHA_FIRST_CUT_REVIEW = '1st Cut Review'
 export const ZERODHA_FIRST_CUT_REVIEW_DONE = '1st Cut Review Done'
@@ -89,6 +90,41 @@ export const ZERODHA_EXTERNAL_REVIEW_STAGES = [
   ZERODHA_SECOND_DRAFT_REVIEW_DONE,
 ] as const
 
+export const ZERODHA_CLIENT_REVIEW_STAGES = [
+  ZERODHA_FIRST_CUT_REVIEW,
+  ZERODHA_FIRST_DRAFT_REVIEW,
+  ZERODHA_SECOND_DRAFT_REVIEW,
+] as const
+
+export const ZERODHA_REVIEW_TO_DONE: Record<string, string> = {
+  [ZERODHA_FIRST_CUT_REVIEW]: ZERODHA_FIRST_CUT_REVIEW_DONE,
+  [ZERODHA_FIRST_DRAFT_REVIEW]: ZERODHA_FIRST_DRAFT_REVIEW_DONE,
+  [ZERODHA_SECOND_DRAFT_REVIEW]: ZERODHA_SECOND_DRAFT_REVIEW_DONE,
+}
+
+export function isZerodhaClientReviewStage(stage: string): boolean {
+  return (ZERODHA_CLIENT_REVIEW_STAGES as readonly string[]).includes(normalizeZerodhaBoardStage(stage))
+}
+
+export function zerodhaReviewDoneStage(reviewStage: string): string | null {
+  return ZERODHA_REVIEW_TO_DONE[normalizeZerodhaBoardStage(reviewStage)] ?? null
+}
+
+export function hasClientReviewSubmission(
+  submissions: { review_stage: string }[],
+  reviewStage: string,
+): boolean {
+  const stage = normalizeZerodhaBoardStage(reviewStage)
+  return submissions.some(s => normalizeZerodhaBoardStage(s.review_stage) === stage)
+}
+
+export function stageBeforeQc(channelDbName: string | null | undefined): string {
+  const stages = internalStagesForChannel(channelDbName)
+  const idx = (stages as readonly string[]).indexOf(ZERODHA_FIRST_DRAFT_QC)
+  if (idx > 0) return stages[idx - 1]
+  return 'Animation & VD'
+}
+
 export const STAGES_ZERODHA_INTERNAL = [
   ZERODHA_REQUEST_RECEIVED,
   ZERODHA_READY_TO_PRODUCE,
@@ -98,6 +134,7 @@ export const STAGES_ZERODHA_INTERNAL = [
   'Storyboard',
   'Graphics & VD',
   'Animation & VD',
+  ZERODHA_FIRST_DRAFT_QC,
   ZERODHA_FIRST_DRAFT_REVIEW,
   ZERODHA_FIRST_DRAFT_REVIEW_DONE,
   ZERODHA_FIRST_REVIEW_CHANGES,
@@ -224,14 +261,15 @@ export const DEFAULT_ZERODHA_STAGE_SLA: Omit<StageSlaRow, 'id'>[] = [
   { stage_name: 'Storyboard', role_owner: 'Writer', duration_hours: 0, level_0_hours: 0, level_1_hours: 0, level_2_hours: 1.5, level_3_hours: 2, level_4_hours: 12, parallel_group: null, sort_order: 6 },
   { stage_name: 'Graphics & VD', role_owner: 'Designer', duration_hours: 0, level_0_hours: 0, level_1_hours: 24, level_2_hours: 48, level_3_hours: 72, level_4_hours: 96, parallel_group: 'vd_bundle', sort_order: 7 },
   { stage_name: 'Animation & VD', role_owner: 'Editor', duration_hours: 12, level_0_hours: 12, level_1_hours: 24, level_2_hours: 72, level_3_hours: 144, level_4_hours: 192, parallel_group: 'vd_bundle', sort_order: 8 },
-  { stage_name: ZERODHA_FIRST_DRAFT_REVIEW, role_owner: 'External Team', duration_hours: 24, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 9 },
-  { stage_name: ZERODHA_FIRST_DRAFT_REVIEW_DONE, role_owner: 'Internal', duration_hours: 12, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 10 },
-  { stage_name: ZERODHA_FIRST_REVIEW_CHANGES, role_owner: 'Editor', duration_hours: 24, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 11 },
-  { stage_name: ZERODHA_SECOND_DRAFT_REVIEW, role_owner: 'External Team', duration_hours: 24, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 12 },
-  { stage_name: ZERODHA_SECOND_DRAFT_REVIEW_DONE, role_owner: 'Internal', duration_hours: 12, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 13 },
-  { stage_name: 'Final Changes', role_owner: 'Editor', duration_hours: 24, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 14 },
-  { stage_name: 'Sound', role_owner: 'Sound Designer', duration_hours: 1.5, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 15 },
-  { stage_name: 'Final Delivery', role_owner: 'Internal', duration_hours: 0, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 16 },
+  { stage_name: ZERODHA_FIRST_DRAFT_QC, role_owner: 'Channel Super Admin', duration_hours: 12, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 9 },
+  { stage_name: ZERODHA_FIRST_DRAFT_REVIEW, role_owner: 'External Team', duration_hours: 24, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 10 },
+  { stage_name: ZERODHA_FIRST_DRAFT_REVIEW_DONE, role_owner: 'Internal', duration_hours: 12, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 11 },
+  { stage_name: ZERODHA_FIRST_REVIEW_CHANGES, role_owner: 'Editor', duration_hours: 24, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 12 },
+  { stage_name: ZERODHA_SECOND_DRAFT_REVIEW, role_owner: 'External Team', duration_hours: 24, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 13 },
+  { stage_name: ZERODHA_SECOND_DRAFT_REVIEW_DONE, role_owner: 'Internal', duration_hours: 12, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 14 },
+  { stage_name: 'Final Changes', role_owner: 'Editor', duration_hours: 24, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 15 },
+  { stage_name: 'Sound', role_owner: 'Sound Designer', duration_hours: 1.5, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 16 },
+  { stage_name: 'Final Delivery', role_owner: 'Internal', duration_hours: 0, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 17 },
 ]
 
 export function zerodhaStageSlaRows(): StageSlaRow[] {

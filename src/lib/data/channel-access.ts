@@ -56,6 +56,11 @@ export const fetchChannelRole = cache(async (profileId: string, channelSlug: str
   return (data?.channel_role as ChannelMemberRole) ?? null
 })
 
+export async function fetchChannelSuperAdmins(slug: string): Promise<ChannelMember[]> {
+  const members = await fetchChannelMembers(slug)
+  return members.filter(m => m.channel_role === 'Channel Super Admin')
+}
+
 export async function fetchChannelMembers(slug: string): Promise<ChannelMember[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
