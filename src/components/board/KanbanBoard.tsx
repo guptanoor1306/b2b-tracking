@@ -29,6 +29,8 @@ import {
   pipelineProgressPercentForChannel,
   isPendingRequestReview,
   isDeclinedRequest,
+  isResubmittedRequest,
+  isAwaitingRequestReview,
 } from '@/lib/zerodha-sla'
 
 const CARD_BASE = 'rounded-xl border bg-white transition-[box-shadow,opacity] hover:shadow-md'
@@ -74,13 +76,18 @@ function CardContent({
   const assigneeId = resolveStageAssigneeId(project, project.current_stage)
   const displayAssignee = project.stage_assignee
     ?? (assigneeId ? users.find(u => u.id === assigneeId) ?? null : null)
-  const intakeReview = isPendingRequestReview(project) || isDeclinedRequest(project)
+  const intakeReview = isAwaitingRequestReview(project) || isDeclinedRequest(project)
 
   return (
     <>
       {intakeReview && isPendingRequestReview(project) && (
         <span className="inline-block mb-1.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
           Pending review
+        </span>
+      )}
+      {intakeReview && isResubmittedRequest(project) && (
+        <span className="inline-block mb-1.5 rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-800">
+          Resubmitted
         </span>
       )}
       {intakeReview && isDeclinedRequest(project) && (
@@ -189,7 +196,7 @@ const KanbanCard = memo(function KanbanCard({
 
   const cardClass = getIpCardBorderClass(
     project.ip,
-    isPendingRequestReview(project) || isDeclinedRequest(project) ? false : project.is_on_hold,
+    isAwaitingRequestReview(project) || isDeclinedRequest(project) ? false : project.is_on_hold,
   )
   const ipAccent = getIpAccent(project.ip)
   const projectHref = `/projects/${project.id}`

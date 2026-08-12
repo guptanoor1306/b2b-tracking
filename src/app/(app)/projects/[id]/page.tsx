@@ -22,6 +22,7 @@ import {
   canCreateExternalRequest,
   canSubmitClientReviewFeedback,
   canSubmitQcReviewFeedback,
+  canResubmitDeclinedRequest,
 } from '@/lib/views'
 import { fetchClientReviewSubmissions } from '@/lib/data/client-review-feedback'
 import { fetchQcReviewSubmissions, fetchCurrentQcSubmission } from '@/lib/data/qc-review-feedback'
@@ -88,6 +89,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       canEditRpCuts={canEditRpCuts(role)}
       canSendReminder={canSendStageReminder(role)}
       canReviewRequest={canReviewExternalRequest(role, channelName)}
+      canResubmitRequest={canResubmitDeclinedRequest(role, project, profile.id)}
       canDuplicateRequest={canCreateExternalRequest(role, channelName)}
       holidays={holidays}
       users={users}

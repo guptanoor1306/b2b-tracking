@@ -5,14 +5,15 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { Textarea } from '@/components/ui/Textarea'
-import { approveExternalRequest, declineExternalRequest } from '@/lib/actions/projects'
-import { CheckCircle2, XCircle, ClipboardList } from 'lucide-react'
+import { approveExternalRequest, declineExternalRequest, resubmitExternalRequest } from '@/lib/actions/projects'
+import { CheckCircle2, XCircle, ClipboardList, RotateCcw } from 'lucide-react'
 
 type Props = {
   projectId: string
+  resubmitted?: boolean
 }
 
-export function RequestReviewBar({ projectId }: Props) {
+export function RequestReviewBar({ projectId, resubmitted = false }: Props) {
   const router = useRouter()
   const [declineOpen, setDeclineOpen] = useState(false)
   const [reason, setReason] = useState('')
@@ -60,7 +61,9 @@ export function RequestReviewBar({ projectId }: Props) {
             <div>
               <p className="text-sm font-semibold text-zinc-900">Review production request</p>
               <p className="text-xs text-zinc-600 mt-0.5">
-                Approve to move to Ready to Produce, or decline with a reason for the client.
+                {resubmitted
+                  ? 'The client resubmitted after making updates. Approve to move to Ready to Produce, or decline with a reason.'
+                  : 'Approve to move to Ready to Produce, or decline with a reason for the client.'}
               </p>
             </div>
           </div>
@@ -121,7 +124,53 @@ export function DeclinedRequestNotice() {
     <div className="rounded-xl border border-red-200 bg-red-50/80 px-4 py-3">
       <p className="text-sm font-semibold text-red-800">Request declined</p>
       <p className="mt-0.5 text-xs text-red-700">
-        See the decline reason in Feedback &amp; Changes below. Update your materials and contact LearnApp if you need to resubmit.
+        See the decline reason in Feedback &amp; Changes below. Update your materials, then use Resubmit request when ready.
+      </p>
+    </div>
+  )
+}
+
+export function ResubmitRequestBanner({ projectId }: { projectId: string }) {
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleResubmit = async () => {
+    setLoading(true)
+    setError('')
+    const result = await resubmitExternalRequest(projectId)
+    setLoading(false)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    router.refresh()
+  }
+
+  return (
+    <div className="rounded-xl border border-sky-200 bg-sky-50/90 px-4 py-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-sky-900">Ready to resubmit?</p>
+          <p className="mt-0.5 text-xs text-sky-800">
+            After saving your updated materials below, resend the request for LearnApp review.
+          </p>
+          {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+        </div>
+        <Button size="sm" loading={loading} onClick={handleResubmit} className="shrink-0">
+          <RotateCcw size={14} /> Resubmit request
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+export function ResubmittedRequestNotice() {
+  return (
+    <div className="rounded-xl border border-sky-200 bg-sky-50/80 px-4 py-3">
+      <p className="text-sm font-semibold text-sky-900">Request resubmitted</p>
+      <p className="mt-0.5 text-xs text-sky-800">
+        Your updated request is back with the internal team for review.
       </p>
     </div>
   )

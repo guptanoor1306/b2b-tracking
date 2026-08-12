@@ -4,9 +4,9 @@ import { Project, Profile, StageHistory, Comment, HoldPeriod, RpCut, ClientRevie
 import { Button } from '@/components/ui/Button'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { ProjectSectionsGrid, pendingContentCount, isProjectIntakeView } from '@/components/projects/ProjectSectionsGrid'
-import { RequestReviewBar, DeclinedRequestNotice, PendingRequestNotice } from '@/components/projects/RequestReviewBar'
+import { RequestReviewBar, DeclinedRequestNotice, PendingRequestNotice, ResubmitRequestBanner, ResubmittedRequestNotice } from '@/components/projects/RequestReviewBar'
 import {
-  isPendingRequestReview, isDeclinedRequest, suppressProductionMetrics,
+  isPendingRequestReview, isDeclinedRequest, isResubmittedRequest, isAwaitingRequestReview, suppressProductionMetrics,
 } from '@/lib/zerodha-sla'
 import { ProjectEditModal } from '@/components/projects/ProjectEditModal'
 import { DeleteProjectButton } from '@/components/projects/DeleteProjectButton'
@@ -36,6 +36,7 @@ type Props = {
   canEditRpCuts?: boolean
   canSendReminder?: boolean
   canReviewRequest?: boolean
+  canResubmitRequest?: boolean
   canDuplicateRequest?: boolean
   holidays?: string[]
   users: Profile[]
@@ -56,7 +57,7 @@ export function ProjectDetailLayout({
   project, displayStage, internal, canEdit = true,
   canEditLinks = false, canEditCopy = false, canEditIntakeMaterials = false,
   canViewRpCuts = false, canEditRpCuts = false,
-  canSendReminder = false, canReviewRequest = false, canDuplicateRequest = false,
+  canSendReminder = false, canReviewRequest = false, canResubmitRequest = false, canDuplicateRequest = false,
   holidays = [], users, graphicsDesigners, history, holdPeriods = [], comments, rpCuts = [],
   clientReviewSubmissions = [], canSubmitClientReview = false,
   internalView = false, qcSubmissions = [], currentQcSubmission = null, canSubmitQcReview = false,
@@ -67,6 +68,8 @@ export function ProjectDetailLayout({
   const hideMetrics = suppressProductionMetrics(project)
   const pendingReview = isPendingRequestReview(project)
   const declined = isDeclinedRequest(project)
+  const resubmitted = isResubmittedRequest(project)
+  const awaitingReview = isAwaitingRequestReview(project)
   const targetRelease = hideMetrics ? null : resolveTargetReleaseDate(project, holidays)
   const progress = hideMetrics
     ? 0
@@ -133,12 +136,22 @@ export function ProjectDetailLayout({
                 {healthLabel(project.status_health)}
               </span>
             )}
+            {resubmitted && !internal && (
+              <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-800">
+                Resubmitted
+              </span>
+            )}
             {pendingReview && !internal && (
               <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
                 Awaiting review
               </span>
             )}
-            {declined && (
+            {resubmitted && internal && (
+              <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-800">
+                Resubmitted
+              </span>
+            )}
+            {declined && !resubmitted && (
               <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
                 Declined
               </span>
@@ -196,13 +209,19 @@ export function ProjectDetailLayout({
         )}
       </div>
 
-      {canReviewRequest && pendingReview && (
-        <RequestReviewBar projectId={project.id} />
+      {canReviewRequest && awaitingReview && (
+        <RequestReviewBar projectId={project.id} resubmitted={resubmitted} />
       )}
       {!internal && pendingReview && (
         <PendingRequestNotice />
       )}
-      {declined && (
+      {!internal && resubmitted && (
+        <ResubmittedRequestNotice />
+      )}
+      {!internal && declined && canResubmitRequest && (
+        <ResubmitRequestBanner projectId={project.id} />
+      )}
+      {!internal && declined && !canResubmitRequest && (
         <DeclinedRequestNotice />
       )}
 
@@ -232,7 +251,6 @@ export function ProjectDetailLayout({
           onClose={() => setEditOpen(false)}
           project={project}
           users={users}
-          holidays={holidays}
         />
       )}
     </div>

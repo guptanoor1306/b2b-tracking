@@ -28,7 +28,7 @@ export function BoardFiltersBar({
 
   return (
     <div className="mb-4 rounded-xl border border-zinc-200/80 bg-white px-4 py-3 shadow-sm space-y-2">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         {showLanguageFilter ? (
           <BoardMetaFilter ips={ips} languages={languages} matchCount={matchCount} embedded />
         ) : (

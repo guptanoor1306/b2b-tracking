@@ -9,6 +9,7 @@ import {
   requestApprovedEmail,
   requestDeclinedEmail,
   requestReceivedInternalEmail,
+  requestResubmittedInternalEmail,
   requestStatusInternalEmail,
   commentDigestEmail,
   type CommentDigestItem,
@@ -29,6 +30,7 @@ export type NotificationType =
   | 'request_approved'
   | 'request_declined'
   | 'request_received'
+  | 'request_resubmitted'
   | 'comment_digest'
 
 const REMINDER_THRESHOLDS_HOURS = [24, 48, 72, 96, 120] as const
@@ -467,6 +469,39 @@ export async function notifyRequestReceived(
     if (result.sent) {
       await logNotification({
         type: 'request_received',
+        recipientId: recipient.id,
+        recipientEmail: recipient.email,
+        projectId: project.id,
+        channelSlug,
+      })
+    }
+  }
+}
+
+export async function notifyRequestResubmitted(
+  project: Pick<Project, 'id' | 'title' | 'channel' | 'external_team_member_id' | 'created_by'>,
+): Promise<void> {
+  if (!isZerodhaChannelDbName(project.channel)) return
+  const channelSlug = channelSlugFromProject(project)
+  if (!channelSlug) return
+
+  const channelName = channelNameFromProject(project)
+  const submitter = await fetchRequestSubmitter(project.external_team_member_id ?? project.created_by)
+  const recipients = await fetchZerodhaInternalNotificationRecipients(channelSlug)
+
+  for (const recipient of recipients) {
+    const { subject, text, html } = requestResubmittedInternalEmail({
+      recipientName: recipient.name,
+      projectTitle: project.title,
+      channelName,
+      projectId: project.id,
+      submitterName: submitter?.name,
+    })
+
+    const result = await sendEmail({ to: recipient.email, subject, text, html })
+    if (result.sent) {
+      await logNotification({
+        type: 'request_resubmitted',
         recipientId: recipient.id,
         recipientEmail: recipient.email,
         projectId: project.id,

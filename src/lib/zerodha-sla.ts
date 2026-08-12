@@ -6,13 +6,13 @@ export const ZERODHA_REQUEST_RECEIVED = 'Request Received'
 export const ZERODHA_READY_TO_PRODUCE = 'Ready to Produce'
 export const ZERODHA_INTAKE_STAGES = [ZERODHA_REQUEST_RECEIVED, ZERODHA_READY_TO_PRODUCE] as const
 
-export type RequestStatus = 'pending' | 'approved' | 'declined'
+export type RequestStatus = 'pending' | 'approved' | 'declined' | 'resubmitted'
 
 export function isZerodhaIntakeStage(stage: string): boolean {
   return (ZERODHA_INTAKE_STAGES as readonly string[]).includes(stage)
 }
 
-/** Client submission awaiting internal LearnApp review. */
+/** Client submission awaiting internal LearnApp review (first submission). */
 export function isPendingRequestReview(project: {
   channel: string
   current_stage: string
@@ -21,6 +21,25 @@ export function isPendingRequestReview(project: {
   return isZerodhaChannelDbName(project.channel)
     && project.current_stage === ZERODHA_REQUEST_RECEIVED
     && (project.request_status === 'pending' || project.request_status == null)
+}
+
+/** Client resubmitted after a decline — awaiting internal review again. */
+export function isResubmittedRequest(project: {
+  channel?: string
+  current_stage?: string
+  request_status?: RequestStatus | string | null
+}): boolean {
+  return project.request_status === 'resubmitted'
+    && project.current_stage === ZERODHA_REQUEST_RECEIVED
+}
+
+/** Pending or resubmitted — shown in internal review queue. */
+export function isAwaitingRequestReview(project: {
+  channel: string
+  current_stage: string
+  request_status?: RequestStatus | string | null
+}): boolean {
+  return isPendingRequestReview(project) || isResubmittedRequest(project)
 }
 
 export function isDeclinedRequest(project: {
@@ -37,7 +56,7 @@ export function suppressProductionMetrics(project: {
   current_stage: string
   request_status?: RequestStatus | string | null
 }): boolean {
-  return isPendingRequestReview(project) || isDeclinedRequest(project)
+  return isAwaitingRequestReview(project) || isDeclinedRequest(project)
 }
 
 export function hasIntakeMaterials(project: {

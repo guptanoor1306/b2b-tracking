@@ -20,9 +20,10 @@ import {
   isBlockedReadyToProduceMove,
   canReviewExternalRequest,
   canEditIntakeMaterials,
+  canResubmitDeclinedRequest,
   isExternalClientAdmin,
 } from '@/lib/views'
-import { hasIntakeMaterials, ZERODHA_REQUEST_RECEIVED, ZERODHA_READY_TO_PRODUCE, isPendingRequestReview } from '@/lib/zerodha-sla'
+import { hasIntakeMaterials, ZERODHA_REQUEST_RECEIVED, ZERODHA_READY_TO_PRODUCE, isAwaitingRequestReview } from '@/lib/zerodha-sla'
 import { FIRST_CUT_STAGE } from '@/lib/constants'
 import { normalizeStage } from '@/lib/timelines'
 import {
@@ -30,7 +31,7 @@ import {
   isProjectTimelineLocked,
 } from '@/lib/timelines'
 import { fetchHolidayDates } from '@/lib/data/holidays'
-import { notifyProjectTeamOnCreate, notifyStageActionable, notifyRequestApproved, notifyRequestDeclined, notifyRequestReceived } from '@/lib/email/notifications'
+import { notifyProjectTeamOnCreate, notifyStageActionable, notifyRequestApproved, notifyRequestDeclined, notifyRequestReceived, notifyRequestResubmitted } from '@/lib/email/notifications'
 import { isEmailConfigured, sendEmail } from '@/lib/email/send'
 import { insertStageHistoryRecord } from '@/lib/data/stage-history'
 import { Project } from '@/lib/types'
@@ -383,7 +384,7 @@ export async function declineExternalRequest(projectId: string, reason: string) 
   const supabase = await createClient()
   const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).single()
   if (!project) return { error: 'Project not found' }
-  if (!isPendingRequestReview(project)) return { error: 'This request is not awaiting review' }
+  if (!isAwaitingRequestReview(project)) return { error: 'This request is not awaiting review' }
 
   const { error: updateError } = await supabase.from('projects').update({
     request_status: 'declined',
@@ -405,6 +406,37 @@ export async function declineExternalRequest(projectId: string, reason: string) 
   await logActivity(projectId, profile.id, 'request_declined', 'request_status', 'pending', 'declined')
 
   void notifyRequestDeclined(project as Project, text).catch(() => {})
+
+  revalidatePath(`/projects/${projectId}`)
+  revalidatePath('/dashboard')
+  revalidatePath('/board')
+  return { success: true }
+}
+
+export async function resubmitExternalRequest(projectId: string) {
+  const session = await getSessionEffectiveRole()
+  if (!session) return { error: 'Unauthorized' }
+  const { profile } = session
+
+  const supabase = await createClient()
+  const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).single()
+  if (!project) return { error: 'Project not found' }
+  if (!canResubmitDeclinedRequest(session.role, project, profile.id)) {
+    return { error: 'Unauthorized' }
+  }
+
+  const now = new Date().toISOString()
+  const { error } = await supabase.from('projects').update({
+    request_status: 'resubmitted',
+    updated_by: profile.id,
+    last_status_update_at: now,
+  }).eq('id', projectId)
+
+  if (error) return { error: error.message }
+
+  await logActivity(projectId, profile.id, 'request_resubmitted', 'request_status', 'declined', 'resubmitted')
+
+  void notifyRequestResubmitted(project as Project).catch(() => {})
 
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/dashboard')

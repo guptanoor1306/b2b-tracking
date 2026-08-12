@@ -11,7 +11,7 @@ import { welcomeFirstName, HEALTH_PILL_V2 } from '@/lib/design/theme-v2'
 import { getProjectTimeliness } from '@/lib/timelines'
 import { CheckCircle, AlertTriangle, GitBranch, Zap, ArrowRight, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { isPendingRequestReview, isZerodhaChannelDbName } from '@/lib/zerodha-sla'
+import { isAwaitingRequestReview, isZerodhaChannelDbName } from '@/lib/zerodha-sla'
 import { mapInternalToExternalStage, needsExternalClientAttention } from '@/lib/views'
 import { CreateRequestButton } from '@/components/board/CreateRequestButton'
 import { CreateReportButton } from '@/components/reports/ChannelReportModal'
@@ -61,9 +61,9 @@ export function AdminDashboard({
   }
 
   const attentionPool = allInPipeline ?? inPipeline
-  const newProjectsReceived = isZerodha ? inPipeline.filter(isPendingRequestReview) : []
+  const newProjectsReceived = isZerodha ? inPipeline.filter(isAwaitingRequestReview) : []
   const pipelineProjects = isZerodha
-    ? inPipeline.filter(p => !isPendingRequestReview(p))
+    ? inPipeline.filter(p => !isAwaitingRequestReview(p))
     : inPipeline
   const needsAttention = (() => {
     if (!externalView) {

@@ -273,6 +273,32 @@ ${ctaButton(url, 'Review request')}
   return { subject, text, html }
 }
 
+export function requestResubmittedInternalEmail(opts: {
+  recipientName: string
+  projectTitle: string
+  channelName: string
+  projectId: string
+  submitterName?: string | null
+}) {
+  const url = projectUrl(opts.projectId)
+  const subject = `[${opts.channelName}] Request resubmitted: ${opts.projectTitle}`
+  const text = `Hi ${opts.recipientName},
+
+The client resubmitted production request "${opts.projectTitle}"${opts.submitterName ? ` (${opts.submitterName})` : ''} after making updates.
+
+Review request: ${url}
+
+— LearnApp Studios`
+
+  const html = emailShell('Request resubmitted', `
+<p>Hi ${opts.recipientName},</p>
+<p>The client resubmitted <strong>${opts.projectTitle}</strong>${opts.submitterName ? ` (<strong>${opts.submitterName}</strong>)` : ''} after making updates.</p>
+${ctaButton(url, 'Review request')}
+`)
+
+  return { subject, text, html }
+}
+
 export function requestStatusInternalEmail(opts: {
   recipientName: string
   projectTitle: string

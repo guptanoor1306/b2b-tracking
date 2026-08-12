@@ -12,6 +12,7 @@ import { FINAL_STAGE } from '@/lib/constants'
 import {
   isDeclinedRequest,
   isPendingRequestReview,
+  isResubmittedRequest,
   ZERODHA_REQUEST_RECEIVED,
 } from '@/lib/zerodha-sla'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
@@ -73,7 +74,7 @@ export function ExternalDashboard({
   )
   const assignedItems = projects.filter(p => {
     if (p.current_stage === FINAL_STAGE) return false
-    if (isPendingRequestReview(p) || isDeclinedRequest(p)) return false
+    if (isPendingRequestReview(p) || isResubmittedRequest(p) || isDeclinedRequest(p)) return false
     if (p.stage_assignee_id === userId) return true
     if (isUserOnProjectTeam(p, userId) && p.current_stage !== ZERODHA_REQUEST_RECEIVED) return true
     return false

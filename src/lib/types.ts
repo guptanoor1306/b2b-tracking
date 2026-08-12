@@ -87,7 +87,7 @@ export type Project = {
   created_at: string
   updated_at: string
   last_status_update_at: string
-  request_status?: 'pending' | 'approved' | 'declined' | null
+  request_status?: 'pending' | 'approved' | 'declined' | 'resubmitted' | null
   agency?: Agency | null
   owner?: Profile | null
   graphic_designer?: Profile | null

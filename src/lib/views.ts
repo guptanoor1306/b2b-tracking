@@ -11,7 +11,19 @@ import {
   FINAL_STAGE,
   STAGE_PIPELINE,
 } from '@/lib/constants'
-import { isZerodhaChannelDbName, mapZerodhaInternalToExternalStage, ZERODHA_READY_TO_PRODUCE, hasIntakeMaterials, isDeclinedRequest, normalizeZerodhaBoardStage, ZERODHA_FIRST_CUT_REVIEW, ZERODHA_FIRST_DRAFT_REVIEW, ZERODHA_SECOND_DRAFT_REVIEW, ZERODHA_FIRST_DRAFT_QC, isZerodhaClientReviewStage } from '@/lib/zerodha-sla'
+import {
+  isZerodhaChannelDbName,
+  mapZerodhaInternalToExternalStage,
+  ZERODHA_READY_TO_PRODUCE,
+  hasIntakeMaterials,
+  isDeclinedRequest,
+  normalizeZerodhaBoardStage,
+  ZERODHA_FIRST_CUT_REVIEW,
+  ZERODHA_FIRST_DRAFT_REVIEW,
+  ZERODHA_SECOND_DRAFT_REVIEW,
+  ZERODHA_FIRST_DRAFT_QC,
+  isZerodhaClientReviewStage,
+} from '@/lib/zerodha-sla'
 import { Role, Project } from '@/lib/types'
 import { isUserOnProjectTeam } from '@/lib/projects/team'
 
@@ -267,6 +279,18 @@ export function canCreateExternalRequest(role: Role | string, channelDbName: str
 
 export function canReviewExternalRequest(role: Role | string, channelDbName: string | null | undefined): boolean {
   return isZerodhaChannelDbName(channelDbName) && isInternalRole(role)
+}
+
+/** External submitter may resubmit a declined Zerodha request after updating materials. */
+export function canResubmitDeclinedRequest(
+  role: Role | string,
+  project: Pick<Project, 'channel' | 'current_stage' | 'request_status' | 'external_team_member_id' | 'created_by'>,
+  userId: string,
+): boolean {
+  if (!isZerodhaChannelDbName(project.channel)) return false
+  if (!isDeclinedRequest(project)) return false
+  if (!isExternalRole(role) && !isExternalClientAdmin(role)) return false
+  return project.external_team_member_id === userId || project.created_by === userId
 }
 
 /** Only LearnApp internal team may move Zerodha requests to Ready to Produce. */

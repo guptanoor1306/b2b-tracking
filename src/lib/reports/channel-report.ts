@@ -229,7 +229,9 @@ export function buildChannelReport(input: {
     inRange(p.delivered_date, start, end),
   )
 
-  const requestsReceived = receivedInPeriod.filter(isRequestsReceived)
+  const requestsReceived = receivedInPeriod.filter(p =>
+    isRequestsReceived(p) || p.request_status === 'resubmitted',
+  )
   const requestsDeclined = receivedInPeriod.filter(isDeclinedRequest)
   const toBePicked = relevantVideos.filter(p =>
     isToBePicked(p)

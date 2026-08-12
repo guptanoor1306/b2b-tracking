@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { ClipboardList, ArrowRight } from 'lucide-react'
+import { isResubmittedRequest } from '@/lib/zerodha-sla'
 import { Project } from '@/lib/types'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { formatDate } from '@/lib/utils'
@@ -34,9 +35,16 @@ export function NewProjectsReceivedSection({ projects }: Props) {
               className="group flex items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 hover:border-amber-200 hover:shadow-sm transition-all"
             >
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-zinc-900 truncate group-hover:text-violet-700">
-                  {p.title}
-                </p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <p className="text-sm font-semibold text-zinc-900 truncate group-hover:text-violet-700">
+                    {p.title}
+                  </p>
+                  {isResubmittedRequest(p) && (
+                    <span className="shrink-0 rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-800">
+                      Resubmitted
+                    </span>
+                  )}
+                </div>
                 <p className="mt-0.5 text-[11px] text-zinc-500">
                   Received {p.received_date ? formatDate(p.received_date, 'dd MMM yyyy') : '—'}
                   {p.target_delivery_date && (

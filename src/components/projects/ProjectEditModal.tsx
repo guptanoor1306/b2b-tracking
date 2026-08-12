@@ -1,25 +1,22 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Project, Profile } from '@/lib/types'
-import { CONTENT_TYPES, PRIORITIES, FIRST_CUT_STAGE } from '@/lib/constants'
-import { needsTeleprompterPrompt } from '@/components/projects/StageChangeModal'
+import { ChevronDown, ChevronUp } from 'lucide-react'
+import { Project, Profile, Priority } from '@/lib/types'
+import { CONTENT_TYPES, PRIORITIES } from '@/lib/constants'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
-import { Textarea } from '@/components/ui/Textarea'
 import { Button } from '@/components/ui/Button'
 import { SlideOver, SlideOverSection } from '@/components/ui/SlideOver'
 import { UserSearchSelect } from '@/components/ui/UserSearchSelect'
-import { updateProject, changeProjectStage } from '@/lib/actions/projects'
+import { updateProject } from '@/lib/actions/projects'
 import { useActiveChannel } from '@/context/ChannelContext'
 import {
   isZerodhaChannelDbName,
   isZerodhaChannelSlug,
-  internalStagesForChannel,
   projectLevelOptions,
   VIDEO_LANGUAGES,
-  channelUsesTeleprompterFlow,
 } from '@/lib/zerodha-sla'
 
 type Props = {
@@ -27,24 +24,16 @@ type Props = {
   onClose: () => void
   project: Project
   users: Profile[]
-  holidays?: string[]
 }
 
-export function ProjectEditModal({ open, onClose, project, users, holidays = [] }: Props) {
-  const router = useRouter()
-  const channel = useActiveChannel()
-  const isZerodha = isZerodhaChannelSlug(channel?.slug)
-    || isZerodhaChannelDbName(channel?.dbName)
-    || isZerodhaChannelDbName(project.channel)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [form, setForm] = useState({
+function buildForm(project: Project) {
+  return {
     title: project.title,
-    ip: project.ip === '—' ? '' : project.ip,
+    ip: project.ip === '—' || project.ip === 'TBD' ? '' : project.ip,
     content_type: project.content_type,
     video_language: project.video_language ?? '',
     level_of_video: project.level_of_video ?? '',
-    priority: project.priority,
+    priority: project.priority ?? '',
     editor_id: project.editor_id ?? '',
     editor_2_id: project.editor_2_id ?? '',
     designer_id: project.designer_id ?? project.graphic_designer_id ?? '',
@@ -53,37 +42,38 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
     writer_id: project.writer_id ?? '',
     external_team_member_id: project.external_team_member_id ?? '',
     qc_reviewer_id: project.qc_reviewer_id ?? '',
-    uses_teleprompter: project.uses_teleprompter === true ? 'yes' : project.uses_teleprompter === false ? 'no' : '',
-    thumbnail_copy: project.thumbnail_copy ?? '',
-    title_copy: project.title_copy ?? '',
-    drive_link: project.drive_link ?? '',
     assets_link: project.assets_link ?? '',
-    current_stage: project.current_stage,
-    received_date: project.received_date ?? '',
-    target_delivery_date: project.target_delivery_date ?? '',
-    notes: project.notes ?? '',
-  })
+  }
+}
+
+export function ProjectEditModal({ open, onClose, project, users }: Props) {
+  const router = useRouter()
+  const channel = useActiveChannel()
+  const isZerodha = isZerodhaChannelSlug(channel?.slug)
+    || isZerodhaChannelDbName(channel?.dbName)
+    || isZerodhaChannelDbName(project.channel)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [editClientDetails, setEditClientDetails] = useState(false)
+  const [form, setForm] = useState(() => buildForm(project))
+
+  useEffect(() => {
+    if (open) {
+      setForm(buildForm(project))
+      setEditClientDetails(false)
+      setError('')
+    }
+  }, [open, project])
 
   const levelOptions = useMemo(
     () => projectLevelOptions(project.channel ?? channel?.dbName, form.video_language || null),
     [project.channel, channel?.dbName, form.video_language],
   )
 
-  const stageOptions = useMemo(
-    () => internalStagesForChannel(project.channel ?? channel?.dbName),
-    [project.channel, channel?.dbName],
-  )
-
-  const teamCtx = {
-    level_of_video: form.level_of_video || null,
-    video_language: form.video_language || null,
-    channel: project.channel,
-    editor_id: form.editor_id || null,
-    editor_2_id: form.editor_2_id || null,
-    designer_id: form.designer_id || null,
-    designer_2_id: form.designer_2_id || null,
-    uses_teleprompter: form.uses_teleprompter === 'yes' ? true : form.uses_teleprompter === 'no' ? false : null,
-  }
+  const clientSummary = [
+    form.content_type,
+    isZerodha && form.video_language ? form.video_language : null,
+  ].filter(Boolean).join(' · ')
 
   const set = (k: string, v: string) => setForm(f => {
     const next = { ...f, [k]: v }
@@ -96,39 +86,17 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
     return next
   })
 
-  const stageChangingToFirstCut = needsTeleprompterPrompt(
-    project.current_stage,
-    form.current_stage,
-    project.channel ?? channel?.dbName,
-  )
-
   const handleSave = async () => {
-    if (stageChangingToFirstCut && !form.uses_teleprompter) return
     setLoading(true)
     setError('')
 
-    if (form.current_stage !== project.current_stage) {
-      const stageResult = await changeProjectStage(
-        project.id,
-        form.current_stage,
-        undefined,
-        undefined,
-        stageChangingToFirstCut ? form.uses_teleprompter === 'yes' : undefined
-      )
-      if (stageResult.error) {
-        setError(stageResult.error)
-        setLoading(false)
-        return
-      }
-    }
-
     const result = await updateProject(project.id, {
       title: form.title.trim() || 'Untitled project',
-      ip: form.ip.trim() || '—',
+      ip: form.ip.trim() || 'TBD',
       content_type: form.content_type || CONTENT_TYPES[0],
       ...(form.video_language ? { video_language: form.video_language } : {}),
       ...(form.level_of_video ? { level_of_video: form.level_of_video } : {}),
-      priority: form.priority,
+      ...(form.priority ? { priority: form.priority as Priority } : {}),
       editor_id: form.editor_id || null,
       editor_2_id: form.editor_2_id || null,
       designer_id: form.designer_id || null,
@@ -137,15 +105,7 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
       writer_id: form.writer_id || null,
       external_team_member_id: form.external_team_member_id || null,
       ...(isZerodha ? { qc_reviewer_id: form.qc_reviewer_id || null } : {}),
-      uses_teleprompter: form.uses_teleprompter === 'yes' ? true : form.uses_teleprompter === 'no' ? false : null,
-      thumbnail_copy: form.thumbnail_copy || null,
-      title_copy: form.title_copy || null,
-      drive_link: form.drive_link || null,
       assets_link: form.assets_link || null,
-      received_date: form.received_date || null,
-      picked_up_date: form.received_date || null,
-      ...(isZerodha ? { target_delivery_date: form.target_delivery_date || null } : {}),
-      notes: form.notes || null,
     })
     setLoading(false)
     if (result.error) {
@@ -162,47 +122,84 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
       onClose={onClose}
       title="Edit project"
       subtitle={project.title}
-      width="xl"
+      width="lg"
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button loading={loading} onClick={handleSave} disabled={stageChangingToFirstCut && !form.uses_teleprompter}>
-            Save changes
-          </Button>
+          <Button loading={loading} onClick={handleSave}>Save changes</Button>
         </div>
       }
     >
       {error && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        <p className="mb-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       )}
-      <div className="space-y-8">
-        <SlideOverSection title="Basics">
-          <Input label="Project name" value={form.title} onChange={e => set('title', e.target.value)} />
-          <Input label="IP" placeholder="Enter IP" value={form.ip} onChange={e => set('ip', e.target.value)} />
-          <div className="grid grid-cols-2 gap-3">
-            <Select label="Type" placeholder="Select type" options={CONTENT_TYPES.map(t => ({ value: t, label: t }))} value={form.content_type} onChange={e => set('content_type', e.target.value)} />
-            {isZerodha ? (
-              <>
-                <Select
-                  label="Language"
-                  placeholder="Select language"
-                  options={VIDEO_LANGUAGES.map(l => ({ value: l, label: l }))}
-                  value={form.video_language}
-                  onChange={e => set('video_language', e.target.value)}
-                />
-                <Select
-                  label="Level"
-                  placeholder={form.video_language ? 'Select level' : 'Select language first'}
-                  options={levelOptions}
-                  value={form.level_of_video}
-                  onChange={e => set('level_of_video', e.target.value)}
-                />
-              </>
-            ) : (
-              <Select label="Level" placeholder="Select level" options={levelOptions} value={form.level_of_video} onChange={e => set('level_of_video', e.target.value)} />
+      <div className="space-y-7">
+        <SlideOverSection title="Client request">
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 px-4 py-3.5">
+            <p className="text-sm font-semibold text-zinc-900">{form.title || 'Untitled project'}</p>
+            {clientSummary && (
+              <p className="mt-1 text-xs text-zinc-600">{clientSummary}</p>
+            )}
+            <button
+              type="button"
+              onClick={() => setEditClientDetails(v => !v)}
+              className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-700"
+            >
+              {editClientDetails ? 'Hide client details' : 'Change client details'}
+              {editClientDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {editClientDetails && (
+              <div className="mt-3 space-y-3 border-t border-zinc-200/80 pt-3">
+                <Input label="Project name" value={form.title} onChange={e => set('title', e.target.value)} />
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Select
+                    label="Type"
+                    placeholder="Select type"
+                    options={CONTENT_TYPES.map(t => ({ value: t, label: t }))}
+                    value={form.content_type}
+                    onChange={e => set('content_type', e.target.value)}
+                  />
+                  {isZerodha && (
+                    <Select
+                      label="Language"
+                      placeholder="Select language"
+                      options={VIDEO_LANGUAGES.map(l => ({ value: l, label: l }))}
+                      value={form.video_language}
+                      onChange={e => set('video_language', e.target.value)}
+                    />
+                  )}
+                </div>
+              </div>
             )}
           </div>
-          <Select label="Priority" options={PRIORITIES.map(p => ({ value: p, label: p }))} value={form.priority} onChange={e => set('priority', e.target.value)} />
+        </SlideOverSection>
+
+        <SlideOverSection title="Production setup">
+          <Input
+            label="IP"
+            placeholder="Enter IP"
+            value={form.ip}
+            onChange={e => set('ip', e.target.value)}
+          />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Select
+              label="Level"
+              placeholder={isZerodha && !form.video_language ? 'Select language first' : 'Select level'}
+              options={levelOptions}
+              value={form.level_of_video}
+              onChange={e => set('level_of_video', e.target.value)}
+            />
+            <Select
+              label="Priority (optional)"
+              placeholder="Not set"
+              options={[
+                { value: '', label: 'Not set' },
+                ...PRIORITIES.map(p => ({ value: p, label: p })),
+              ]}
+              value={form.priority}
+              onChange={e => set('priority', e.target.value)}
+            />
+          </div>
         </SlideOverSection>
 
         <SlideOverSection title="Team">
@@ -225,34 +222,13 @@ export function ProjectEditModal({ open, onClose, project, users, holidays = [] 
           </div>
         </SlideOverSection>
 
-        <SlideOverSection title="Stage & dates">
-          <Select label="Current stage" options={stageOptions.map(s => ({ value: s, label: s }))} value={form.current_stage} onChange={e => set('current_stage', e.target.value)} />
-
-          {(stageChangingToFirstCut || form.current_stage === FIRST_CUT_STAGE) && channelUsesTeleprompterFlow(project.channel ?? channel?.dbName) && (
-            <div>
-              <p className="mb-2 text-sm font-medium text-zinc-700">Is Teleprompter Used</p>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => set('uses_teleprompter', 'yes')} className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${form.uses_teleprompter === 'yes' ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'}`}>Yes</button>
-                <button type="button" onClick={() => set('uses_teleprompter', 'no')} className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${form.uses_teleprompter === 'no' ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'}`}>No</button>
-              </div>
-            </div>
-          )}
-
-          <Input label="Start date" type="date" value={form.received_date} onChange={e => set('received_date', e.target.value)} />
-          {isZerodha && (
-            <Input label="Release date" type="date" value={form.target_delivery_date} onChange={e => set('target_delivery_date', e.target.value)} />
-          )}
-        </SlideOverSection>
-
-        <SlideOverSection title="Links & copy">
-          <Input label="Thumbnail text" value={form.thumbnail_copy} onChange={e => set('thumbnail_copy', e.target.value)} />
-          <Input label="Title copy" value={form.title_copy} onChange={e => set('title_copy', e.target.value)} />
-          <Input label="Review link" value={form.assets_link} onChange={e => set('assets_link', e.target.value)} />
-          <Input label="Drive / video link" value={form.drive_link} onChange={e => set('drive_link', e.target.value)} />
-        </SlideOverSection>
-
-        <SlideOverSection title="Notes">
-          <Textarea label="Internal notes" value={form.notes} onChange={e => set('notes', e.target.value)} />
+        <SlideOverSection title="Review link">
+          <Input
+            label="Review link"
+            placeholder="https://..."
+            value={form.assets_link}
+            onChange={e => set('assets_link', e.target.value)}
+          />
         </SlideOverSection>
       </div>
     </SlideOver>
