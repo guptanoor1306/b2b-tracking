@@ -8,7 +8,7 @@ import {
 import { CheckCircle2 } from 'lucide-react'
 import { StageHistory, HoldPeriod, Project } from '@/lib/types'
 import { computeStageDurations, formatDuration, daysInStage, stageHistoryEntries } from '@/lib/utils'
-import { businessHoursBetweenExcluding, splitBusinessHours } from '@/lib/businessTime'
+import { businessHoursBetween, businessHoursBetweenExcluding, splitBusinessHours } from '@/lib/businessTime'
 import {
   effectiveStageStartIso,
   shouldShowParallelAnimationRow,
@@ -28,7 +28,7 @@ const ROW_MIN_H = 56
 
 type Props = {
   history: StageHistory[]
-  project: Pick<Project, 'level_of_video' | 'video_language' | 'channel' | 'editor_id' | 'editor_2_id' | 'designer_id' | 'designer_2_id' | 'uses_teleprompter' | 'is_on_hold' | 'current_stage' | 'delivered_date'>
+  project: Pick<Project, 'level_of_video' | 'video_language' | 'channel' | 'editor_id' | 'editor_2_id' | 'designer_id' | 'designer_2_id' | 'uses_teleprompter' | 'is_on_hold' | 'on_hold_since' | 'current_stage' | 'delivered_date'>
   holdPeriods?: HoldPeriod[]
   currentStage?: string
   projectId: string
@@ -151,10 +151,77 @@ function computeBarSegments(
   return segments.filter(s => s.end > s.start)
 }
 
+function resolveEffectiveHoldPeriods(
+  holdPeriods: HoldPeriod[],
+  history: StageHistory[],
+  project: Pick<Project, 'is_on_hold' | 'on_hold_since'>,
+): HoldPeriod[] {
+  if (holdPeriods.length > 0) return holdPeriods
+
+  const synthetic: HoldPeriod[] = []
+  const holdEvents = [...history]
+    .filter(h => h.is_hold_event)
+    .sort((a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime())
+
+  let openStart: string | null = null
+  for (const ev of holdEvents) {
+    const isResume = /resum/i.test(ev.note ?? '')
+    if (!isResume) {
+      openStart = ev.changed_at
+    } else if (openStart) {
+      synthetic.push({
+        id: `hist-${openStart}`,
+        project_id: '',
+        started_at: openStart,
+        ended_at: ev.changed_at,
+        started_by: null,
+        ended_by: null,
+        note: null,
+      })
+      openStart = null
+    }
+  }
+
+  if (openStart) {
+    synthetic.push({
+      id: 'hist-open',
+      project_id: '',
+      started_at: openStart,
+      ended_at: null,
+      started_by: null,
+      ended_by: null,
+      note: null,
+    })
+  } else if (project.is_on_hold && project.on_hold_since) {
+    synthetic.push({
+      id: 'flag-open',
+      project_id: '',
+      started_at: project.on_hold_since,
+      ended_at: null,
+      started_by: null,
+      ended_by: null,
+      note: null,
+    })
+  }
+
+  return synthetic
+}
+
 function segmentWidthPct(segStart: Date, segEnd: Date, barStart: Date, barEnd: Date): number {
   const total = barEnd.getTime() - barStart.getTime()
   if (total <= 0) return 100
   return ((segEnd.getTime() - segStart.getTime()) / total) * 100
+}
+
+function segmentDurationLabel(
+  seg: { type: 'active' | 'hold'; start: Date; end: Date },
+  holidays: string[],
+): string {
+  const hours = seg.type === 'hold'
+    ? businessHoursBetween(seg.start, seg.end, holidays)
+    : businessHoursBetweenExcluding(seg.start, seg.end, holidays, [])
+  const { days, hours: rem } = splitBusinessHours(hours)
+  return formatDuration(days, rem)
 }
 
 function GanttBar({
@@ -163,6 +230,7 @@ function GanttBar({
   rangeStart,
   totalDays,
   holdPeriods,
+  holidays,
   onSaveStart,
   onSaveEnd,
 }: {
@@ -171,6 +239,7 @@ function GanttBar({
   rangeStart: Date
   totalDays: number
   holdPeriods: HoldPeriod[]
+  holidays: string[]
   onSaveStart: (dateStr: string) => void
   onSaveEnd: (dateStr: string) => void
 }) {
@@ -198,9 +267,10 @@ function GanttBar({
 
   const segments = computeBarSegments(displayStart, displayEnd, holdPeriods)
   const hasHoldGap = segments.some(s => s.type === 'hold')
+  const showBarCenterLabel = !hasHoldGap
 
   const startDrag = (mode: DragMode, clientX: number) => {
-    if (!canEdit || !trackRef.current) return
+    if (!canEdit || !trackRef.current || hasHoldGap) return
 
     const track = trackRef.current
     const origStart = row.start
@@ -263,61 +333,76 @@ function GanttBar({
         className={cn(
           'absolute top-1/2 flex h-9 min-w-[48px] -translate-y-1/2 items-center overflow-hidden rounded-md bg-white shadow-sm',
           borderClass,
-          canEdit && 'select-none',
-          row.isCurrent && !row.overSla && 'ring-1 ring-violet-200'
+          canEdit && !hasHoldGap && 'select-none',
+          row.isCurrent && !row.overSla && 'ring-1 ring-violet-200',
         )}
         style={{ left: `${leftPct}%`, width: `${Math.max(widthPct, 2)}%` }}
         title={`${format(displayStart, 'dd MMM')} – ${format(displayEnd, 'dd MMM')} · ${row.durationLabel} · ${statusLabel}${hasHoldGap ? ' · includes hold' : ''}`}
       >
         <div className="absolute inset-0 flex overflow-hidden rounded-[3px]">
-          {segments.map((seg, si) => (
-            <div
-              key={si}
-              className={cn(
-                'h-full shrink-0',
-                seg.type === 'hold'
-                  ? 'bg-zinc-300/70 border-x border-zinc-400/40'
-                  : 'bg-white'
-              )}
-              style={{ width: `${segmentWidthPct(seg.start, seg.end, displayStart, displayEnd)}%` }}
-              title={seg.type === 'hold' ? 'On hold' : undefined}
-            />
-          ))}
+          {segments.map((seg, si) => {
+            const wPct = segmentWidthPct(seg.start, seg.end, displayStart, displayEnd)
+            const segLabel = segmentDurationLabel(seg, holidays)
+            return (
+              <div
+                key={si}
+                className={cn(
+                  'relative flex h-full shrink-0 items-center justify-center overflow-hidden',
+                  seg.type === 'hold'
+                    ? 'bg-zinc-300/70 border-x border-zinc-400/40'
+                    : 'bg-white',
+                )}
+                style={{ width: `${wPct}%` }}
+                title={seg.type === 'hold' ? `On hold · ${segLabel}` : segLabel}
+              >
+                {hasHoldGap && wPct >= 6 && (
+                  <span className={cn(
+                    'truncate px-0.5 text-[8px] font-semibold leading-tight',
+                    seg.type === 'hold' ? 'text-zinc-600' : row.overSla ? 'text-red-600' : 'text-zinc-600',
+                  )}>
+                    {segLabel}
+                  </span>
+                )}
+              </div>
+            )
+          })}
         </div>
 
-        {canEdit && (
+        {canEdit && !hasHoldGap && (
           <div
             className="absolute inset-y-0 left-0 z-10 w-2 cursor-ew-resize rounded-l-md hover:bg-zinc-200/60"
             onMouseDown={e => { e.preventDefault(); e.stopPropagation(); startDrag('resize-start', e.clientX) }}
           />
         )}
 
-        <div
-          className={cn(
-            'relative z-[1] flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2',
-            canEdit && 'cursor-grab active:cursor-grabbing'
-          )}
-          onMouseDown={e => {
-            if (!canEdit) return
-            e.preventDefault()
-            startDrag('move', e.clientX)
-          }}
-        >
-          <span className={cn(
-            'shrink-0 text-[10px] tabular-nums',
-            row.overSla ? 'font-semibold text-red-600' : 'text-zinc-600'
-          )}>
-            {row.durationLabel}
-          </span>
-          <span className={cn(
-            'shrink-0 text-[9px] font-bold uppercase tracking-wide',
-            row.overSla ? 'text-red-600' : row.isCurrent ? 'text-violet-600' : 'text-emerald-600'
-          )}>
-            {statusLabel}
-          </span>
-        </div>
+        {showBarCenterLabel && (
+          <div
+            className={cn(
+              'relative z-[1] flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2',
+              canEdit && 'cursor-grab active:cursor-grabbing',
+            )}
+            onMouseDown={e => {
+              if (!canEdit) return
+              e.preventDefault()
+              startDrag('move', e.clientX)
+            }}
+          >
+            <span className={cn(
+              'shrink-0 text-[10px] tabular-nums',
+              row.overSla ? 'font-semibold text-red-600' : 'text-zinc-600',
+            )}>
+              {row.durationLabel}
+            </span>
+            <span className={cn(
+              'shrink-0 text-[9px] font-bold uppercase tracking-wide',
+              row.overSla ? 'text-red-600' : row.isCurrent ? 'text-violet-600' : 'text-emerald-600',
+            )}>
+              {statusLabel}
+            </span>
+          </div>
+        )}
 
-        {canEdit && row.endEntryId && (
+        {canEdit && row.endEntryId && !hasHoldGap && (
           <div
             className="absolute inset-y-0 right-0 z-10 w-2 cursor-ew-resize rounded-r-md hover:bg-zinc-200/60"
             onMouseDown={e => { e.preventDefault(); e.stopPropagation(); startDrag('resize-end', e.clientX) }}
@@ -385,7 +470,12 @@ export function StagePipelineGantt({
 
   const stageEntries = useMemo(() => stageHistoryEntries(history), [history])
 
-  const durations = computeStageDurations(history, holidays, holdPeriods)
+  const effectiveHoldPeriods = useMemo(
+    () => resolveEffectiveHoldPeriods(holdPeriods, history, project),
+    [holdPeriods, history, project],
+  )
+
+  const durations = computeStageDurations(history, holidays, effectiveHoldPeriods)
 
   const stageAssigneeMap = useMemo(() => {
     const map = new Map<string, { name: string; id?: string }>()
@@ -420,7 +510,7 @@ export function StagePipelineGantt({
         !atFinalDelivery
         && normalizeStage(entry.new_stage) === normalizeStage(currentStage ?? '')
         && !next
-      const overSla = isStageDurationOverSla(stage, d.startedAt, endIso, holidays, project.level_of_video, project, holdPeriods, timelineLocked)
+      const overSla = isStageDurationOverSla(stage, d.startedAt, endIso, holidays, project.level_of_video, project, effectiveHoldPeriods, timelineLocked)
 
       let durationLabel = formatDuration(d.days, d.hours)
       if (isFinalStageRow && atFinalDelivery && !next) {
@@ -458,7 +548,7 @@ export function StagePipelineGantt({
         if (parallelStart && anchorEntry) {
           const animStartIso = resolveDate(anchorEntry.id, parallelStart)
           const animEndIso = new Date().toISOString()
-          const exclude = holdPeriods.map(p => ({
+          const exclude = effectiveHoldPeriods.map(p => ({
             start: parseISO(p.started_at),
             end: p.ended_at ? parseISO(p.ended_at) : new Date(),
           }))
@@ -487,7 +577,7 @@ export function StagePipelineGantt({
               holidays,
               project.level_of_video,
               project,
-              holdPeriods,
+              effectiveHoldPeriods,
               timelineLocked
             ),
             assigneeInfo: stageAssigneeMap.get(ANIMATION_VD_STAGE) ?? null,
@@ -563,7 +653,7 @@ export function StagePipelineGantt({
       ticks: axisTicks(days),
       totalDays,
     }
-  }, [stageEntries, durations, resolveDate, currentStage, currentAssignee, currentAssigneeId, stageAssigneeMap, holidays, project, holdPeriods, externalView, timelineLocked])
+  }, [stageEntries, durations, resolveDate, currentStage, currentAssignee, currentAssigneeId, stageAssigneeMap, holidays, project, effectiveHoldPeriods, externalView, timelineLocked])
 
   const latestHistory = stageEntries[stageEntries.length - 1]
   const currentStageDays = daysInStage(latestHistory?.changed_at)
@@ -678,7 +768,8 @@ export function StagePipelineGantt({
               canEdit={canEdit}
               rangeStart={rangeStart}
               totalDays={totalDays}
-              holdPeriods={holdPeriods}
+              holdPeriods={effectiveHoldPeriods}
+              holidays={holidays}
               onSaveStart={d => saveDate(row.entryId, d)}
               onSaveEnd={d => row.endEntryId && saveDate(row.endEntryId, d)}
             />
@@ -702,7 +793,7 @@ export function StagePipelineGantt({
             <span className="h-4 w-0.5 bg-violet-600" /> Today
           </span>
           {canEdit && <span className="text-zinc-400">Drag bar to move · edges to resize</span>}
-          {holdPeriods.length > 0 && (
+          {effectiveHoldPeriods.length > 0 && (
             <span className="inline-flex items-center gap-1.5">
               <span className="h-4 w-6 rounded bg-zinc-400/30 border border-zinc-400/50" /> Hold
             </span>

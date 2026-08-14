@@ -3,6 +3,7 @@ import { FINAL_STAGE, STAGES_INTERNAL } from '@/lib/constants'
 import {
   addBusinessHours,
   businessDaysLate,
+  businessDaysLateExcluding,
   businessHoursBetween,
   businessHoursBetweenExcluding,
   isBusinessDay,
@@ -297,7 +298,9 @@ export function getProjectTimeliness(
     : 0
   const sla = slaMap[stage] ?? null
   const stageOverHours = sla != null ? Math.max(0, hoursInStage - sla) : 0
-  const overallLateDays = targetReleaseDate ? businessDaysLate(targetReleaseDate, holidays) : 0
+  const overallLateDays = targetReleaseDate
+    ? businessDaysLateExcluding(targetReleaseDate, holidays, holdPeriods)
+    : 0
   const delayed = stageOverHours > 0 || overallLateDays > 0
 
   let label: string
@@ -329,14 +332,21 @@ export function computeProjectHealth(
     last_status_update_at: string
     is_on_hold?: boolean
     level_of_video?: string | null
+    channel?: string | null
+    editor_id?: string | null
+    editor_2_id?: string | null
+    designer_id?: string | null
+    designer_2_id?: string | null
+    uses_teleprompter?: boolean | null
   },
-  holidays: string[] = []
+  holidays: string[] = [],
+  holdPeriods: HoldPeriod[] = [],
 ): string {
   if (project.is_on_hold) return 'On hold'
   const stage = normalizeStage(project.current_stage)
   if (stage === FINAL_STAGE) return 'Delivered'
 
-  const { status } = getProjectTimeliness(project, holidays)
+  const { status } = getProjectTimeliness(project, holidays, holdPeriods)
   if (status === 'delayed') return 'Delayed'
 
   const target = resolveTargetReleaseDate(project, holidays)

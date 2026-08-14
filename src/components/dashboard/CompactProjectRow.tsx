@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/Badge'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { HEALTH_PILL_V2 } from '@/lib/design/theme-v2'
 import { isPendingRequestReview } from '@/lib/zerodha-sla'
-import { AssigneeContext, DisplayProfile, getProjectDisplayAssignee } from '@/lib/projects/display-assignee'
+import { AssigneeContext, DisplayProfile, getProjectDisplayAssignee, getProjectDeliveredAssignees } from '@/lib/projects/display-assignee'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +23,9 @@ export function CompactProjectRow({
   const pendingReview = isPendingRequestReview(project)
   const pill = pendingReview ? null : HEALTH_PILL_V2[project.status_health]
   const displayAssignee = pendingReview ? null : getProjectDisplayAssignee(project, assigneeContext, holdStarter)
+  const deliveredAssignees = assigneeContext === 'delivered'
+    ? getProjectDeliveredAssignees(project)
+    : []
   const stageText = stageLabel ?? project.current_stage
 
   return (
@@ -58,7 +61,21 @@ export function CompactProjectRow({
           <Badge label={project.status_health} variant="health" className="shrink-0" />
         </>
       )}
-      {light && displayAssignee && (
+      {(light && deliveredAssignees.length > 0) && (
+        <div className="flex -space-x-1.5 shrink-0">
+          {deliveredAssignees.map(a => (
+            <AssigneeAvatar
+              key={a.id}
+              name={a.name}
+              id={a.id}
+              size="sm"
+              theme="light"
+              className="ring-2 ring-white"
+            />
+          ))}
+        </div>
+      )}
+      {light && assigneeContext !== 'delivered' && displayAssignee && (
         <AssigneeAvatar
           name={displayAssignee.name}
           id={displayAssignee.id}

@@ -331,3 +331,31 @@ export function zerodhaStageSlaHoursMap(
 export function isZerodhaStage(stage: string): boolean {
   return (STAGES_ZERODHA_INTERNAL as readonly string[]).includes(stage)
 }
+
+function zerodhaPipelineIndex(stage: string): number {
+  const normalized = normalizeZerodhaBoardStage(stage)
+  return (STAGES_ZERODHA_INTERNAL as readonly string[]).indexOf(normalized)
+}
+
+/** Client-side + server-side guard for Kanban stage moves that bypass Draft QC. */
+export function getZerodhaQcStageMoveError(currentStage: string, newStage: string): string | null {
+  const cur = normalizeZerodhaBoardStage(currentStage)
+  const next = normalizeZerodhaBoardStage(newStage)
+  if (cur === next) return null
+
+  const qcIdx = zerodhaPipelineIndex(ZERODHA_FIRST_DRAFT_QC)
+  const postQcIdx = zerodhaPipelineIndex(ZERODHA_FIRST_DRAFT_REVIEW)
+  const curIdx = zerodhaPipelineIndex(cur)
+  const newIdx = zerodhaPipelineIndex(next)
+  if (qcIdx < 0 || postQcIdx < 0 || curIdx < 0 || newIdx < 0) return null
+
+  if (cur === ZERODHA_FIRST_DRAFT_QC) {
+    return 'Complete Draft QC on the project page to approve or send back.'
+  }
+
+  if (curIdx < postQcIdx && newIdx >= postQcIdx) {
+    return 'Project must complete Draft QC before moving to client review stages.'
+  }
+
+  return null
+}

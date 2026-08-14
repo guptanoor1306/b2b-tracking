@@ -115,6 +115,25 @@ export async function fetchProjectHoldPeriods(projectId: string) {
   return data ?? []
 }
 
+export async function fetchHoldPeriodsForProjects(projectIds: string[]) {
+  if (!projectIds.length) return {} as Record<string, Awaited<ReturnType<typeof fetchProjectHoldPeriods>>>
+
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('project_hold_periods')
+    .select('*')
+    .in('project_id', projectIds)
+    .order('started_at')
+
+  const map: Record<string, NonNullable<typeof data>> = {}
+  for (const row of data ?? []) {
+    const id = row.project_id as string
+    if (!map[id]) map[id] = []
+    map[id].push(row)
+  }
+  return map
+}
+
 export async function fetchOpenHoldStarters(): Promise<Record<string, Pick<Profile, 'id' | 'name' | 'email'>>> {
   const supabase = await createClient()
   const { data } = await supabase

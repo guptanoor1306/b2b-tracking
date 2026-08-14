@@ -4,7 +4,7 @@ import { getActiveChannelRole, getActiveChannelDbName } from '@/lib/channel-cont
 import { fetchProjects } from '@/lib/data/projects'
 import { fetchRecentComments } from '@/lib/data/comments'
 import { fetchHolidayDates } from '@/lib/data/holidays'
-import { fetchStageSlaConfig, fetchOpenHoldStarters } from '@/lib/data/stage-sla'
+import { fetchStageSlaConfig, fetchOpenHoldStarters, fetchHoldPeriodsForProjects } from '@/lib/data/stage-sla'
 import { setStageSlaCache } from '@/lib/timelines'
 import { AdminDashboard } from '@/components/dashboard/AdminDashboard'
 import { ExternalDashboard } from '@/components/dashboard/ExternalDashboard'
@@ -33,11 +33,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   if (!profile) redirect('/login')
 
   const channelName = await getActiveChannelDbName()
-  const [projects, holidays, stageSla, holdStarters] = await Promise.all([
-    fetchProjects(),
+  const projects = await fetchProjects()
+  const [holidays, stageSla, holdStarters, holdPeriodsByProjectId] = await Promise.all([
     fetchHolidayDates(),
     fetchStageSlaConfig(channelName),
     fetchOpenHoldStarters(),
+    fetchHoldPeriodsForProjects(projects.map(p => p.id)),
   ])
   setStageSlaCache(stageSla, channelName)
 
@@ -124,6 +125,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       allInPipeline={inPipeline}
       holidays={holidays}
       holdStarters={holdStarters}
+      holdPeriodsByProjectId={holdPeriodsByProjectId}
       externalView={usesExternalAdminDashboard(effectiveRole)}
       channelDbName={channelName}
       workspaceLabel={usesExternalAdminDashboard(effectiveRole) ? 'Client production overview' : undefined}

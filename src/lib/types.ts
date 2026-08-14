@@ -99,6 +99,7 @@ export type Project = {
   sound_designer?: Profile | null
   writer?: Profile | null
   external_team_member?: Profile | null
+  creator?: Profile | null
   qc_reviewer?: Profile | null
   updater?: Profile | null
 }

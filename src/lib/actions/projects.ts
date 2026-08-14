@@ -40,7 +40,8 @@ import { resolveZerodhaStageAssigneeId, defaultQcReviewerId } from '@/lib/action
 import { getActiveChannelSlug } from '@/lib/channel-context'
 import { minReleaseDateFromRequest } from '@/lib/businessTime'
 import { CONTENT_TYPES } from '@/lib/constants'
-import { ZERODHA_FIRST_DRAFT_QC, normalizeZerodhaBoardStage } from '@/lib/zerodha-sla'
+import { ZERODHA_FIRST_DRAFT_QC, normalizeZerodhaBoardStage, getZerodhaQcStageMoveError } from '@/lib/zerodha-sla'
+import { fetchProjectHoldPeriods } from '@/lib/data/stage-sla'
 
 async function getSessionEffectiveRole() {
   const profile = await getSessionProfile()
@@ -577,6 +578,12 @@ export async function changeProjectStage(
     return { error: 'Ready to Produce can only be marked by LearnApp.' }
   }
 
+  if (isZerodhaChannelDbName(project.channel)) {
+    const qcError = getZerodhaQcStageMoveError(project.current_stage, newStage)
+    if (qcError) return { error: qcError }
+  }
+
+  const holdPeriods = await fetchProjectHoldPeriods(projectId)
   const channelSlug = await getActiveChannelSlug()
   const status_health = computeProjectHealth({
     current_stage: newStage,
@@ -585,7 +592,13 @@ export async function changeProjectStage(
     last_status_update_at: new Date().toISOString(),
     is_on_hold: project.is_on_hold,
     level_of_video: project.level_of_video,
-  }, holidays)
+    channel: project.channel,
+    editor_id: project.editor_id,
+    editor_2_id: project.editor_2_id,
+    designer_id: project.designer_id,
+    designer_2_id: project.designer_2_id,
+    uses_teleprompter: project.uses_teleprompter,
+  }, holidays, holdPeriods)
   let projectForAssignee = project as Project
   const updates: Record<string, unknown> = {
     current_stage: newStage,
@@ -930,13 +943,14 @@ export async function toggleProjectHold(projectId: string, note?: string) {
       }).eq('id', openHold.id)
     }
 
+    const holdPeriods = await fetchProjectHoldPeriods(projectId)
     await supabase.from('projects').update({
       is_on_hold: false,
       on_hold_since: null,
       status_health: computeProjectHealth({
         ...project,
         is_on_hold: false,
-      }, holidays),
+      }, holidays, holdPeriods),
       updated_by: profile.id,
     }).eq('id', projectId)
 

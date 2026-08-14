@@ -8,14 +8,16 @@ import {
   useDraggable, useDroppable, rectIntersection,
   type CollisionDetection,
 } from '@dnd-kit/core'
-import { Project, Profile } from '@/lib/types'
+import { Project, Profile, HoldPeriod } from '@/lib/types'
 import { cn, formatDate } from '@/lib/utils'
 import { changeProjectStage } from '@/lib/actions/projects'
 import { StageChangeModal, needsTeleprompterPrompt } from '@/components/projects/StageChangeModal'
 import { GripVertical, Clock, Layers, AlertTriangle, Pause } from 'lucide-react'
 import { getBoardDisplayStage, resolveStageAssigneeId } from '@/lib/views'
+import { getProjectDeliveredAssignees } from '@/lib/projects/display-assignee'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
-import { getProjectTimeliness, resolveTargetReleaseDate } from '@/lib/timelines'
+import { getProjectTimeliness, resolveTargetReleaseDate, normalizeStage } from '@/lib/timelines'
+import { FINAL_STAGE } from '@/lib/constants'
 import { useActiveChannel } from '@/context/ChannelContext'
 import {
   getTimelinessTextClassV2,
@@ -31,6 +33,7 @@ import {
   isDeclinedRequest,
   isResubmittedRequest,
   isAwaitingRequestReview,
+  getZerodhaQcStageMoveError,
 } from '@/lib/zerodha-sla'
 
 const CARD_BASE = 'rounded-xl border bg-white transition-[box-shadow,opacity] hover:shadow-md'
@@ -59,23 +62,28 @@ const boardCollisionDetection: CollisionDetection = args => {
 }
 
 function CardContent({
-  project, holidays, compact = false, titleHref, channelDbName, users = [],
+  project, holidays, holdPeriods = [], compact = false, titleHref, channelDbName, users = [],
 }: {
   project: Project
   holidays: string[]
+  holdPeriods?: HoldPeriod[]
   compact?: boolean
   titleHref?: string
   channelDbName?: string | null
   users?: Profile[]
 }) {
-  const t = getProjectTimeliness(project, holidays)
+  const t = getProjectTimeliness(project, holidays, holdPeriods)
   const target = resolveTargetReleaseDate(project, holidays)
   const progress = pipelineProgressPercentForChannel(project.current_stage, channelDbName ?? project.channel)
   const delayClass = getTimelinessTextClassV2(t.status)
   const showLanguage = isZerodhaChannelDbName(channelDbName ?? project.channel) && project.video_language
+  const isDelivered = normalizeStage(project.current_stage) === FINAL_STAGE
+  const cardAssignees = isDelivered ? getProjectDeliveredAssignees(project) : []
   const assigneeId = resolveStageAssigneeId(project, project.current_stage)
-  const displayAssignee = project.stage_assignee
-    ?? (assigneeId ? users.find(u => u.id === assigneeId) ?? null : null)
+  const displayAssignee = isDelivered
+    ? null
+    : project.stage_assignee
+      ?? (assigneeId ? users.find(u => u.id === assigneeId) ?? null : null)
   const intakeReview = isAwaitingRequestReview(project) || isDeclinedRequest(project)
 
   return (
@@ -157,7 +165,25 @@ function CardContent({
                 </span>
               )}
             </div>
-            {displayAssignee ? (
+            {cardAssignees.length > 0 ? (
+              <div className="flex items-center gap-1.5 shrink-0 max-w-[130px]">
+                <div className="flex -space-x-1.5 shrink-0">
+                  {cardAssignees.map(a => (
+                    <AssigneeAvatar
+                      key={a.id}
+                      name={a.name}
+                      id={a.id}
+                      size="sm"
+                      theme="light"
+                      className="ring-2 ring-white"
+                    />
+                  ))}
+                </div>
+                <span className="text-[11px] font-semibold text-zinc-700 truncate">
+                  {cardAssignees.map(a => a.name.split(' ')[0]).join(' · ')}
+                </span>
+              </div>
+            ) : displayAssignee ? (
               <div className="flex items-center gap-1.5 shrink-0 max-w-[110px]">
                 <AssigneeAvatar
                   name={displayAssignee.name}
@@ -180,11 +206,12 @@ function CardContent({
 }
 
 const KanbanCard = memo(function KanbanCard({
-  project, readOnly, holidays, channelDbName, users,
+  project, readOnly, holidays, holdPeriods = [], channelDbName, users,
 }: {
   project: Project
   readOnly?: boolean
   holidays: string[]
+  holdPeriods?: HoldPeriod[]
   channelDbName?: string | null
   users: Profile[]
 }) {
@@ -220,7 +247,14 @@ const KanbanCard = memo(function KanbanCard({
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <CardContent project={project} holidays={holidays} titleHref={projectHref} channelDbName={channelDbName} users={users} />
+          <CardContent
+            project={project}
+            holidays={holidays}
+            holdPeriods={holdPeriods}
+            titleHref={projectHref}
+            channelDbName={channelDbName}
+            users={users}
+          />
         </div>
       </div>
     </div>
@@ -228,12 +262,13 @@ const KanbanCard = memo(function KanbanCard({
 })
 
 function KanbanColumn({
-  stage, projects, readOnly, holidays, index, isLast, hideHeader, channelDbName, users,
+  stage, projects, readOnly, holidays, holdPeriodsByProjectId = {}, index, isLast, hideHeader, channelDbName, users,
 }: {
   stage: string
   projects: Project[]
   readOnly?: boolean
   holidays: string[]
+  holdPeriodsByProjectId?: Record<string, HoldPeriod[]>
   index: number
   isLast: boolean
   hideHeader?: boolean
@@ -280,6 +315,7 @@ function KanbanColumn({
             project={p}
             readOnly={readOnly}
             holidays={holidays}
+            holdPeriods={holdPeriodsByProjectId[p.id] ?? []}
             channelDbName={channelDbName}
             users={users}
           />
@@ -289,10 +325,16 @@ function KanbanColumn({
   )
 }
 
-function BoardFooter({ projects, holidays }: { projects: Project[]; holidays: string[] }) {
+function BoardFooter({
+  projects, holidays, holdPeriodsByProjectId = {},
+}: {
+  projects: Project[]
+  holidays: string[]
+  holdPeriodsByProjectId?: Record<string, HoldPeriod[]>
+}) {
   const overdue = useMemo(
-    () => projects.filter(p => getProjectTimeliness(p, holidays).status === 'delayed').length,
-    [projects, holidays]
+    () => projects.filter(p => getProjectTimeliness(p, holidays, holdPeriodsByProjectId[p.id] ?? []).status === 'delayed').length,
+    [projects, holidays, holdPeriodsByProjectId]
   )
   const onHold = projects.filter(p => p.is_on_hold).length
   const inProgress = projects.filter(p => p.current_stage !== 'Final Delivery').length
@@ -336,6 +378,7 @@ type Props = {
   users: Profile[]
   stages: readonly string[]
   holidays?: string[]
+  holdPeriodsByProjectId?: Record<string, HoldPeriod[]>
   readOnly?: boolean
   externalView?: boolean
   viewerUserId?: string
@@ -381,6 +424,7 @@ export function KanbanBoard({
   users,
   stages,
   holidays = [],
+  holdPeriodsByProjectId = {},
   readOnly = false,
   externalView = false,
   viewerUserId,
@@ -469,6 +513,14 @@ export function KanbanBoard({
     if (blockReadyToProduce && newStage === 'Ready to Produce') {
       setDragError('Ready to Produce can only be marked by LearnApp.')
       return
+    }
+
+    if (isZerodhaChannelDbName(channel?.dbName ?? project.channel) && !externalView) {
+      const qcError = getZerodhaQcStageMoveError(project.current_stage, newStage)
+      if (qcError) {
+        setDragError(qcError)
+        return
+      }
     }
 
     if (needsTeleprompterPrompt(project.current_stage, newStage, channel?.dbName ?? project.channel)) {
@@ -574,6 +626,7 @@ export function KanbanBoard({
                   projects={byStage(stage)}
                   readOnly={readOnly}
                   holidays={holidays}
+                  holdPeriodsByProjectId={holdPeriodsByProjectId}
                   hideHeader
                   channelDbName={channel?.dbName}
                   users={users}
@@ -592,14 +645,21 @@ export function KanbanBoard({
                 'p-3.5 w-[252px] shadow-2xl ring-2 rotate-[1.5deg] scale-[1.02]',
                 getIpAccent(activeProject.ip).ring,
               )}>
-                <CardContent project={activeProject} holidays={holidays} compact channelDbName={channel?.dbName} users={users} />
+                <CardContent
+                  project={activeProject}
+                  holidays={holidays}
+                  holdPeriods={holdPeriodsByProjectId[activeProject.id] ?? []}
+                  compact
+                  channelDbName={channel?.dbName}
+                  users={users}
+                />
               </div>
             ) : null}
           </DragOverlay>
         </DndContext>
       </div>
 
-      <BoardFooter projects={projects} holidays={holidays} />
+      <BoardFooter projects={projects} holidays={holidays} holdPeriodsByProjectId={holdPeriodsByProjectId} />
 
       {pending && (
         <StageChangeModal

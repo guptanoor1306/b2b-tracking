@@ -6,7 +6,7 @@ import { NewProjectsReceivedSection } from '@/components/dashboard/NewProjectsRe
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { resolveTargetReleaseDate } from '@/lib/timelines'
 import { formatDate, formatWaitingSince } from '@/lib/utils'
-import { businessDaysLate } from '@/lib/businessTime'
+import { businessDaysLateExcluding } from '@/lib/businessTime'
 import { welcomeFirstName, HEALTH_PILL_V2 } from '@/lib/design/theme-v2'
 import { getProjectTimeliness } from '@/lib/timelines'
 import { CheckCircle, AlertTriangle, GitBranch, Zap, ArrowRight, Clock } from 'lucide-react'
@@ -18,6 +18,7 @@ import { CreateReportButton } from '@/components/reports/ChannelReportModal'
 import { ReleaseScheduleButton } from '@/components/dashboard/ReleaseScheduleButton'
 import type { ReleaseScheduleItem } from '@/components/dashboard/ReleaseScheduleModal'
 import { RecentCommentsSection } from '@/components/dashboard/RecentCommentsSection'
+import type { HoldPeriod } from '@/lib/types'
 import type { RecentCommentFeedItem } from '@/lib/data/comments'
 import type { ReactNode } from 'react'
 
@@ -32,6 +33,7 @@ type Props = {
   allInPipeline?: Project[]
   holidays: string[]
   holdStarters?: Record<string, DisplayProfile>
+  holdPeriodsByProjectId?: Record<string, HoldPeriod[]>
   externalView?: boolean
   channelDbName?: string | null
   workspaceLabel?: string
@@ -49,6 +51,7 @@ const STAT_CONFIG = [
 
 export function AdminDashboard({
   profileName, month, monthFilter, counts, inPipeline, delivered, onHold, allInPipeline, holidays, holdStarters = {},
+  holdPeriodsByProjectId = {},
   externalView = false, channelDbName = null, workspaceLabel, showCreateRequest = false,
   showCreateReport = false,
   releaseScheduleItems = [],
@@ -143,11 +146,11 @@ export function AdminDashboard({
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {needsAttention.map(p => {
-                const t = getProjectTimeliness(p, holidays)
+                const t = getProjectTimeliness(p, holidays, holdPeriodsByProjectId[p.id] ?? [])
                 const target = resolveTargetReleaseDate(p, holidays)
                 const pendingDays = formatWaitingSince(p.last_status_update_at)
                 const releaseLateDays = p.target_delivery_date
-                  ? businessDaysLate(p.target_delivery_date, holidays)
+                  ? businessDaysLateExcluding(p.target_delivery_date, holidays, holdPeriodsByProjectId[p.id] ?? [])
                   : 0
                 const pendingPerson = p.stage_assignee ?? p.external_team_member
                 const healthLabel = p.status_health === 'At risk'
@@ -249,7 +252,7 @@ export function AdminDashboard({
             iconColor="bg-emerald-100 text-emerald-600"
             emptyMessage="No delivered projects."
             variant="light"
-            assigneeContext="stage"
+            assigneeContext="delivered"
             externalView={externalView}
             channelDbName={channelDbName}
             defaultExpanded={false}

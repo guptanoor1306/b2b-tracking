@@ -6,7 +6,7 @@ import { CreateRequestButton } from '@/components/board/CreateRequestButton'
 import { MonthFilterSlot } from '@/components/dashboard/MonthFilterSlot'
 import { fetchProjects } from '@/lib/data/projects'
 import { fetchHolidayDates } from '@/lib/data/holidays'
-import { fetchStageSlaConfig } from '@/lib/data/stage-sla'
+import { fetchStageSlaConfig, fetchHoldPeriodsForProjects } from '@/lib/data/stage-sla'
 import { fetchChannelMembers } from '@/lib/data/channel-access'
 import { setStageSlaCache } from '@/lib/timelines'
 import { getSessionProfile } from '@/lib/auth'
@@ -36,12 +36,13 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
 
   const params = await searchParams
   const month = params.month ?? ALL_MONTHS
-  const [projects, users, holidays, stageSla, channelName] = await Promise.all([
-    fetchProjects(),
+  const projects = await fetchProjects()
+  const [users, holidays, stageSla, channelName, holdPeriodsByProjectId] = await Promise.all([
     getActiveChannelSlug().then(slug => fetchChannelMembers(slug ?? '')),
     fetchHolidayDates(),
     getActiveChannelDbName().then(name => fetchStageSlaConfig(name)),
     getActiveChannelDbName(),
+    fetchHoldPeriodsForProjects(projects.map(p => p.id)),
   ])
   setStageSlaCache(stageSla, channelName)
 
@@ -96,6 +97,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         projects={filtered}
         users={users}
         holidays={holidays}
+        holdPeriodsByProjectId={holdPeriodsByProjectId}
         stages={internal ? internalStages : externalStages}
         readOnly={!canMoveBoardCards(role, channelName)}
         externalView={!internal}

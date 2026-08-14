@@ -137,6 +137,8 @@ export function minReleaseDateFromRequest(requestDate: Date, workingDays = 3, ho
   return format(addBusinessDays(requestDate, workingDays, holidays), 'yyyy-MM-dd')
 }
 
+type HoldWindow = { started_at: string; ended_at?: string | null }
+
 export function businessDaysLate(targetDateStr: string, holidays: string[] = []): number {
   const target = parseISO(targetDateStr)
   if (!isValid(target)) return 0
@@ -153,6 +155,37 @@ export function businessDaysLate(targetDateStr: string, holidays: string[] = [])
     cur = addDays(cur, 1)
   }
   return late
+}
+
+/** Like businessDaysLate but subtracts business days spent on hold after the target date. */
+export function businessDaysLateExcluding(
+  targetDateStr: string,
+  holidays: string[] = [],
+  holdPeriods: HoldWindow[] = [],
+): number {
+  const baseLate = businessDaysLate(targetDateStr, holidays)
+  if (!baseLate || !holdPeriods.length) return baseLate
+
+  const target = startOfDay(parseISO(targetDateStr))
+  if (!isValid(target)) return baseLate
+
+  const holidaySet = new Set(holidays)
+  const today = startOfDay(new Date())
+  let holdDays = 0
+
+  for (const period of holdPeriods) {
+    const start = startOfDay(parseISO(period.started_at))
+    const end = startOfDay(period.ended_at ? parseISO(period.ended_at) : new Date())
+    if (!isValid(start) || !isValid(end)) continue
+
+    let cur = start > target ? start : addDays(target, 1)
+    while (cur <= end && cur <= today) {
+      if (isBusinessDay(cur, holidaySet)) holdDays++
+      cur = addDays(cur, 1)
+    }
+  }
+
+  return Math.max(0, baseLate - holdDays)
 }
 
 export function splitBusinessHours(totalHours: number): { days: number; hours: number } {
