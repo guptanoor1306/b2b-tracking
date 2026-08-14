@@ -196,7 +196,11 @@ export function canSubmitQcReviewFeedback(
   if (!isZerodhaChannelDbName(project.channel)) return false
   if (!isInternalRole(role)) return false
   if (normalizeZerodhaBoardStage(project.current_stage) !== ZERODHA_FIRST_DRAFT_QC) return false
-  return project.qc_reviewer_id === userId || isChannelSuperAdmin(role)
+  if (project.qc_reviewer_id === userId) return true
+  if (isChannelSuperAdmin(role) || isSuperAdmin(role)) return true
+  // Legacy internal projects may never have had a QC reviewer assigned
+  if (!project.qc_reviewer_id && (isChannelAdmin(role) || role === 'Channel Team')) return true
+  return false
 }
 
 export function canSubmitClientReviewFeedback(

@@ -12,7 +12,7 @@ import { QcReviewFeedbackPanel } from '@/components/projects/QcReviewFeedbackPan
 import { isZerodhaClientReviewStage } from '@/lib/zerodha-sla'
 import { updateProject, saveRpCuts, RpCutInput } from '@/lib/actions/projects'
 import { ExternalLink, Plus, Trash2 } from 'lucide-react'
-import { hasIntakeMaterials } from '@/lib/zerodha-sla'
+import { hasIntakeMaterials, isZerodhaChannelDbName } from '@/lib/zerodha-sla'
 import { cn } from '@/lib/utils'
 
 const MAX_CUTS = 10
@@ -113,6 +113,8 @@ export function ProjectSectionsGrid({
   const intakeVideoLink = project.drive_link
   const productionDriveLink = project.drive_link || project.final_file_link
   const showIntakeSidebar = hasIntakeMaterials(project)
+  const showQcReview = internalView && isZerodhaChannelDbName(project.channel)
+  const showClientReview = showIntakeSidebar
   const canEditMaterials = canEditIntakeMaterials
 
   const [links, setLinks] = useState({
@@ -196,7 +198,6 @@ export function ProjectSectionsGrid({
     router.refresh()
   }
 
-  const showClientReview = showIntakeSidebar
   const inActiveClientReview = showClientReview && isZerodhaClientReviewStage(project.current_stage)
   const commentsCanAdd = !inActiveClientReview || !canSubmitClientReview
   const filledCuts = cuts.filter(c => c.timestamps.trim() || c.thumbnail.trim()).length
@@ -418,7 +419,7 @@ export function ProjectSectionsGrid({
             ) : undefined}
             className="min-h-[min(560px,72vh)]"
           >
-            {internalView && showClientReview && (
+            {showQcReview && (
               <div className="mb-4">
                 <QcReviewFeedbackPanel
                   projectId={project.id}
@@ -479,6 +480,18 @@ export function ProjectSectionsGrid({
         ) : undefined}
         className={!canViewRpCuts ? 'md:col-span-2' : undefined}
       >
+        {showQcReview && (
+          <div className="mb-4">
+            <QcReviewFeedbackPanel
+              projectId={project.id}
+              channelDbName={project.channel}
+              currentStage={project.current_stage}
+              canSubmit={canSubmitQcReview}
+              qcSubmissions={qcSubmissions}
+              currentQcSubmission={currentQcSubmission}
+            />
+          </div>
+        )}
         <CommentsSection projectId={project.id} comments={comments} canAdd variant="light" compact />
       </SectionCard>
       {rpCutsSection}
