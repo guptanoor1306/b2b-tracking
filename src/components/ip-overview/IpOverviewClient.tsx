@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { IpStats, periodLabel, computeOverviewTotals } from '@/lib/data/ip-stats'
+import { PeriodToggle } from '@/components/ui/PeriodToggle'
 import { cn } from '@/lib/utils'
 import { ArrowUpRight, GitBranch, CheckCircle2, PauseCircle, Sparkles } from 'lucide-react'
 
@@ -70,23 +71,7 @@ export function IpOverviewClient({ stats, period }: Props) {
             {periodLabel(period)} · {totals.totalProjects} projects across {stats.length} IPs
           </p>
         </div>
-        <div className="flex rounded-lg border border-zinc-200 overflow-hidden bg-white">
-          {(['week', 'month'] as const).map(p => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setPeriod(p)}
-              className={cn(
-                'px-4 py-1.5 text-xs font-medium transition-colors',
-                period === p
-                  ? 'bg-zinc-100 text-zinc-900'
-                  : 'text-zinc-500 hover:text-zinc-700'
-              )}
-            >
-              {p === 'week' ? 'Weekly' : 'Monthly'}
-            </button>
-          ))}
-        </div>
+        <PeriodToggle period={period} onChange={setPeriod} />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

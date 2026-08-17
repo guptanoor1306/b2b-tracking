@@ -216,7 +216,7 @@ export function computeFinanceBillingReport(
       continue
     }
 
-    if (beforePeriod && project.current_stage !== FINAL_STAGE) {
+    if (period === 'month' && beforePeriod && project.current_stage !== FINAL_STAGE) {
       carryOverRowsByChannel.get(project.channel)?.push(
         makeBillingRow(project, pickDate, 'carry_over', onHold, billedInPeriodLabel),
       )
@@ -235,7 +235,7 @@ export function computeFinanceBillingReport(
       slug: getChannelByDbName(channel)?.slug ?? channel.toLowerCase(),
       picked: periodRows.length,
       delivered: periodRows.filter(r => r.isDelivered).length,
-      onHold: [...periodRows, ...carryOverRows].filter(r => r.onHold).length,
+      onHold: periodRows.filter(r => r.onHold).length,
       carryOver: carryOverRows.length,
       periodRows,
       carryOverRows,

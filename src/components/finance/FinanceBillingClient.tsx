@@ -10,6 +10,7 @@ import {
   type FinanceBillingReport,
   type FinanceBillingRow,
 } from '@/lib/finance-billing-shared'
+import { PeriodToggle } from '@/components/ui/PeriodToggle'
 import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import {
@@ -100,23 +101,7 @@ export function FinanceBillingClient({ report }: Props) {
           </div>
 
           <div className="flex flex-col gap-3 sm:items-end">
-            <div className="flex rounded-lg border border-zinc-200 overflow-hidden bg-zinc-50 p-0.5">
-              {(['week', 'month'] as const).map(p => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPeriod(p)}
-                  className={cn(
-                    'rounded-md px-4 py-1.5 text-xs font-medium transition-colors',
-                    report.period === p
-                      ? 'bg-white text-zinc-900 shadow-sm'
-                      : 'text-zinc-500 hover:text-zinc-700',
-                  )}
-                >
-                  {p === 'week' ? 'Weekly' : 'Monthly'}
-                </button>
-              ))}
-            </div>
+            <PeriodToggle period={report.period} onChange={setPeriod} />
 
             <div className="flex flex-wrap items-center gap-2">
               {report.period === 'month' ? (
@@ -189,7 +174,7 @@ export function FinanceBillingClient({ report }: Props) {
         </div>
       </div>
 
-      {(report.totals.onHold > 0 || report.totals.carryOver > 0) && (
+      {(report.totals.onHold > 0 || (report.period === 'month' && report.totals.carryOver > 0)) && (
         <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
           <div className="flex gap-2">
             <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-600" />
@@ -200,9 +185,9 @@ export function FinanceBillingClient({ report }: Props) {
                   {report.totals.onHold} video{report.totals.onHold !== 1 ? 's' : ''} on hold — confirm whether to include in this bill.
                 </p>
               )}
-              {report.totals.carryOver > 0 && (
+              {report.period === 'month' && report.totals.carryOver > 0 && (
                 <p className="text-xs text-amber-800/90">
-                  {report.totals.carryOver} video{report.totals.carryOver !== 1 ? 's' : ''} picked in a prior {report.period === 'month' ? 'month' : 'week'} — already billed then; do not bill again.
+                  {report.totals.carryOver} video{report.totals.carryOver !== 1 ? 's' : ''} picked in a prior month — already billed then; do not bill again.
                 </p>
               )}
             </div>
@@ -210,7 +195,10 @@ export function FinanceBillingClient({ report }: Props) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className={cn(
+        'grid grid-cols-2 gap-4',
+        report.period === 'month' ? 'lg:grid-cols-4' : 'lg:grid-cols-3',
+      )}>
         <SummaryCard
           label="Picked in production"
           value={report.totals.picked}
@@ -233,13 +221,15 @@ export function FinanceBillingClient({ report }: Props) {
           tone="amber"
           hint={report.totals.onHold > 0 ? 'Needs finance review' : undefined}
         />
-        <SummaryCard
-          label="Prior period"
-          value={report.totals.carryOver}
-          icon={AlertTriangle}
-          tone="amber"
-          hint={report.totals.carryOver > 0 ? 'Do not bill again' : undefined}
-        />
+        {report.period === 'month' && (
+          <SummaryCard
+            label="Prior period"
+            value={report.totals.carryOver}
+            icon={AlertTriangle}
+            tone="amber"
+            hint={report.totals.carryOver > 0 ? 'Do not bill again' : undefined}
+          />
+        )}
       </div>
 
       {report.channels.map(channel => (

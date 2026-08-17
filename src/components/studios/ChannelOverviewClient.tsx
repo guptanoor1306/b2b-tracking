@@ -7,6 +7,7 @@ import {
   GitBranch, CheckCircle2, PauseCircle, Sparkles, Lock,
 } from 'lucide-react'
 import { ChannelStats, computeOverviewTotals, periodLabel } from '@/lib/data/channel-stats'
+import { PeriodToggle } from '@/components/ui/PeriodToggle'
 
 type Props = {
   stats: ChannelStats[]
@@ -94,23 +95,7 @@ export function ChannelOverviewClient({
             {periodLabel(period)} · {totals.totalProjects} projects across {stats.length} channels
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex overflow-hidden rounded-lg border border-zinc-200 bg-white">
-            {(['week', 'month'] as const).map(p => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPeriod(p)}
-                className={cn(
-                  'px-4 py-1.5 text-xs font-medium transition-colors',
-                  period === p ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'
-                )}
-              >
-                {p === 'week' ? 'Weekly' : 'Monthly'}
-              </button>
-            ))}
-          </div>
-        </div>
+        <PeriodToggle period={period} onChange={setPeriod} />
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
