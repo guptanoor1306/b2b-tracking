@@ -25,9 +25,12 @@ import {
   FINANCE_BILLING_CHANNELS,
   financeMonthKey,
   financeWeekStartKey,
+  billingPeriodLabelForDate,
+  buildFinanceNotes,
   type FinanceBillingPeriod,
   type FinanceBillingReport,
   type FinanceBillingRow,
+  type FinanceBillingRowKind,
   type FinanceChannelBilling,
 } from '@/lib/finance-billing-shared'
 
@@ -53,6 +56,8 @@ type BillingProject = {
   channel: string
   content_type: string
   current_stage: string
+  status_health: string
+  is_on_hold: boolean
   picked_up_date: string | null
   created_at: string
 }
@@ -140,12 +145,38 @@ export function inBillingPeriod(
 }
 
 export function billingPeriodLabel(period: FinanceBillingPeriod, anchor = new Date()): string {
-  if (period === 'week') {
-    const start = startOfWeek(anchor, { weekStartsOn: 1 })
-    const end = endOfWeek(anchor, { weekStartsOn: 1 })
-    return `${format(start, 'dd MMM')} – ${format(end, 'dd MMM yyyy')}`
+  return billingPeriodLabelForDate(period, anchor)
+}
+
+function billingPeriodStart(period: FinanceBillingPeriod, anchor: Date): Date {
+  return startOfDay(
+    period === 'week'
+      ? startOfWeek(anchor, { weekStartsOn: 1 })
+      : startOfMonth(anchor),
+  )
+}
+
+function makeBillingRow(
+  project: BillingProject,
+  pickDate: string,
+  kind: FinanceBillingRowKind,
+  onHold: boolean,
+  billedInPeriodLabel: string | null,
+): FinanceBillingRow {
+  return {
+    projectId: project.id,
+    contentId: project.content_id,
+    title: project.title,
+    channel: project.channel,
+    contentType: project.content_type,
+    pickedAt: pickDate,
+    currentStage: project.current_stage,
+    isDelivered: project.current_stage === FINAL_STAGE,
+    kind,
+    onHold,
+    billedInPeriodLabel,
+    financeNotes: buildFinanceNotes(kind, onHold, billedInPeriodLabel),
   }
-  return format(anchor, 'MMMM yyyy')
 }
 
 export function computeFinanceBillingReport(
@@ -154,53 +185,74 @@ export function computeFinanceBillingReport(
   period: FinanceBillingPeriod,
   anchor = new Date(),
 ): FinanceBillingReport {
-  const rowsByChannel = new Map<string, FinanceBillingRow[]>()
+  const periodRowsByChannel = new Map<string, FinanceBillingRow[]>()
+  const carryOverRowsByChannel = new Map<string, FinanceBillingRow[]>()
 
   for (const channel of FINANCE_BILLING_CHANNELS) {
-    rowsByChannel.set(channel, [])
+    periodRowsByChannel.set(channel, [])
+    carryOverRowsByChannel.set(channel, [])
   }
+
+  const periodStart = billingPeriodStart(period, anchor)
 
   for (const project of projects) {
     if (!(FINANCE_BILLING_CHANNELS as readonly string[]).includes(project.channel)) continue
 
     const pickDate = resolvePickDate(project, historyByProject.get(project.id) ?? [])
-    if (!pickDate || !inBillingPeriod(pickDate, period, anchor)) continue
+    if (!pickDate) continue
 
-    const row: FinanceBillingRow = {
-      projectId: project.id,
-      contentId: project.content_id,
-      title: project.title,
-      channel: project.channel,
-      contentType: project.content_type,
-      pickedAt: pickDate,
-      currentStage: project.current_stage,
-      isDelivered: project.current_stage === FINAL_STAGE,
+    const pickParsed = parseBillingDate(pickDate)
+    if (!pickParsed) continue
+
+    const onHold = project.is_on_hold || project.status_health === 'On hold'
+    const billedInPeriodLabel = billingPeriodLabelForDate(period, pickParsed)
+    const inPeriod = inBillingPeriod(pickDate, period, anchor)
+    const beforePeriod = pickParsed < periodStart
+
+    if (inPeriod) {
+      periodRowsByChannel.get(project.channel)?.push(
+        makeBillingRow(project, pickDate, 'current_period', onHold, null),
+      )
+      continue
     }
-    rowsByChannel.get(project.channel)?.push(row)
+
+    if (beforePeriod && project.current_stage !== FINAL_STAGE) {
+      carryOverRowsByChannel.get(project.channel)?.push(
+        makeBillingRow(project, pickDate, 'carry_over', onHold, billedInPeriodLabel),
+      )
+    }
   }
 
   const channels: FinanceChannelBilling[] = FINANCE_BILLING_CHANNELS.map(channel => {
-    const rows = (rowsByChannel.get(channel) ?? []).sort((a, b) =>
+    const periodRows = (periodRowsByChannel.get(channel) ?? []).sort((a, b) =>
+      b.pickedAt.localeCompare(a.pickedAt),
+    )
+    const carryOverRows = (carryOverRowsByChannel.get(channel) ?? []).sort((a, b) =>
       b.pickedAt.localeCompare(a.pickedAt),
     )
     return {
       channel,
       slug: getChannelByDbName(channel)?.slug ?? channel.toLowerCase(),
-      picked: rows.length,
-      delivered: rows.filter(r => r.isDelivered).length,
-      rows,
+      picked: periodRows.length,
+      delivered: periodRows.filter(r => r.isDelivered).length,
+      onHold: [...periodRows, ...carryOverRows].filter(r => r.onHold).length,
+      carryOver: carryOverRows.length,
+      periodRows,
+      carryOverRows,
     }
   })
 
   const picked = channels.reduce((sum, c) => sum + c.picked, 0)
   const delivered = channels.reduce((sum, c) => sum + c.delivered, 0)
+  const onHold = channels.reduce((sum, c) => sum + c.onHold, 0)
+  const carryOver = channels.reduce((sum, c) => sum + c.carryOver, 0)
 
   return {
     period,
     periodLabel: billingPeriodLabel(period, anchor),
     monthKey: financeMonthKey(period === 'month' ? anchor : startOfMonth(anchor)),
     weekStartKey: financeWeekStartKey(anchor),
-    totals: { picked, delivered },
+    totals: { picked, delivered, onHold, carryOver },
     channels,
   }
 }
@@ -209,7 +261,7 @@ async function fetchBillingProjects(): Promise<BillingProject[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('projects')
-    .select('id, content_id, title, channel, content_type, current_stage, picked_up_date, created_at')
+    .select('id, content_id, title, channel, content_type, current_stage, status_health, is_on_hold, picked_up_date, created_at')
     .in('channel', [...FINANCE_BILLING_CHANNELS])
     .order('title')
 

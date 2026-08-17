@@ -8,12 +8,13 @@ import {
   financeMonthKey,
   financeWeekStartKey,
   type FinanceBillingReport,
+  type FinanceBillingRow,
 } from '@/lib/finance-billing-shared'
 import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import {
   CheckCircle2, Clapperboard, ChevronLeft, ChevronRight,
-  Download, ExternalLink,
+  Download, ExternalLink, AlertTriangle, PauseCircle,
 } from 'lucide-react'
 
 type Props = {
@@ -188,7 +189,28 @@ export function FinanceBillingClient({ report }: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:max-w-xl">
+      {(report.totals.onHold > 0 || report.totals.carryOver > 0) && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
+          <div className="flex gap-2">
+            <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-600" />
+            <div className="space-y-1">
+              <p className="font-medium">Review before invoicing</p>
+              {report.totals.onHold > 0 && (
+                <p className="text-xs text-amber-800/90">
+                  {report.totals.onHold} video{report.totals.onHold !== 1 ? 's' : ''} on hold — confirm whether to include in this bill.
+                </p>
+              )}
+              {report.totals.carryOver > 0 && (
+                <p className="text-xs text-amber-800/90">
+                  {report.totals.carryOver} video{report.totals.carryOver !== 1 ? 's' : ''} picked in a prior {report.period === 'month' ? 'month' : 'week'} — already billed then; do not bill again.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <SummaryCard
           label="Picked in production"
           value={report.totals.picked}
@@ -203,6 +225,20 @@ export function FinanceBillingClient({ report }: Props) {
           hint={report.totals.picked > 0
             ? `${Math.round((report.totals.delivered / report.totals.picked) * 100)}% of picked`
             : undefined}
+        />
+        <SummaryCard
+          label="On hold"
+          value={report.totals.onHold}
+          icon={PauseCircle}
+          tone="amber"
+          hint={report.totals.onHold > 0 ? 'Needs finance review' : undefined}
+        />
+        <SummaryCard
+          label="Prior period"
+          value={report.totals.carryOver}
+          icon={AlertTriangle}
+          tone="amber"
+          hint={report.totals.carryOver > 0 ? 'Do not bill again' : undefined}
         />
       </div>
 
@@ -223,12 +259,14 @@ function SummaryCard({
   label: string
   value: number
   icon: typeof Clapperboard
-  tone: 'violet' | 'emerald'
+  tone: 'violet' | 'emerald' | 'amber'
   hint?: string
 }) {
   const colors = tone === 'violet'
     ? { bg: 'bg-violet-50', text: 'text-violet-600', ring: 'ring-violet-100' }
-    : { bg: 'bg-emerald-50', text: 'text-emerald-600', ring: 'ring-emerald-100' }
+    : tone === 'emerald'
+      ? { bg: 'bg-emerald-50', text: 'text-emerald-600', ring: 'ring-emerald-100' }
+      : { bg: 'bg-amber-50', text: 'text-amber-600', ring: 'ring-amber-100' }
 
   return (
     <div className={cn('rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm ring-1', colors.ring)}>
@@ -249,13 +287,18 @@ function ChannelSection({
 }: {
   channel: FinanceBillingReport['channels'][number]
 }) {
+  const hasPeriodRows = channel.periodRows.length > 0
+  const hasCarryOver = channel.carryOverRows.length > 0
+
   return (
     <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
       <div className="px-5 py-4 border-b border-zinc-100 flex flex-wrap items-center justify-between gap-3 bg-zinc-50/50">
         <div>
           <p className="text-base font-semibold text-zinc-900">{channel.channel}</p>
           <p className="text-xs text-zinc-500 mt-0.5">
-            {channel.picked} picked · {channel.delivered} delivered
+            {channel.picked} picked this period · {channel.delivered} delivered
+            {channel.onHold > 0 ? ` · ${channel.onHold} on hold` : ''}
+            {channel.carryOver > 0 ? ` · ${channel.carryOver} from prior period` : ''}
           </p>
         </div>
         <Link
@@ -266,65 +309,138 @@ function ChannelSection({
         </Link>
       </div>
 
-      {channel.rows.length === 0 ? (
+      {!hasPeriodRows && !hasCarryOver ? (
         <p className="px-5 py-10 text-sm text-zinc-400 italic text-center">
           No videos picked in production for this period.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-[10px] text-zinc-500 uppercase border-b border-zinc-100 bg-white">
-                <th className="px-5 py-3 text-left font-semibold">Video</th>
-                <th className="px-4 py-3 text-left font-semibold w-28">Video type</th>
-                <th className="px-4 py-3 text-left font-semibold w-36">Picked</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[10rem]">Current stage</th>
-                <th className="px-4 py-3 text-right font-semibold w-28">Status</th>
-                <th className="px-4 py-3 w-10" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {channel.rows.map(row => (
-                <tr key={row.projectId} className="group hover:bg-violet-50/30 transition-colors">
-                  <td className="px-5 py-3.5">
-                    <p className="text-sm font-medium text-zinc-900">{row.title}</p>
-                    {row.contentId && (
-                      <p className="text-[11px] text-zinc-400 mt-0.5 font-mono">{row.contentId}</p>
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5 text-zinc-600 whitespace-nowrap">
-                    {row.contentType || '—'}
-                  </td>
-                  <td className="px-4 py-3.5 text-zinc-700 tabular-nums whitespace-nowrap">
-                    {formatDate(row.pickedAt, 'dd MMM yyyy')}
-                  </td>
-                  <td className="px-4 py-3.5 text-zinc-600">{row.currentStage}</td>
-                  <td className="px-4 py-3.5 text-right">
-                    {row.isDelivered ? (
-                      <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-100">
-                        Delivered
-                      </span>
-                    ) : (
-                      <span className="inline-flex rounded-full bg-violet-50 px-2.5 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-100">
-                        In pipeline
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <Link
-                      href={`/projects/${row.projectId}`}
-                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-zinc-400 hover:text-violet-600 hover:bg-violet-50 opacity-0 group-hover:opacity-100 transition-all"
-                      title="Open project"
-                    >
-                      <ExternalLink size={15} />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="divide-y divide-zinc-100">
+          {hasPeriodRows && (
+            <BillingTable
+              title="Picked this period"
+              subtitle="Billable for the selected period"
+              rows={channel.periodRows}
+            />
+          )}
+          {hasCarryOver && (
+            <BillingTable
+              title="From prior billing periods"
+              subtitle="Already picked earlier — shown for review only, do not bill again"
+              rows={channel.carryOverRows}
+              variant="carry_over"
+            />
+          )}
         </div>
       )}
     </div>
+  )
+}
+
+function BillingTable({
+  title,
+  subtitle,
+  rows,
+  variant = 'current',
+}: {
+  title: string
+  subtitle: string
+  rows: FinanceBillingRow[]
+  variant?: 'current' | 'carry_over'
+}) {
+  return (
+    <div className={cn(variant === 'carry_over' && 'bg-amber-50/20')}>
+      <div className="px-5 py-3 border-b border-zinc-100">
+        <p className="text-xs font-semibold text-zinc-800">{title}</p>
+        <p className="text-[11px] text-zinc-500 mt-0.5">{subtitle}</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-[10px] text-zinc-500 uppercase border-b border-zinc-100 bg-white">
+              <th className="px-5 py-3 text-left font-semibold min-w-[12rem]">Video</th>
+              <th className="px-4 py-3 text-left font-semibold w-28">Video type</th>
+              <th className="px-4 py-3 text-left font-semibold w-36">Picked</th>
+              <th className="px-4 py-3 text-left font-semibold min-w-[10rem]">Current stage</th>
+              <th className="px-4 py-3 text-left font-semibold min-w-[14rem]">Finance notes</th>
+              <th className="px-4 py-3 w-10" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-100">
+            {rows.map(row => (
+              <tr
+                key={`${row.kind}-${row.projectId}`}
+                className={cn(
+                  'group transition-colors',
+                  row.financeNotes.length > 0
+                    ? 'bg-amber-50/40 hover:bg-amber-50/70'
+                    : 'hover:bg-violet-50/30',
+                )}
+              >
+                <td className="px-5 py-3.5">
+                  <p className="text-sm font-medium text-zinc-900">{row.title}</p>
+                  {row.contentId && (
+                    <p className="text-[11px] text-zinc-400 mt-0.5 font-mono">{row.contentId}</p>
+                  )}
+                </td>
+                <td className="px-4 py-3.5 text-zinc-600 whitespace-nowrap">
+                  {row.contentType || '—'}
+                </td>
+                <td className="px-4 py-3.5 text-zinc-700 tabular-nums whitespace-nowrap">
+                  {formatDate(row.pickedAt, 'dd MMM yyyy')}
+                </td>
+                <td className="px-4 py-3.5 text-zinc-600">{row.currentStage}</td>
+                <td className="px-4 py-3.5">
+                  <FinanceNotes notes={row.financeNotes} isDelivered={row.isDelivered} />
+                </td>
+                <td className="px-4 py-3.5">
+                  <Link
+                    href={`/projects/${row.projectId}`}
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-zinc-400 hover:text-violet-600 hover:bg-violet-50 opacity-0 group-hover:opacity-100 transition-all"
+                    title="Open project"
+                  >
+                    <ExternalLink size={15} />
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function FinanceNotes({ notes, isDelivered }: { notes: string[]; isDelivered: boolean }) {
+  if (notes.length === 0 && !isDelivered) {
+    return (
+      <span className="inline-flex rounded-full bg-violet-50 px-2.5 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-100">
+        In pipeline
+      </span>
+    )
+  }
+
+  if (notes.length === 0 && isDelivered) {
+    return (
+      <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-100">
+        Delivered
+      </span>
+    )
+  }
+
+  return (
+    <ul className="space-y-1.5">
+      {notes.map(note => (
+        <li
+          key={note}
+          className="flex gap-1.5 text-[11px] leading-snug text-amber-900"
+        >
+          <AlertTriangle size={12} className="shrink-0 mt-0.5 text-amber-600" />
+          <span>{note}</span>
+        </li>
+      ))}
+      {isDelivered && (
+        <li className="text-[10px] text-emerald-700 font-medium">Delivered</li>
+      )}
+    </ul>
   )
 }
