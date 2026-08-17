@@ -34,6 +34,7 @@ import {
   isResubmittedRequest,
   isAwaitingRequestReview,
   getZerodhaQcStageMoveError,
+  getZerodhaQcReviewLinkError,
 } from '@/lib/zerodha-sla'
 
 const CARD_BASE = 'rounded-xl border bg-white transition-[box-shadow,opacity] hover:shadow-md'
@@ -519,6 +520,11 @@ export function KanbanBoard({
       const qcError = getZerodhaQcStageMoveError(project.current_stage, newStage)
       if (qcError) {
         setDragError(qcError)
+        return
+      }
+      const reviewLinkError = getZerodhaQcReviewLinkError(newStage, project.assets_link)
+      if (reviewLinkError) {
+        setDragError(reviewLinkError)
         return
       }
     }

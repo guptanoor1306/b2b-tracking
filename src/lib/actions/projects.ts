@@ -40,7 +40,7 @@ import { resolveZerodhaStageAssigneeId, defaultQcReviewerId } from '@/lib/action
 import { getActiveChannelSlug } from '@/lib/channel-context'
 import { minReleaseDateFromRequest } from '@/lib/businessTime'
 import { CONTENT_TYPES } from '@/lib/constants'
-import { ZERODHA_FIRST_DRAFT_QC, normalizeZerodhaBoardStage, getZerodhaQcStageMoveError } from '@/lib/zerodha-sla'
+import { ZERODHA_FIRST_DRAFT_QC, normalizeZerodhaBoardStage, getZerodhaQcStageMoveError, getZerodhaQcReviewLinkError } from '@/lib/zerodha-sla'
 import { fetchProjectHoldPeriods } from '@/lib/data/stage-sla'
 
 async function getSessionEffectiveRole() {
@@ -581,6 +581,8 @@ export async function changeProjectStage(
   if (isZerodhaChannelDbName(project.channel)) {
     const qcError = getZerodhaQcStageMoveError(project.current_stage, newStage)
     if (qcError) return { error: qcError }
+    const reviewLinkError = getZerodhaQcReviewLinkError(newStage, project.assets_link)
+    if (reviewLinkError) return { error: reviewLinkError }
   }
 
   const holdPeriods = await fetchProjectHoldPeriods(projectId)

@@ -359,3 +359,15 @@ export function getZerodhaQcStageMoveError(currentStage: string, newStage: strin
 
   return null
 }
+
+/** Require review link before entering Draft QC (Animation & VD → QC handoff). */
+export function getZerodhaQcReviewLinkError(
+  newStage: string,
+  assetsLink: string | null | undefined,
+): string | null {
+  if (normalizeZerodhaBoardStage(newStage) !== ZERODHA_FIRST_DRAFT_QC) return null
+  if (!assetsLink?.trim()) {
+    return 'Add a review link on the project page before moving to Draft QC.'
+  }
+  return null
+}
