@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import {
   LayoutDashboard, Settings, UserCircle, LogOut,
-  PanelLeftClose, PanelLeft, Loader2,
+  PanelLeftClose, PanelLeft, Loader2, Receipt,
 } from 'lucide-react'
 
 type NavItem = {
@@ -20,6 +20,7 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: '/studios', label: 'Overview', icon: LayoutDashboard, exact: true },
+  { href: '/studios/finance', label: 'Finance', icon: Receipt, superAdminOnly: true },
   { href: '/studios/settings', label: 'Channel settings', icon: Settings, superAdminOnly: true },
   { href: '/studios/account', label: 'Account', icon: UserCircle },
 ]

@@ -170,6 +170,10 @@ export function usesIpOverviewDashboard(role: Role | string): boolean {
   return isSuperAdmin(role)
 }
 
+export function usesFinanceDashboard(role: Role | string): boolean {
+  return isSuperAdmin(role)
+}
+
 export function canManageUsers(role: Role | string): boolean {
   return (CHANNEL_ADMIN_ROLES as readonly string[]).includes(role) || isExternalClientAdmin(role)
 }
