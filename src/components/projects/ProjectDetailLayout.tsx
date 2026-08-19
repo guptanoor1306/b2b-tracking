@@ -11,6 +11,7 @@ import {
 import { ProjectEditModal } from '@/components/projects/ProjectEditModal'
 import { DeleteProjectButton } from '@/components/projects/DeleteProjectButton'
 import { ProjectHoldButton } from '@/components/projects/ProjectHoldButton'
+import { ProjectHoldReasonPanel } from '@/components/projects/ProjectHoldReasonPanel'
 import { StagePipelineGantt } from '@/components/projects/StagePipelineGantt'
 import { resolveTargetReleaseDate } from '@/lib/timelines'
 import { formatDate } from '@/lib/utils'
@@ -225,6 +226,10 @@ export function ProjectDetailLayout({
         <DeclinedRequestNotice />
       )}
 
+      <div className={cn(
+        project.is_on_hold && 'lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start lg:gap-4',
+      )}>
+        <div className="min-w-0 space-y-4">
       <ProjectSectionsGrid
         project={project}
         comments={comments}
@@ -253,6 +258,17 @@ export function ProjectDetailLayout({
           users={users}
         />
       )}
+        </div>
+
+        {project.is_on_hold && (
+          <ProjectHoldReasonPanel
+            projectId={project.id}
+            holdPeriods={holdPeriods}
+            isOnHold={!!project.is_on_hold}
+            canEdit={canEdit && internal}
+          />
+        )}
+      </div>
     </div>
   )
 }

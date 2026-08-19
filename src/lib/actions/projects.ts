@@ -967,11 +967,16 @@ export async function toggleProjectHold(projectId: string, note?: string) {
 
     await logActivity(projectId, profile.id, 'hold_resume', 'is_on_hold', 'true', 'false')
   } else {
+    const holdReason = note?.trim()
+    if (!holdReason) {
+      return { error: 'Please provide a reason for putting this project on hold.' }
+    }
+
     await supabase.from('project_hold_periods').insert({
       project_id: projectId,
       started_at: now,
       started_by: profile.id,
-      note: note ?? 'Project put on hold',
+      note: holdReason,
     })
 
     await supabase.from('projects').update({
@@ -986,12 +991,55 @@ export async function toggleProjectHold(projectId: string, note?: string) {
       old_stage: project.current_stage,
       new_stage: project.current_stage,
       changed_by: profile.id,
-      note: note ?? 'Project on hold',
+      note: holdReason,
       is_hold_event: true,
     })
 
     await logActivity(projectId, profile.id, 'hold_start', 'is_on_hold', 'false', 'true')
   }
+
+  revalidatePath(`/projects/${projectId}`)
+  revalidatePath('/board')
+  revalidatePath('/dashboard')
+  return { success: true }
+}
+
+export async function updateOpenHoldReason(projectId: string, reason: string) {
+  const session = await getSessionEffectiveRole()
+  if (!session || !isInternalRole(session.role)) {
+    return { error: 'Unauthorized' }
+  }
+
+  const trimmed = reason.trim()
+  if (!trimmed) {
+    return { error: 'Hold reason cannot be empty.' }
+  }
+
+  const supabase = await createClient()
+  const { data: project } = await supabase
+    .from('projects')
+    .select('id, is_on_hold')
+    .eq('id', projectId)
+    .single()
+
+  if (!project) return { error: 'Project not found' }
+  if (!project.is_on_hold) return { error: 'Project is not on hold' }
+
+  const { data: openHold } = await supabase
+    .from('project_hold_periods')
+    .select('id')
+    .eq('project_id', projectId)
+    .is('ended_at', null)
+    .maybeSingle()
+
+  if (!openHold) return { error: 'No active hold period found' }
+
+  const { error } = await supabase
+    .from('project_hold_periods')
+    .update({ note: trimmed })
+    .eq('id', openHold.id)
+
+  if (error) return { error: error.message }
 
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/board')
