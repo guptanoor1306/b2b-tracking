@@ -1,5 +1,6 @@
 import { LEVELS_OF_VIDEO, STAGES_EXTERNAL, STAGES_INTERNAL } from '@/lib/constants'
 import { normalizeStage } from '@/lib/timelines'
+import { StageHistory } from '@/lib/types'
 
 /** Zerodha-only intake stages (external submissions → internal review). */
 export const ZERODHA_REQUEST_RECEIVED = 'Request Received'
@@ -335,6 +336,38 @@ export function isZerodhaStage(stage: string): boolean {
 function zerodhaPipelineIndex(stage: string): number {
   const normalized = normalizeZerodhaBoardStage(stage)
   return (STAGES_ZERODHA_INTERNAL as readonly string[]).indexOf(normalized)
+}
+
+/** Old Zerodha projects already at 1st Cut+ before the Request Received intake flow — keep full timeline. */
+export function isLegacyZerodhaTimelineProject(
+  project: { channel: string; current_stage: string },
+  history: StageHistory[],
+): boolean {
+  if (!isZerodhaChannelDbName(project.channel)) return false
+  const idx = zerodhaPipelineIndex(project.current_stage)
+  const firstCutIdx = zerodhaPipelineIndex(ZERODHA_FIRST_CUT)
+  if (firstCutIdx < 0 || idx < firstCutIdx) return false
+
+  const firstStage = [...history]
+    .filter(h => !h.is_hold_event)
+    .sort((a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime())[0]
+    ?.new_stage
+
+  if (!firstStage) return true
+  return normalizeZerodhaBoardStage(firstStage) !== ZERODHA_REQUEST_RECEIVED
+}
+
+/** Hide Request Received / Ready to Produce rows on the project detail pipeline timeline. */
+export function shouldHideZerodhaIntakeFromTimeline(
+  project: { channel: string; current_stage: string },
+  history: StageHistory[],
+): boolean {
+  if (!isZerodhaChannelDbName(project.channel)) return false
+  return !isLegacyZerodhaTimelineProject(project, history)
+}
+
+export function filterZerodhaIntakeFromHistory(history: StageHistory[]): StageHistory[] {
+  return history.filter(h => !isZerodhaIntakeStage(h.new_stage))
 }
 
 /** Client-side + server-side guard for Kanban stage moves that bypass Draft QC. */

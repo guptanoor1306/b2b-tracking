@@ -21,6 +21,10 @@ import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { updateStageHistoryDate } from '@/lib/actions/projects'
 import { isStageDurationOverSla, normalizeStage, isProjectTimelineLocked } from '@/lib/timelines'
 import { mapInternalToExternalStage } from '@/lib/views'
+import {
+  filterZerodhaIntakeFromHistory,
+  shouldHideZerodhaIntakeFromTimeline,
+} from '@/lib/zerodha-sla'
 import { cn } from '@/lib/utils'
 
 const LABEL_WIDTH = 220
@@ -468,14 +472,19 @@ export function StagePipelineGantt({
 
   const timelineLocked = isProjectTimelineLocked(project)
 
-  const stageEntries = useMemo(() => stageHistoryEntries(history), [history])
+  const timelineHistory = useMemo(() => {
+    if (!shouldHideZerodhaIntakeFromTimeline(project, history)) return history
+    return filterZerodhaIntakeFromHistory(history)
+  }, [history, project])
+
+  const stageEntries = useMemo(() => stageHistoryEntries(timelineHistory), [timelineHistory])
 
   const effectiveHoldPeriods = useMemo(
-    () => resolveEffectiveHoldPeriods(holdPeriods, history, project),
-    [holdPeriods, history, project],
+    () => resolveEffectiveHoldPeriods(holdPeriods, timelineHistory, project),
+    [holdPeriods, timelineHistory, project],
   )
 
-  const durations = computeStageDurations(history, holidays, effectiveHoldPeriods)
+  const durations = computeStageDurations(timelineHistory, holidays, effectiveHoldPeriods)
 
   const stageAssigneeMap = useMemo(() => {
     const map = new Map<string, { name: string; id?: string }>()
