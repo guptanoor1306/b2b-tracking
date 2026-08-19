@@ -57,7 +57,8 @@ export function suppressProductionMetrics(project: {
   current_stage: string
   request_status?: RequestStatus | string | null
 }): boolean {
-  return isAwaitingRequestReview(project) || isDeclinedRequest(project)
+  if (isAwaitingRequestReview(project) || isDeclinedRequest(project)) return true
+  return isZerodhaChannelDbName(project.channel) && isZerodhaIntakeStage(project.current_stage)
 }
 
 export function hasIntakeMaterials(project: {

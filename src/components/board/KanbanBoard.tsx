@@ -35,6 +35,7 @@ import {
   isAwaitingRequestReview,
   getZerodhaQcStageMoveError,
   getZerodhaQcReviewLinkError,
+  suppressProductionMetrics,
 } from '@/lib/zerodha-sla'
 
 const CARD_BASE = 'rounded-xl border bg-white transition-[box-shadow,opacity] hover:shadow-md'
@@ -86,6 +87,7 @@ function CardContent({
     : project.stage_assignee
       ?? (assigneeId ? users.find(u => u.id === assigneeId) ?? null : null)
   const intakeReview = isAwaitingRequestReview(project) || isDeclinedRequest(project)
+  const hideMetrics = suppressProductionMetrics(project)
 
   return (
     <>
@@ -104,12 +106,12 @@ function CardContent({
           Declined
         </span>
       )}
-      {!intakeReview && t.status === 'delayed' && (
+      {!hideMetrics && t.status === 'delayed' && (
         <span className="inline-block mb-1.5 rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">
           Delayed
         </span>
       )}
-      {!intakeReview && project.is_on_hold && (
+      {!hideMetrics && project.is_on_hold && (
         <span className="inline-block mb-1.5 ml-1 rounded-md bg-zinc-200 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-700">
           On hold
         </span>
@@ -143,18 +145,23 @@ function CardContent({
           </span>
         )}
       </p>
-      {!compact && !intakeReview && (
-        <>
-          <div className="mt-3">
-            <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
-              <div
-                className="h-full rounded-full bg-zinc-400 transition-all"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <p className="text-[11px] text-zinc-500 mt-1 font-medium tabular-nums">{progress}% complete</p>
+      {!compact && !hideMetrics && (
+        <div className="mt-3">
+          <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
+            <div
+              className="h-full rounded-full bg-zinc-400 transition-all"
+              style={{ width: `${progress}%` }}
+            />
           </div>
-          <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-zinc-100">
+          <p className="text-[11px] text-zinc-500 mt-1 font-medium tabular-nums">{progress}% complete</p>
+        </div>
+      )}
+      {!compact && (
+        <div className={cn(
+          'flex items-center justify-between gap-2 mt-3 pt-3 border-t border-zinc-100',
+          hideMetrics && 'border-t-0 pt-2',
+        )}>
+          {!hideMetrics && (
             <div className="min-w-0">
               {t.showLabel && (
                 <span className={cn('text-[11px] font-bold', delayClass)}>{t.label}</span>
@@ -166,6 +173,8 @@ function CardContent({
                 </span>
               )}
             </div>
+          )}
+          <div className={cn(hideMetrics && 'ml-auto')}>
             {cardAssignees.length > 0 ? (
               <div className="flex items-center gap-1.5 shrink-0 max-w-[130px]">
                 <div className="flex -space-x-1.5 shrink-0">
@@ -200,7 +209,7 @@ function CardContent({
               <span className="text-[11px] text-zinc-400 font-medium">Unassigned</span>
             )}
           </div>
-        </>
+        </div>
       )}
     </>
   )

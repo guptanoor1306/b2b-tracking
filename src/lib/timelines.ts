@@ -17,6 +17,7 @@ import {
 } from '@/lib/stage-sla'
 import {
   isZerodhaChannelDbName,
+  isZerodhaIntakeStage,
   zerodhaStageSlaRows,
 } from '@/lib/zerodha-sla'
 import { HoldPeriod } from '@/lib/types'
@@ -269,6 +270,17 @@ export function getProjectTimeliness(
       textClass: 'text-zinc-500',
       label: 'On hold',
       showLabel: true,
+    }
+  }
+
+  if (isZerodhaChannelDbName(project.channel) && isZerodhaIntakeStage(project.current_stage)) {
+    return {
+      ...base,
+      status: 'on_time',
+      borderClass: 'border-emerald-500/35',
+      textClass: 'text-emerald-400',
+      label: '',
+      showLabel: false,
     }
   }
 
