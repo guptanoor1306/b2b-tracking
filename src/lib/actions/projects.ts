@@ -972,19 +972,28 @@ export async function toggleProjectHold(projectId: string, note?: string) {
       return { error: 'Please provide a reason for putting this project on hold.' }
     }
 
-    await supabase.from('project_hold_periods').insert({
+    const { error: holdInsertError } = await supabase.from('project_hold_periods').insert({
       project_id: projectId,
       started_at: now,
       started_by: profile.id,
       note: holdReason,
     })
 
-    await supabase.from('projects').update({
+    if (holdInsertError) {
+      return { error: holdInsertError.message }
+    }
+
+    const { error: projectUpdateError } = await supabase.from('projects').update({
       is_on_hold: true,
       on_hold_since: now,
       status_health: 'On hold',
       updated_by: profile.id,
     }).eq('id', projectId)
+
+    if (projectUpdateError) {
+      await supabase.from('project_hold_periods').delete().eq('project_id', projectId).is('ended_at', null)
+      return { error: projectUpdateError.message }
+    }
 
     await insertStageHistoryRecord({
       project_id: projectId,
@@ -1009,6 +1018,7 @@ export async function updateOpenHoldReason(projectId: string, reason: string) {
   if (!session || !isInternalRole(session.role)) {
     return { error: 'Unauthorized' }
   }
+  const { profile } = session
 
   const trimmed = reason.trim()
   if (!trimmed) {
@@ -1018,7 +1028,7 @@ export async function updateOpenHoldReason(projectId: string, reason: string) {
   const supabase = await createClient()
   const { data: project } = await supabase
     .from('projects')
-    .select('id, is_on_hold')
+    .select('id, is_on_hold, on_hold_since')
     .eq('id', projectId)
     .single()
 
@@ -1032,14 +1042,28 @@ export async function updateOpenHoldReason(projectId: string, reason: string) {
     .is('ended_at', null)
     .maybeSingle()
 
-  if (!openHold) return { error: 'No active hold period found' }
+  if (openHold) {
+    const { error } = await supabase
+      .from('project_hold_periods')
+      .update({ note: trimmed })
+      .eq('id', openHold.id)
 
-  const { error } = await supabase
-    .from('project_hold_periods')
-    .update({ note: trimmed })
-    .eq('id', openHold.id)
+    if (error) return { error: error.message }
+  } else {
+    const startedAt = project.on_hold_since ?? new Date().toISOString()
+    const { error } = await supabase.from('project_hold_periods').insert({
+      project_id: projectId,
+      started_at: startedAt,
+      started_by: profile.id,
+      note: trimmed,
+    })
 
-  if (error) return { error: error.message }
+    if (error) return { error: error.message }
+
+    if (!project.on_hold_since) {
+      await supabase.from('projects').update({ on_hold_since: startedAt }).eq('id', projectId)
+    }
+  }
 
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/board')
