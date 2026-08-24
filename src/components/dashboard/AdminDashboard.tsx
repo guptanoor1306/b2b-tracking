@@ -4,14 +4,12 @@ import { DisplayProfile } from '@/lib/projects/display-assignee'
 import { CollapsibleProjectSection } from '@/components/dashboard/CollapsibleProjectSection'
 import { NewProjectsReceivedSection } from '@/components/dashboard/NewProjectsReceivedSection'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
-import { resolveTargetReleaseDate } from '@/lib/timelines'
-import { formatDate, formatWaitingSince } from '@/lib/utils'
+import { effectiveStatusHealth, getProjectTimeliness, resolveTargetReleaseDate } from '@/lib/timelines'
+import { formatDate, formatWaitingSince, cn } from '@/lib/utils'
 import { businessDaysLateExcluding } from '@/lib/businessTime'
 import { welcomeFirstName, HEALTH_PILL_V2 } from '@/lib/design/theme-v2'
-import { getProjectTimeliness } from '@/lib/timelines'
 import { CheckCircle, AlertTriangle, GitBranch, Zap, ArrowRight, Clock } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { isAwaitingRequestReview, isZerodhaChannelDbName } from '@/lib/zerodha-sla'
+import { isAwaitingRequestReview, isZerodhaChannelDbName, suppressProductionMetrics } from '@/lib/zerodha-sla'
 import { mapInternalToExternalStage, needsExternalClientAttention } from '@/lib/views'
 import { CreateRequestButton } from '@/components/board/CreateRequestButton'
 import { CreateReportButton } from '@/components/reports/ChannelReportModal'
@@ -69,9 +67,14 @@ export function AdminDashboard({
     ? inPipeline.filter(p => !isAwaitingRequestReview(p))
     : inPipeline
   const needsAttention = (() => {
+    const isAttentionHealth = (project: Project) => {
+      if (suppressProductionMetrics(project)) return false
+      const health = effectiveStatusHealth(project)
+      return health === 'Delayed' || health === 'At risk'
+    }
     if (!externalView) {
       return pipelineProjects
-        .filter(p => p.status_health === 'Delayed' || p.status_health === 'At risk')
+        .filter(isAttentionHealth)
         .slice(0, 6)
     }
     const seen = new Set<string>()
@@ -85,7 +88,7 @@ export function AdminDashboard({
       if (needsExternalClientAttention(project, channelDbName)) add(project)
     }
     for (const project of attentionPool) {
-      if (project.status_health === 'Delayed' || project.status_health === 'At risk') add(project)
+      if (isAttentionHealth(project)) add(project)
     }
     return items.slice(0, 6)
   })()
@@ -153,9 +156,10 @@ export function AdminDashboard({
                   ? businessDaysLateExcluding(p.target_delivery_date, holidays, holdPeriodsByProjectId[p.id] ?? [])
                   : 0
                 const pendingPerson = p.stage_assignee ?? p.external_team_member
-                const healthLabel = p.status_health === 'At risk'
+                const effectiveHealth = effectiveStatusHealth(p)
+                const healthLabel = effectiveHealth === 'At risk'
                   ? 'At risk'
-                  : (p.status_health === 'Delayed' || t.status === 'delayed')
+                  : (effectiveHealth === 'Delayed' || t.status === 'delayed')
                     ? 'Delayed'
                     : null
                 const lateLabel = externalView

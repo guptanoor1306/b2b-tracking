@@ -53,12 +53,31 @@ export function isDeclinedRequest(project: {
 }
 
 export function suppressProductionMetrics(project: {
-  channel: string
+  channel?: string | null
   current_stage: string
   request_status?: RequestStatus | string | null
 }): boolean {
-  if (isAwaitingRequestReview(project) || isDeclinedRequest(project)) return true
-  return isZerodhaChannelDbName(project.channel) && isZerodhaIntakeStage(project.current_stage)
+  const channel = project.channel
+  if (!channel) return false
+  const scoped = { ...project, channel }
+  if (isAwaitingRequestReview(scoped) || isDeclinedRequest(scoped)) return true
+  return isZerodhaChannelDbName(channel) && isZerodhaIntakeStage(project.current_stage)
+}
+
+/** Dashboard row label before production starts — no On track / Delayed / At risk. */
+export function pipelineIntakeLabel(project: {
+  channel?: string | null
+  current_stage: string
+  request_status?: RequestStatus | string | null
+}): string | null {
+  if (!suppressProductionMetrics(project)) return null
+  const channel = project.channel
+  if (!channel) return null
+  const scoped = { ...project, channel }
+  if (isAwaitingRequestReview(scoped)) return null
+  if (isDeclinedRequest(scoped)) return 'Declined'
+  if (project.current_stage === ZERODHA_READY_TO_PRODUCE) return ZERODHA_READY_TO_PRODUCE
+  return null
 }
 
 export function hasIntakeMaterials(project: {
@@ -198,6 +217,7 @@ export function normalizeZerodhaBoardStage(stage: string): string {
   if (stage === 'First Review Done') return ZERODHA_FIRST_DRAFT_REVIEW_DONE
   if (stage === '2nd Review') return ZERODHA_SECOND_DRAFT_REVIEW
   if (stage === '2nd Review Done') return ZERODHA_SECOND_DRAFT_REVIEW_DONE
+  if (stage === 'Editing' || stage === 'Editing with Sound' || stage === 'Premiere') return 'Sound'
   return stage
 }
 

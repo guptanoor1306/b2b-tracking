@@ -128,6 +128,7 @@ export type StageDuration = {
   endedAt: string | null
   days: number
   hours: number
+  totalBusinessHours: number
 }
 
 export function stageHistoryEntries(history: StageHistory[]): StageHistory[] {
@@ -154,6 +155,7 @@ export function computeStageDurations(history: StageHistory[], holidays: string[
       endedAt: sorted[i + 1]?.changed_at ?? null,
       days,
       hours,
+      totalBusinessHours: totalHours,
     }
   })
 }

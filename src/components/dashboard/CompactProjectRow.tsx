@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/Badge'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { HEALTH_PILL_V2 } from '@/lib/design/theme-v2'
 import { effectiveStatusHealth } from '@/lib/timelines'
-import { isPendingRequestReview } from '@/lib/zerodha-sla'
+import { isAwaitingRequestReview, pipelineIntakeLabel, suppressProductionMetrics } from '@/lib/zerodha-sla'
 import { AssigneeContext, DisplayProfile, getProjectDisplayAssignee, getProjectDeliveredAssignees } from '@/lib/projects/display-assignee'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -21,10 +21,12 @@ export function CompactProjectRow({
   project, variant = 'dark', assigneeContext = 'stage', holdStarter, stageLabel,
 }: Props) {
   const light = variant === 'light'
-  const pendingReview = isPendingRequestReview(project)
+  const awaitingReview = isAwaitingRequestReview(project)
+  const hideHealthTag = suppressProductionMetrics(project)
+  const intakeLabel = pipelineIntakeLabel(project)
   const statusHealth = effectiveStatusHealth(project)
-  const pill = pendingReview ? null : HEALTH_PILL_V2[statusHealth]
-  const displayAssignee = pendingReview ? null : getProjectDisplayAssignee(project, assigneeContext, holdStarter)
+  const healthPill = hideHealthTag ? null : HEALTH_PILL_V2[statusHealth]
+  const displayAssignee = awaitingReview ? null : getProjectDisplayAssignee(project, assigneeContext, holdStarter)
   const deliveredAssignees = assigneeContext === 'delivered'
     ? getProjectDeliveredAssignees(project)
     : []
@@ -46,23 +48,29 @@ export function CompactProjectRow({
           {project.title}
         </p>
         <p className={cn('text-[11px] mt-0.5 truncate', light ? 'text-zinc-500' : 'text-zinc-600')}>
-          {pendingReview ? 'Awaiting internal review' : stageText}
+          {awaitingReview ? 'Awaiting internal review' : stageText}
         </p>
       </div>
-      {pendingReview && light ? (
+      {awaitingReview && light ? (
         <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
           New request
         </span>
-      ) : light && pill ? (
-        <span className={cn('shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold', pill)}>
+      ) : intakeLabel && light ? (
+        <span className="shrink-0 rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-semibold text-zinc-600">
+          {intakeLabel}
+        </span>
+      ) : light && healthPill ? (
+        <span className={cn('shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold', healthPill)}>
           {statusHealth}
         </span>
-      ) : (
+      ) : !light ? (
         <>
           <Badge label={stageText} variant="stage" className="shrink-0 max-w-[120px] truncate hidden sm:inline-flex" />
-          <Badge label={statusHealth} variant="health" className="shrink-0" />
+          {!hideHealthTag && (
+            <Badge label={statusHealth} variant="health" className="shrink-0" />
+          )}
         </>
-      )}
+      ) : null}
       {(light && deliveredAssignees.length > 0) && (
         <div className="flex -space-x-1.5 shrink-0">
           {deliveredAssignees.map(a => (

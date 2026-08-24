@@ -19,6 +19,7 @@ import {
   isZerodhaChannelDbName,
   isZerodhaIntakeStage,
   normalizeZerodhaBoardStage,
+  suppressProductionMetrics,
   zerodhaStageSlaRows,
 } from '@/lib/zerodha-sla'
 import { HoldPeriod } from '@/lib/types'
@@ -132,9 +133,13 @@ export function effectiveStatusHealth(project: {
   current_stage: string
   status_health: string
   channel?: string | null
+  request_status?: string | null
 }): string {
   if (resolvePipelineStage(project.current_stage, project.channel) === FINAL_STAGE) {
     return 'Delivered'
+  }
+  if (suppressProductionMetrics(project)) {
+    return 'On track'
   }
   return project.status_health
 }
@@ -270,7 +275,7 @@ export function getProjectTimeliness(
   holidays: string[] = [],
   holdPeriods: HoldPeriod[] = []
 ): TimelinessResult {
-  const stage = normalizeStage(project.current_stage)
+  const stage = resolvePipelineStage(project.current_stage, project.channel)
   const targetReleaseDate = resolveTargetReleaseDate(project, holidays)
   const teamCtx = projectTeamContext(project)
   const slaMap = buildStageSlaHoursMap(project.level_of_video, teamCtx, project.channel)
@@ -377,6 +382,7 @@ export function computeProjectHealth(
   if (project.is_on_hold) return 'On hold'
   const stage = resolvePipelineStage(project.current_stage, project.channel)
   if (stage === FINAL_STAGE) return 'Delivered'
+  if (suppressProductionMetrics(project)) return 'On track'
 
   const { status } = getProjectTimeliness(project, holidays, holdPeriods)
   if (status === 'delayed') return 'Delayed'
@@ -404,19 +410,23 @@ export function isStageDurationOverSla(
   endedAt: Date | string,
   holidays: string[] = [],
   level?: string | null,
-  project?: ProjectTeamContext,
+  project?: ProjectTeamContext & { channel?: string | null },
   holdPeriods: HoldPeriod[] = [],
-  timelineLocked = false
+  timelineLocked = false,
+  elapsedBusinessHours?: number,
 ): boolean {
   if (timelineLocked) return false
-  const sla = getStageSlaHours(stage, level, project)
+  const channel = project?.channel ?? null
+  const sla = getStageSlaHours(stage, level, project, undefined, channel)
   if (sla == null) return false
-  const end = typeof endedAt === 'string' ? parseISO(endedAt) : endedAt
-  const exclude = holdPeriods.map(p => ({
-    start: parseISO(p.started_at),
-    end: p.ended_at ? parseISO(p.ended_at) : new Date(),
-  }))
-  const elapsed = businessHoursBetweenExcluding(parseISO(startedAt), end, holidays, exclude)
+  const elapsed = elapsedBusinessHours ?? (() => {
+    const end = typeof endedAt === 'string' ? parseISO(endedAt) : endedAt
+    const exclude = holdPeriods.map(p => ({
+      start: parseISO(p.started_at),
+      end: p.ended_at ? parseISO(p.ended_at) : new Date(),
+    }))
+    return businessHoursBetweenExcluding(parseISO(startedAt), end, holidays, exclude)
+  })()
   return elapsed > sla
 }
 

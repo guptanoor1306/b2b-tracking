@@ -522,7 +522,17 @@ export function StagePipelineGantt({
         !atFinalDelivery
         && stageLabel(entry.new_stage) === stageLabel(currentStage ?? '')
         && !next
-      const overSla = isStageDurationOverSla(stage, d.startedAt, endIso, holidays, project.level_of_video, project, effectiveHoldPeriods, timelineLocked)
+      const overSla = isStageDurationOverSla(
+        stage,
+        d.startedAt,
+        endIso,
+        holidays,
+        project.level_of_video,
+        project,
+        effectiveHoldPeriods,
+        timelineLocked,
+        d.totalBusinessHours,
+      )
 
       let durationLabel = formatDuration(d.days, d.hours)
       if (isFinalStageRow && atFinalDelivery && !next) {
@@ -590,7 +600,8 @@ export function StagePipelineGantt({
               project.level_of_video,
               project,
               effectiveHoldPeriods,
-              timelineLocked
+              timelineLocked,
+              animHours,
             ),
             assigneeInfo: stageAssigneeMap.get(ANIMATION_VD_STAGE) ?? null,
             durationLabel: formatDuration(animDays, animHoursPart),
