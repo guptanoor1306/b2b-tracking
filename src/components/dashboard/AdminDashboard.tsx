@@ -8,7 +8,7 @@ import { effectiveStatusHealth, getProjectTimeliness, resolveTargetReleaseDate }
 import { formatDate, formatWaitingSince, cn } from '@/lib/utils'
 import { businessDaysLateExcluding } from '@/lib/businessTime'
 import { welcomeFirstName, HEALTH_PILL_V2 } from '@/lib/design/theme-v2'
-import { CheckCircle, AlertTriangle, GitBranch, Zap, ArrowRight, Clock } from 'lucide-react'
+import { Zap, ArrowRight, Clock } from 'lucide-react'
 import { isAwaitingRequestReview, isZerodhaChannelDbName, suppressProductionMetrics } from '@/lib/zerodha-sla'
 import { mapInternalToExternalStage, needsExternalClientAttention } from '@/lib/views'
 import { CreateRequestButton } from '@/components/board/CreateRequestButton'
@@ -16,6 +16,11 @@ import { CreateReportButton } from '@/components/reports/ChannelReportModal'
 import { ReleaseScheduleButton } from '@/components/dashboard/ReleaseScheduleButton'
 import type { ReleaseScheduleItem } from '@/components/dashboard/ReleaseScheduleModal'
 import { RecentCommentsSection } from '@/components/dashboard/RecentCommentsSection'
+import { TeamPerformanceVitals } from '@/components/dashboard/TeamPerformanceVitals'
+import { DashboardStatsRow } from '@/components/dashboard/DashboardStatsRow'
+import { TimelineMetricsWidget } from '@/components/dashboard/TimelineMetricsWidget'
+import type { TeamPerformanceStats } from '@/lib/data/team-stats'
+import type { OnTimeDeliveryStats, TimelineMetrics } from '@/lib/data/dashboard-metrics'
 import type { HoldPeriod } from '@/lib/types'
 import type { RecentCommentFeedItem } from '@/lib/data/comments'
 import type { ReactNode } from 'react'
@@ -25,6 +30,7 @@ type Props = {
   month: string
   monthFilter: ReactNode
   counts: [number, number, number]
+  onTimeDelivery?: OnTimeDeliveryStats | null
   inPipeline: Project[]
   delivered: Project[]
   onHold: Project[]
@@ -37,21 +43,19 @@ type Props = {
   workspaceLabel?: string
   showCreateRequest?: boolean
   showCreateReport?: boolean
+  timelineMetrics?: TimelineMetrics | null
+  teamPerformance?: TeamPerformanceStats | null
   releaseScheduleItems?: ReleaseScheduleItem[]
   recentComments?: RecentCommentFeedItem[]
 }
 
-const STAT_CONFIG = [
-  { key: 'onTime', icon: CheckCircle, iconBg: 'bg-emerald-100 text-emerald-600', label: 'Delivered on time' },
-  { key: 'late', icon: AlertTriangle, iconBg: 'bg-orange-100 text-orange-600', label: 'Delivered late' },
-  { key: 'pipeline', icon: GitBranch, iconBg: 'bg-violet-100 text-violet-600', label: 'In pipeline' },
-]
-
 export function AdminDashboard({
-  profileName, month, monthFilter, counts, inPipeline, delivered, onHold, allInPipeline, holidays, holdStarters = {},
+  profileName, month, monthFilter, counts, onTimeDelivery, inPipeline, delivered, onHold, allInPipeline, holidays, holdStarters = {},
   holdPeriodsByProjectId = {},
   externalView = false, channelDbName = null, workspaceLabel, showCreateRequest = false,
   showCreateReport = false,
+  timelineMetrics = null,
+  teamPerformance = null,
   releaseScheduleItems = [],
   recentComments = [],
 }: Props) {
@@ -93,8 +97,9 @@ export function AdminDashboard({
     return items.slice(0, 6)
   })()
 
-  const totalActive = pipelineProjects.length + onHold.length + newProjectsReceived.length
-  const subtitle = workspaceLabel ?? (externalView ? 'Client production overview' : 'Varsity production')
+  const channelLabel = workspaceLabel ?? (channelDbName ? `${channelDbName} production` : 'Production')
+  const pipelineCount = counts[2]
+  const deliveredCount = delivered.length
 
   return (
     <div className="theme-v2 -mx-6 -mt-2 min-h-[calc(100vh-4rem)] px-6 pb-10 pt-2">
@@ -104,9 +109,7 @@ export function AdminDashboard({
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
               Welcome, {welcomeFirstName(profileName)}
             </h1>
-            <p className="text-sm text-zinc-500 mt-1">
-              {subtitle} · {totalActive} active · {delivered.length} delivered
-            </p>
+            <p className="text-sm text-zinc-500 mt-1">{channelLabel}</p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
             {monthFilter}
@@ -117,23 +120,13 @@ export function AdminDashboard({
         </div>
 
         {/* 1. Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {STAT_CONFIG.map((s, i) => {
-            const Icon = s.icon
-            return (
-              <div
-                key={s.key}
-                className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm text-center"
-              >
-                <div className={cn('mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl', s.iconBg)}>
-                  <Icon size={20} />
-                </div>
-                <p className="text-3xl font-bold text-zinc-900 tabular-nums">{counts[i]}</p>
-                <p className="text-xs text-zinc-500 mt-1">{s.label}</p>
-              </div>
-            )
-          })}
-        </div>
+        <DashboardStatsRow
+          onTimeDelivery={externalView ? null : onTimeDelivery}
+          deliveredCount={deliveredCount}
+          pipelineCount={pipelineCount}
+          month={month}
+          showOnTimeRate={!externalView}
+        />
 
         {/* 2. Needs attention */}
         {needsAttention.length > 0 && (
@@ -233,7 +226,17 @@ export function AdminDashboard({
           <RecentCommentsSection items={recentComments} />
         </div>
 
-        {/* 4. Collapsed project lists */}
+        {/* 4. Team performance */}
+        {teamPerformance && teamPerformance.members.length > 0 && (
+          <TeamPerformanceVitals stats={teamPerformance} month={month} />
+        )}
+
+        {/* 5. Average stage times */}
+        {timelineMetrics && timelineMetrics.metrics.length > 0 && (
+          <TimelineMetricsWidget metrics={timelineMetrics} month={month} />
+        )}
+
+        {/* 6. Project lists */}
         <div className="space-y-4">
           <CollapsibleProjectSection
             title="In Pipeline"

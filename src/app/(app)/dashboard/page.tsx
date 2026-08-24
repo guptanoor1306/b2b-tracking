@@ -1,7 +1,11 @@
 import { redirect } from 'next/navigation'
 import { getSessionProfile } from '@/lib/auth'
-import { getActiveChannelRole, getActiveChannelDbName } from '@/lib/channel-context'
+import { getActiveChannelRole, getActiveChannelDbName, getActiveChannelSlug } from '@/lib/channel-context'
 import { fetchProjects } from '@/lib/data/projects'
+import { fetchChannelMembers } from '@/lib/data/channel-access'
+import { computeTeamPerformance } from '@/lib/data/team-stats'
+import { computeOnTimeDeliveryStats, computeTimelineMetrics } from '@/lib/data/dashboard-metrics'
+import { fetchStageHistoryForProjects } from '@/lib/data/stage-history-batch'
 import { fetchRecentComments } from '@/lib/data/comments'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig, fetchOpenHoldStarters, fetchHoldPeriodsForProjects } from '@/lib/data/stage-sla'
@@ -25,6 +29,7 @@ import {
   effectiveRoleForChannel,
   isChannelSuperAdmin,
 } from '@/lib/views'
+import { isZerodhaChannelDbName } from '@/lib/zerodha-sla'
 
 type SearchParams = Promise<Record<string, string | undefined>>
 
@@ -113,12 +118,36 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   )
   const inPipelineMonth = filterByMonth ? inPipelineView.length : inPipeline.length
 
+  const showSuperadminInsights = showCreateReport && isZerodhaChannelDbName(channelName) && !usesExternalAdminDashboard(effectiveRole)
+  const onTimeDelivery = usesExternalAdminDashboard(effectiveRole)
+    ? null
+    : computeOnTimeDeliveryStats(deliveredOnTime.length, deliveredLate.length)
+
+  let teamPerformance = null
+  let timelineMetrics = null
+  if (showSuperadminInsights) {
+    const channelSlug = await getActiveChannelSlug()
+    const [members, historyByProject] = await Promise.all([
+      fetchChannelMembers(channelSlug ?? ''),
+      fetchStageHistoryForProjects(projects.map(p => p.id)),
+    ])
+    teamPerformance = computeTeamPerformance(projects, members, month)
+    timelineMetrics = computeTimelineMetrics(
+      projects,
+      historyByProject,
+      holidays,
+      holdPeriodsByProjectId,
+      month,
+    )
+  }
+
   return (
     <AdminDashboard
       profileName={profile.name}
       month={month}
       monthFilter={monthFilter}
       counts={[deliveredOnTime.length, deliveredLate.length, inPipelineMonth]}
+      onTimeDelivery={onTimeDelivery}
       inPipeline={inPipelineView}
       delivered={deliveredView}
       onHold={onHoldView}
@@ -131,6 +160,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       workspaceLabel={usesExternalAdminDashboard(effectiveRole) ? 'Client production overview' : undefined}
       showCreateRequest={showCreateRequest}
       showCreateReport={showCreateReport}
+      timelineMetrics={showSuperadminInsights ? timelineMetrics : null}
+      teamPerformance={teamPerformance}
       releaseScheduleItems={releaseScheduleItems}
       recentComments={recentComments}
     />
