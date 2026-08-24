@@ -13,7 +13,7 @@ import { DeleteProjectButton } from '@/components/projects/DeleteProjectButton'
 import { ProjectHoldButton } from '@/components/projects/ProjectHoldButton'
 import { ProjectHoldReasonPanel } from '@/components/projects/ProjectHoldReasonPanel'
 import { StagePipelineGantt } from '@/components/projects/StagePipelineGantt'
-import { resolveTargetReleaseDate } from '@/lib/timelines'
+import { effectiveStatusHealth, resolveTargetReleaseDate } from '@/lib/timelines'
 import { formatDate } from '@/lib/utils'
 import {
   healthLabel, HEALTH_PILL_V2,
@@ -75,7 +75,7 @@ export function ProjectDetailLayout({
   const progress = hideMetrics
     ? 0
     : pipelineProgressPercentForChannel(project.current_stage, project.channel)
-  const healthPill = HEALTH_PILL_V2[project.status_health] ?? 'bg-zinc-100 text-zinc-600 border-zinc-200'
+  const healthPill = HEALTH_PILL_V2[effectiveStatusHealth(project)] ?? 'bg-zinc-100 text-zinc-600 border-zinc-200'
 
   const intakeView = isProjectIntakeView(project)
   const pendingLinks = pendingContentCount(project, { checkLinks: canEditLinks, checkCopy: false, intakeView })
@@ -134,7 +134,7 @@ export function ProjectDetailLayout({
                 'rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
                 healthPill,
               )}>
-                {healthLabel(project.status_health)}
+                {healthLabel(effectiveStatusHealth(project))}
               </span>
             )}
             {resubmitted && !internal && (

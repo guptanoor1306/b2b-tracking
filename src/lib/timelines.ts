@@ -18,6 +18,7 @@ import {
 import {
   isZerodhaChannelDbName,
   isZerodhaIntakeStage,
+  normalizeZerodhaBoardStage,
   zerodhaStageSlaRows,
 } from '@/lib/zerodha-sla'
 import { HoldPeriod } from '@/lib/types'
@@ -83,7 +84,7 @@ export function getStageSlaHours(
 ): number | null {
   const channel = resolveChannelDbName(project, channelDbName)
 
-  const normalized = normalizeStage(stage)
+  const normalized = resolvePipelineStage(stage, channel)
   const row = slaRowsForChannel(channel).find(r => r.stage_name === normalized)
   if (!row) return null
   const h = resolveStageHours(row, level, project, teleprompter)
@@ -117,6 +118,25 @@ export const STAGE_SLA_HOURS: Partial<Record<string, number>> = buildStageSlaHou
 
 export function normalizeStage(stage: string): string {
   return LEGACY_STAGE_ALIASES[stage] ?? stage
+}
+
+/** Channel-aware stage name for SLA, timeline display, and health checks. */
+export function resolvePipelineStage(stage: string, channelDbName?: string | null): string {
+  if (isZerodhaChannelDbName(channelDbName)) {
+    return normalizeZerodhaBoardStage(stage)
+  }
+  return normalizeStage(stage)
+}
+
+export function effectiveStatusHealth(project: {
+  current_stage: string
+  status_health: string
+  channel?: string | null
+}): string {
+  if (resolvePipelineStage(project.current_stage, project.channel) === FINAL_STAGE) {
+    return 'Delivered'
+  }
+  return project.status_health
 }
 
 /** Delivered projects keep their stored target date; SLA edits do not apply retroactively */
@@ -355,7 +375,7 @@ export function computeProjectHealth(
   holdPeriods: HoldPeriod[] = [],
 ): string {
   if (project.is_on_hold) return 'On hold'
-  const stage = normalizeStage(project.current_stage)
+  const stage = resolvePipelineStage(project.current_stage, project.channel)
   if (stage === FINAL_STAGE) return 'Delivered'
 
   const { status } = getProjectTimeliness(project, holidays, holdPeriods)

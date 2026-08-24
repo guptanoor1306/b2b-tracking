@@ -3,6 +3,7 @@ import { Project, Profile } from '@/lib/types'
 import { Badge } from '@/components/ui/Badge'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { HEALTH_PILL_V2 } from '@/lib/design/theme-v2'
+import { effectiveStatusHealth } from '@/lib/timelines'
 import { isPendingRequestReview } from '@/lib/zerodha-sla'
 import { AssigneeContext, DisplayProfile, getProjectDisplayAssignee, getProjectDeliveredAssignees } from '@/lib/projects/display-assignee'
 import { ChevronRight } from 'lucide-react'
@@ -21,7 +22,8 @@ export function CompactProjectRow({
 }: Props) {
   const light = variant === 'light'
   const pendingReview = isPendingRequestReview(project)
-  const pill = pendingReview ? null : HEALTH_PILL_V2[project.status_health]
+  const statusHealth = effectiveStatusHealth(project)
+  const pill = pendingReview ? null : HEALTH_PILL_V2[statusHealth]
   const displayAssignee = pendingReview ? null : getProjectDisplayAssignee(project, assigneeContext, holdStarter)
   const deliveredAssignees = assigneeContext === 'delivered'
     ? getProjectDeliveredAssignees(project)
@@ -53,12 +55,12 @@ export function CompactProjectRow({
         </span>
       ) : light && pill ? (
         <span className={cn('shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold', pill)}>
-          {project.status_health}
+          {statusHealth}
         </span>
       ) : (
         <>
           <Badge label={stageText} variant="stage" className="shrink-0 max-w-[120px] truncate hidden sm:inline-flex" />
-          <Badge label={project.status_health} variant="health" className="shrink-0" />
+          <Badge label={statusHealth} variant="health" className="shrink-0" />
         </>
       )}
       {(light && deliveredAssignees.length > 0) && (

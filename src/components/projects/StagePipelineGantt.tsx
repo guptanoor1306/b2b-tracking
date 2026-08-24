@@ -19,7 +19,7 @@ import { ANIMATION_VD_STAGE, FINAL_STAGE, GRAPHICS_VD_STAGE } from '@/lib/consta
 import { StageReminderButton } from '@/components/projects/StageReminderButton'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { updateStageHistoryDate } from '@/lib/actions/projects'
-import { isStageDurationOverSla, normalizeStage, isProjectTimelineLocked } from '@/lib/timelines'
+import { isStageDurationOverSla, normalizeStage, isProjectTimelineLocked, resolvePipelineStage } from '@/lib/timelines'
 import { mapInternalToExternalStage } from '@/lib/views'
 import {
   filterZerodhaIntakeFromHistory,
@@ -494,17 +494,20 @@ export function StagePipelineGantt({
     return map
   }, [stageEntries])
 
+  const channel = project.channel
+  const stageLabel = useCallback((stage: string) => resolvePipelineStage(stage, channel), [channel])
+
   const { rangeStart, rangeEnd, days, todayOffset, rows, ticks, totalDays } = useMemo(() => {
     const built: Omit<StageRow, 'leftPct' | 'widthPct'>[] = []
     const atFinalDelivery =
-      timelineLocked || normalizeStage(currentStage ?? '') === FINAL_STAGE
+      timelineLocked || stageLabel(currentStage ?? '') === FINAL_STAGE
 
     stageEntries.forEach((entry, i) => {
       const next = stageEntries[i + 1]
       const d = durations[i]
       if (!d) return
 
-      const stage = normalizeStage(entry.new_stage)
+      const stage = stageLabel(entry.new_stage)
       const isFinalStageRow = stage === FINAL_STAGE
       const effectiveStart = effectiveStageStartIso(stageEntries, entry)
       const parallelAnchorEntry = stage === ANIMATION_VD_STAGE ? vdParallelAnchorEntry(stageEntries) : null
@@ -517,7 +520,7 @@ export function StagePipelineGantt({
       const endDate = next ? startOfDay(parseISO(endIso)) : currentEnd!.endDate
       const isCurrent =
         !atFinalDelivery
-        && normalizeStage(entry.new_stage) === normalizeStage(currentStage ?? '')
+        && stageLabel(entry.new_stage) === stageLabel(currentStage ?? '')
         && !next
       const overSla = isStageDurationOverSla(stage, d.startedAt, endIso, holidays, project.level_of_video, project, effectiveHoldPeriods, timelineLocked)
 
@@ -662,7 +665,7 @@ export function StagePipelineGantt({
       ticks: axisTicks(days),
       totalDays,
     }
-  }, [stageEntries, durations, resolveDate, currentStage, currentAssignee, currentAssigneeId, stageAssigneeMap, holidays, project, effectiveHoldPeriods, externalView, timelineLocked])
+  }, [stageEntries, durations, resolveDate, currentStage, currentAssignee, currentAssigneeId, stageAssigneeMap, holidays, project, effectiveHoldPeriods, externalView, timelineLocked, stageLabel])
 
   const latestHistory = stageEntries[stageEntries.length - 1]
   const currentStageDays = daysInStage(latestHistory?.changed_at)
