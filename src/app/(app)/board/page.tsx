@@ -13,6 +13,7 @@ import { getSessionProfile } from '@/lib/auth'
 import { getActiveChannelRole, getActiveChannelDbName, getActiveChannelSlug } from '@/lib/channel-context'
 import { redirect } from 'next/navigation'
 import { ALL_MONTHS, filterProjectsByMonth } from '@/lib/utils'
+import { parseCsvFilter, formatCsvFilter } from '@/lib/board-filters'
 import { isZerodhaChannelDbName, externalStagesForChannel, internalStagesForChannel, VIDEO_LANGUAGES } from '@/lib/zerodha-sla'
 import {
   canSeeBoardAssigneeFilter,
@@ -68,6 +69,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   const boardLanguages = isZerodha
     ? [...new Set(monthScoped.map(p => p.video_language).filter(Boolean))].sort() as string[]
     : []
+  const boardTypes = [...new Set(monthScoped.map(p => p.content_type).filter(Boolean))].sort()
   const internalStages = internalStagesForChannel(channelName)
   const externalStages = externalStagesForChannel(channelName)
 
@@ -80,15 +82,28 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
     filtered = filterProjectsByAssignee(filtered, params.assignee)
   }
 
-  if (params.ip) {
-    filtered = filtered.filter(p => p.ip === params.ip)
+  const selectedIps = parseCsvFilter(params.ip)
+  if (selectedIps.length) {
+    filtered = filtered.filter(p => selectedIps.includes(p.ip))
   }
 
-  if (params.language) {
-    filtered = filtered.filter(p => p.video_language === params.language)
+  const selectedLanguages = parseCsvFilter(params.language)
+  if (selectedLanguages.length) {
+    filtered = filtered.filter(p => p.video_language && selectedLanguages.includes(p.video_language))
   }
 
-  const boardKey = `${month}-${params.assignee ?? 'all'}-${params.ip ?? 'all'}-${params.language ?? 'all'}`
+  const selectedTypes = parseCsvFilter(params.content_type)
+  if (selectedTypes.length) {
+    filtered = filtered.filter(p => selectedTypes.includes(p.content_type))
+  }
+
+  const boardKey = [
+    month,
+    params.assignee ?? 'all',
+    selectedIps.length ? formatCsvFilter(selectedIps) : 'all',
+    selectedLanguages.length ? formatCsvFilter(selectedLanguages) : 'all',
+    selectedTypes.length ? formatCsvFilter(selectedTypes) : 'all',
+  ].join('-')
 
   return (
     <div className="theme-v2 -mx-6 -mt-2 min-h-[calc(100vh-4rem)] px-6 pb-10 pt-2">
@@ -124,11 +139,11 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
             <Suspense fallback={null}>
               <BoardFiltersBar
                 ips={boardIps}
-                languages={boardLanguages.length ? boardLanguages : [...VIDEO_LANGUAGES]}
+                languages={isZerodha ? (boardLanguages.length ? boardLanguages : [...VIDEO_LANGUAGES]) : []}
+                types={boardTypes}
                 users={filterUsers}
                 currentUserId={profile.id}
                 showAssigneeFilter={superAdmin || canSeeBoardAssigneeFilter(role)}
-                showLanguageFilter={isZerodha}
                 matchCount={filtered.length}
               />
             </Suspense>

@@ -64,13 +64,12 @@ const boardCollisionDetection: CollisionDetection = args => {
 }
 
 function CardContent({
-  project, holidays, holdPeriods = [], compact = false, titleHref, channelDbName, users = [],
+  project, holidays, holdPeriods = [], compact = false, channelDbName, users = [],
 }: {
   project: Project
   holidays: string[]
   holdPeriods?: HoldPeriod[]
   compact?: boolean
-  titleHref?: string
   channelDbName?: string | null
   users?: Profile[]
 }) {
@@ -120,19 +119,7 @@ function CardContent({
         'font-bold text-zinc-900 line-clamp-2 leading-snug tracking-tight',
         compact ? 'text-sm' : 'text-[15px]',
       )}>
-        {titleHref ? (
-          <Link
-            href={titleHref}
-            prefetch
-            draggable={false}
-            onPointerDown={e => e.stopPropagation()}
-            className="pointer-events-auto hover:text-violet-700 hover:underline underline-offset-2"
-          >
-            {project.title}
-          </Link>
-        ) : (
-          project.title
-        )}
+        {project.title}
       </p>
       <p className="text-xs text-zinc-500 mt-1 truncate font-medium inline-flex items-center gap-1.5 flex-wrap">
         <span className="inline-flex items-center gap-1.5 min-w-0">
@@ -238,34 +225,56 @@ const KanbanCard = memo(function KanbanCard({
   const ipAccent = getIpAccent(project.ip)
   const projectHref = `/projects/${project.id}`
 
+  if (readOnly) {
+    return (
+      <Link
+        href={projectHref}
+        prefetch
+        draggable={false}
+        className={cn(CARD_BASE, cardClass, 'block p-3.5 hover:shadow-md transition-shadow')}
+      >
+        <CardContent
+          project={project}
+          holidays={holidays}
+          holdPeriods={holdPeriods}
+          channelDbName={channelDbName}
+          users={users}
+        />
+      </Link>
+    )
+  }
+
   return (
     <div
       ref={setNodeRef}
       style={isDragging ? { opacity: 0.35 } : undefined}
       className={cn(
         CARD_BASE, cardClass, 'relative p-3.5 select-none',
-        !readOnly && 'cursor-grab active:cursor-grabbing touch-none',
         isDragging && cn('shadow-lg ring-2', ipAccent.ring),
       )}
-      {...(!readOnly ? listeners : {})}
-      {...(!readOnly ? attributes : {})}
     >
-      <div className="pointer-events-none flex gap-2">
-        {!readOnly && (
-          <div className="text-zinc-300 shrink-0 mt-1">
-            <GripVertical size={15} />
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
+      <div className="flex gap-2">
+        <div
+          className="text-zinc-300 shrink-0 mt-1 cursor-grab active:cursor-grabbing touch-none"
+          {...listeners}
+          {...attributes}
+        >
+          <GripVertical size={15} />
+        </div>
+        <Link
+          href={projectHref}
+          prefetch
+          draggable={false}
+          className="flex-1 min-w-0 rounded-lg -m-1 p-1 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+        >
           <CardContent
             project={project}
             holidays={holidays}
             holdPeriods={holdPeriods}
-            titleHref={projectHref}
             channelDbName={channelDbName}
             users={users}
           />
-        </div>
+        </Link>
       </div>
     </div>
   )

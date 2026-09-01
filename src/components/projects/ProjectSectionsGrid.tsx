@@ -50,7 +50,10 @@ function SectionCard({
 }
 
 function TruncatedLink({ label, url }: { label: string; url: string | null | undefined }) {
-  const href = url?.trim()
+  const raw = url?.trim()
+  const href = raw
+    ? (/^https?:\/\//i.test(raw) ? raw : `https://${raw}`)
+    : null
   return (
     <div className="border-b border-zinc-100 py-2.5 last:border-0">
       <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">{label}</p>
@@ -115,7 +118,9 @@ export function ProjectSectionsGrid({
   const showIntakeSidebar = hasIntakeMaterials(project)
   const showQcReview = internalView && isZerodhaChannelDbName(project.channel)
   const showClientReview = showIntakeSidebar
-  const canEditMaterials = canEditIntakeMaterials
+  const canEditIntakeFields = canEditIntakeMaterials && !internalView
+  const canEditReviewLinkFields = canEditLinks && internalView
+  const canEditProductionLinkFields = canEditLinks && internalView
 
   const [links, setLinks] = useState({
     assets_link: project.assets_link ?? '',
@@ -205,13 +210,13 @@ export function ProjectSectionsGrid({
   const reviewSection = (
     <SectionCard
       title={showIntakeSidebar ? 'Client review' : 'Content Links'}
-      footer={canEditLinks ? (
+      footer={canEditReviewLinkFields ? (
         <div className="flex justify-end">
           <Button size="sm" loading={linksLoading} onClick={showIntakeSidebar ? saveReviewLink : saveLinks}>Save</Button>
         </div>
       ) : undefined}
     >
-      {canEditLinks ? (
+      {canEditReviewLinkFields ? (
         <div className="space-y-3">
           <Input
             label="Review link"
@@ -219,7 +224,7 @@ export function ProjectSectionsGrid({
             value={links.assets_link}
             onChange={e => setLinks(l => ({ ...l, assets_link: e.target.value }))}
           />
-          {!showIntakeSidebar && (
+          {!showIntakeSidebar && canEditProductionLinkFields && (
             <Input
               label="Drive video link"
               placeholder="Paste drive or video link"
@@ -229,7 +234,12 @@ export function ProjectSectionsGrid({
           )}
         </div>
       ) : (
-        <TruncatedLink label="Review link" url={project.assets_link} />
+        <>
+          <TruncatedLink label="Review link" url={project.assets_link} />
+          {!showIntakeSidebar && (
+            <TruncatedLink label="Drive video link" url={productionDriveLink} />
+          )}
+        </>
       )}
     </SectionCard>
   )
@@ -328,7 +338,7 @@ export function ProjectSectionsGrid({
         <p className="mt-0.5 text-[11px] text-zinc-500">Internal client review link</p>
       </div>
       <div className="px-4 py-3">
-        {canEditLinks ? (
+        {canEditReviewLinkFields ? (
           <Input
             label="Review link"
             placeholder="Paste review link"
@@ -339,7 +349,7 @@ export function ProjectSectionsGrid({
           <TruncatedLink label="Review link" url={project.assets_link} />
         )}
       </div>
-      {canEditLinks && (
+      {canEditReviewLinkFields && (
         <div className="border-t border-zinc-100 px-4 py-2.5">
           <Button size="sm" loading={linksLoading} onClick={saveReviewLink} className="w-full">
             Save review link
@@ -356,7 +366,7 @@ export function ProjectSectionsGrid({
         <p className="mt-0.5 text-[11px] text-zinc-500">Links and copy from the request</p>
       </div>
       <div className="px-4 py-1">
-        {canEditMaterials ? (
+        {canEditIntakeFields ? (
           <div className="space-y-2 py-2">
             <Input label="Script link" placeholder="https://..." value={links.script_link} onChange={e => setLinks(l => ({ ...l, script_link: e.target.value }))} />
             <Input label="Video link" placeholder="https://..." value={links.drive_link} onChange={e => setLinks(l => ({ ...l, drive_link: e.target.value }))} />
@@ -388,7 +398,7 @@ export function ProjectSectionsGrid({
           </>
         )}
       </div>
-      {canEditMaterials && (
+      {canEditIntakeFields && (
         <div className="border-t border-zinc-100 px-4 py-2.5">
           <Button size="sm" loading={intakeLoading} onClick={saveIntakeMaterials} className="w-full">
             Save materials
