@@ -28,7 +28,7 @@ export function QcReviewFeedbackPanel({
   currentQcSubmission,
 }: Props) {
   const router = useRouter()
-  const isAtQc = normalizeZerodhaBoardStage(currentStage) === ZERODHA_FIRST_DRAFT_QC
+  const isAtQc = normalizeZerodhaBoardStage(currentStage, channelDbName) === ZERODHA_FIRST_DRAFT_QC
   const returnStage = stageBeforeQc(channelDbName)
   const showForm = canSubmit && isAtQc && !currentQcSubmission
 

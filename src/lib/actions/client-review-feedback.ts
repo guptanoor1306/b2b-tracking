@@ -26,7 +26,7 @@ export async function resolveZerodhaStageAssigneeId(
   newStage: string,
   channelSlug: string | null,
 ): Promise<string | null> {
-  if (normalizeZerodhaBoardStage(newStage) === ZERODHA_FIRST_DRAFT_QC) {
+  if (normalizeZerodhaBoardStage(newStage, project.channel) === ZERODHA_FIRST_DRAFT_QC) {
     if (project.qc_reviewer_id) return project.qc_reviewer_id
     if (channelSlug) {
       const superAdmins = await fetchChannelSuperAdmins(channelSlug)
@@ -64,8 +64,8 @@ export async function submitClientReviewFeedback(
     return { error: 'Unauthorized' }
   }
 
-  const reviewStage = normalizeZerodhaBoardStage(project.current_stage)
-  if (!isZerodhaClientReviewStage(reviewStage)) {
+  const reviewStage = normalizeZerodhaBoardStage(project.current_stage, project.channel)
+  if (!isZerodhaClientReviewStage(reviewStage, project.channel)) {
     return { error: 'Project is not awaiting client review feedback' }
   }
 
@@ -78,7 +78,7 @@ export async function submitClientReviewFeedback(
     return { error: 'Add at least one feedback item before submitting' }
   }
 
-  const doneStage = zerodhaReviewDoneStage(reviewStage)
+  const doneStage = zerodhaReviewDoneStage(reviewStage, project.channel)
   if (!doneStage) return { error: 'Invalid review stage' }
 
   const admin = createAdminClient()

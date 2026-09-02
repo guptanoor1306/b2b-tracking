@@ -2,7 +2,7 @@
 
 import { useState, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { Project, Comment, RpCut, ClientReviewSubmission, QcReviewSubmission } from '@/lib/types'
+import { Project, Comment, RpCut, ClientReviewSubmission, QcReviewSubmission, ReelTimestampPair } from '@/lib/types'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Button } from '@/components/ui/Button'
@@ -87,6 +87,45 @@ function ReadCopy({ label, value }: { label: string; value: string | null | unde
   )
 }
 
+function normalizeReelTimestamps(raw: unknown): ReelTimestampPair[] {
+  if (!raw || !Array.isArray(raw)) return []
+  return raw
+    .map(p => {
+      if (!p || typeof p !== 'object') return null
+      const pair = p as { start?: unknown; end?: unknown }
+      return {
+        start: String(pair.start ?? '').trim(),
+        end: String(pair.end ?? '').trim(),
+      }
+    })
+    .filter((p): p is ReelTimestampPair => !!p && (p.start.length > 0 || p.end.length > 0))
+}
+
+function ReelTimestampRows({ pairs }: { pairs: ReelTimestampPair[] }) {
+  if (!pairs.length) {
+    return (
+      <div className="border-b border-zinc-100 py-2.5 last:border-0">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Timestamps</p>
+        <p className="mt-1 text-xs italic text-zinc-400">Not added</p>
+      </div>
+    )
+  }
+  return (
+    <>
+      {pairs.map((pair, i) => (
+        <div key={i} className="border-b border-zinc-100 py-2.5 last:border-0">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+            {pairs.length > 1 ? `Timestamp ${i + 1}` : 'Timestamps'}
+          </p>
+          <p className="mt-1 text-xs text-zinc-800">
+            {pair.start} → {pair.end}
+          </p>
+        </div>
+      ))}
+    </>
+  )
+}
+
 type Props = {
   project: Project
   comments: Comment[]
@@ -117,6 +156,8 @@ export function ProjectSectionsGrid({
   const productionDriveLink = project.drive_link || project.final_file_link
   const showIntakeSidebar = hasIntakeMaterials(project)
   const isCashCopium = isCashAndCopiumChannelDbName(project.channel)
+  const reelTimestamps = normalizeReelTimestamps(project.reel_timestamps)
+  const showReelTimestamps = isCashCopium && project.content_type === 'Reel'
   const showQcReview = internalView && usesExternalIntakeFlow(project.channel)
   const showClientReview = showIntakeSidebar
   const canEditIntakeFields = canEditIntakeMaterials && !internalView
@@ -204,7 +245,7 @@ export function ProjectSectionsGrid({
     router.refresh()
   }
 
-  const inActiveClientReview = showClientReview && isZerodhaClientReviewStage(project.current_stage)
+  const inActiveClientReview = showClientReview && isZerodhaClientReviewStage(project.current_stage, project.channel)
   const commentsCanAdd = !inActiveClientReview || !canSubmitClientReview
   const filledCuts = cuts.filter(c => c.timestamps.trim() || c.thumbnail.trim()).length
 
@@ -410,16 +451,6 @@ export function ProjectSectionsGrid({
             )}
             <ReadCopy label="Thumbnail copy" value={project.thumbnail_copy} />
             {!isCashCopium && <ReadCopy label="Title copy" value={project.title_copy} />}
-            {isCashCopium && project.content_type === 'Reel' && (project.reel_timestamps ?? []).length > 0 && (
-              <div className="border-b border-zinc-100 py-2.5 last:border-0">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Reel timestamps</p>
-                <ul className="mt-1 space-y-1">
-                  {(project.reel_timestamps ?? []).map((pair, i) => (
-                    <li key={i} className="text-xs text-zinc-800">{pair.start} → {pair.end}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </>
         )}
       </div>
@@ -433,9 +464,22 @@ export function ProjectSectionsGrid({
     </div>
   )
 
+  const reelTimestampsCard = showReelTimestamps ? (
+    <div className="rounded-xl border border-zinc-200/90 bg-white shadow-sm">
+      <div className="border-b border-zinc-100 px-4 py-2.5">
+        <h3 className="text-sm font-semibold text-zinc-900">Reel timestamps</h3>
+        <p className="mt-0.5 text-[11px] text-zinc-500">Start / end from the request</p>
+      </div>
+      <div className="px-4 py-1">
+        <ReelTimestampRows pairs={reelTimestamps} />
+      </div>
+    </div>
+  ) : null
+
   const intakeRightColumn = (
     <aside className="space-y-4 lg:sticky lg:top-4">
       {materialsSidebar}
+      {reelTimestampsCard}
       {reviewMaterialsCard}
       {rpCutsSection}
     </aside>

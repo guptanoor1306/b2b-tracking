@@ -46,7 +46,7 @@ export async function submitQcReviewFeedback(
     return { error: 'Unauthorized' }
   }
 
-  if (normalizeZerodhaBoardStage(project.current_stage) !== ZERODHA_FIRST_DRAFT_QC) {
+  if (normalizeZerodhaBoardStage(project.current_stage, project.channel) !== ZERODHA_FIRST_DRAFT_QC) {
     return { error: 'Project is not at Draft QC stage' }
   }
 

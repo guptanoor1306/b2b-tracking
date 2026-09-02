@@ -86,24 +86,56 @@ export function isDateInMonth(dateStr: string | null | undefined, month: string)
 }
 
 type MonthFilterProject = {
+  current_stage?: string
   received_date: string | null
   picked_up_date: string | null
   delivered_date: string | null
   last_status_update_at?: string | null
   on_hold_since?: string | null
   target_delivery_date?: string | null
+  created_at?: string | null
 }
 
-/** Project received, picked up, updated, or targeted in the given month. */
+
+function monthBounds(month: string): { start: string; end: string } {
+  const [year, m] = month.split('-').map(Number)
+  const anchor = new Date(year, m - 1)
+  return {
+    start: format(startOfMonth(anchor), 'yyyy-MM-dd'),
+    end: format(endOfMonth(anchor), 'yyyy-MM-dd'),
+  }
+}
+
+function projectLifecycleAnchor(project: MonthFilterProject): string | null {
+  return (
+    project.received_date
+    ?? project.picked_up_date
+    ?? project.created_at
+    ?? project.last_status_update_at
+    ?? null
+  )?.slice(0, 10) ?? null
+}
+
+/**
+ * Non-delivered projects stay visible from their start month through every later month
+ * until delivery. Delivered projects are handled separately via isDeliveredInMonth.
+ */
+export function isActiveProjectVisibleInMonth(project: MonthFilterProject, month: string): boolean {
+  if (isAllMonths(month)) return true
+
+  const anchor = projectLifecycleAnchor(project)
+  if (!anchor) return true
+
+  const { start, end } = monthBounds(month)
+  if (anchor > end) return false
+  if (project.delivered_date && project.delivered_date.slice(0, 10) < start) return false
+  return true
+}
+
+/** Active / in-pipeline project visible in the given month (carry-forward until delivery). */
 export function isProjectRelevantInMonth(project: MonthFilterProject, month: string): boolean {
   if (isAllMonths(month)) return true
-  return (
-    isDateInMonth(project.received_date, month)
-    || isDateInMonth(project.picked_up_date, month)
-    || isDateInMonth(project.last_status_update_at, month)
-    || isDateInMonth(project.on_hold_since, month)
-    || isDateInMonth(project.target_delivery_date, month)
-  )
+  return isActiveProjectVisibleInMonth(project, month)
 }
 
 export function isDeliveredInMonth(project: Pick<MonthFilterProject, 'delivered_date'>, month: string): boolean {
@@ -113,12 +145,12 @@ export function isDeliveredInMonth(project: Pick<MonthFilterProject, 'delivered_
 
 type MonthFilterableProject = MonthFilterProject & { current_stage: string }
 
-/** Filter board/home lists: delivered by delivery date; active by activity in month. */
+/** Filter board/home lists: delivered by delivery date; active carry forward until delivery. */
 export function filterProjectsByMonth<T extends MonthFilterableProject>(projects: T[], month: string): T[] {
   if (isAllMonths(month)) return projects
   return projects.filter(p => {
     if (p.current_stage === FINAL_STAGE) return isDeliveredInMonth(p, month)
-    return isProjectRelevantInMonth(p, month)
+    return isActiveProjectVisibleInMonth(p, month)
   })
 }
 

@@ -1,8 +1,9 @@
 import { Project } from '@/lib/types'
-import { STUDIOS_CHANNELS } from '@/lib/channels'
+import { liveStudiosChannels } from '@/lib/channels'
 import { FINAL_STAGE, HEALTH_SCORES } from '@/lib/constants'
 import { computeOverviewTotals, periodLabel, type Period } from '@/lib/data/ip-stats'
-import { parseISO, isValid, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
+import { isDeliveredInMonth, isProjectRelevantInMonth } from '@/lib/utils'
+import { format, startOfWeek, endOfWeek } from 'date-fns'
 
 export type ChannelStats = {
   slug: string
@@ -16,26 +17,30 @@ export type ChannelStats = {
   memberCount: number
 }
 
-function inPeriod(dateStr: string | null | undefined, period: Period, anchor: Date): boolean {
-  if (!dateStr) return false
-  const d = parseISO(dateStr)
-  if (!isValid(d)) return false
-  const start = period === 'week'
-    ? startOfWeek(anchor, { weekStartsOn: 1 })
-    : startOfMonth(anchor)
-  const end = period === 'week'
-    ? endOfWeek(anchor, { weekStartsOn: 1 })
-    : endOfMonth(anchor)
-  return d >= start && d <= end
-}
+function isProjectRelevantInPeriod(p: Project, period: Period, anchor: Date): boolean {
+  if (period === 'month') {
+    const month = format(anchor, 'yyyy-MM')
+    if (p.current_stage === FINAL_STAGE) return isDeliveredInMonth(p, month)
+    return isProjectRelevantInMonth(p, month)
+  }
 
-function projectInPeriod(p: Project, period: Period, anchor: Date): boolean {
-  return (
-    inPeriod(p.updated_at, period, anchor) ||
-    inPeriod(p.received_date, period, anchor) ||
-    inPeriod(p.picked_up_date, period, anchor) ||
-    inPeriod(p.delivered_date, period, anchor)
-  )
+  const start = format(startOfWeek(anchor, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const end = format(endOfWeek(anchor, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  if (p.current_stage === FINAL_STAGE) {
+    const delivered = p.delivered_date?.slice(0, 10)
+    return !!delivered && delivered >= start && delivered <= end
+  }
+
+  const lifecycle = (
+    p.received_date
+    ?? p.picked_up_date
+    ?? p.created_at
+    ?? p.last_status_update_at
+  )?.slice(0, 10)
+  if (!lifecycle) return true
+  if (lifecycle > end) return false
+  if (p.delivered_date && p.delivered_date.slice(0, 10) < start) return false
+  return true
 }
 
 export function computeChannelStats(
@@ -44,12 +49,9 @@ export function computeChannelStats(
   period: Period,
   anchor = new Date()
 ): ChannelStats[] {
-  const filtered = projects.filter(p => projectInPeriod(p, period, anchor))
-
-  return STUDIOS_CHANNELS.map(ch => {
-    const channelProjects = filtered.filter(p => p.channel === ch.dbName)
+  return liveStudiosChannels().map(ch => {
     const allChannelProjects = projects.filter(p => p.channel === ch.dbName)
-    const source = channelProjects.length > 0 ? channelProjects : allChannelProjects
+    const source = allChannelProjects.filter(p => isProjectRelevantInPeriod(p, period, anchor))
 
     const inPipeline = source.filter(
       p => p.current_stage !== FINAL_STAGE && p.status_health !== 'On hold'

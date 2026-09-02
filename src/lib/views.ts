@@ -23,7 +23,9 @@ import {
   ZERODHA_SECOND_DRAFT_REVIEW,
   ZERODHA_FIRST_DRAFT_QC,
   isZerodhaClientReviewStage,
+  isCashAndCopiumChannelDbName,
 } from '@/lib/zerodha-sla'
+import { CASH_COPIUM_CLIENT_REVIEW_STAGES } from '@/lib/cash-and-copium-sla'
 import { Role, Project } from '@/lib/types'
 import { isUserOnProjectTeam } from '@/lib/projects/team'
 
@@ -114,8 +116,13 @@ export function needsExternalClientAttention(
   channelDbName?: string | null,
 ): boolean {
   if (isDeclinedRequest(project)) return true
-  if (usesExternalIntakeFlow(channelDbName ?? project.channel)) {
-    return ZERODHA_CLIENT_REVIEW_STAGES.has(normalizeZerodhaBoardStage(project.current_stage))
+  const channel = channelDbName ?? project.channel
+  if (usesExternalIntakeFlow(channel)) {
+    const normalized = normalizeZerodhaBoardStage(project.current_stage, channel)
+    if (isCashAndCopiumChannelDbName(channel)) {
+      return (CASH_COPIUM_CLIENT_REVIEW_STAGES as readonly string[]).includes(normalized)
+    }
+    return ZERODHA_CLIENT_REVIEW_STAGES.has(normalized)
   }
   const meta = STAGE_PIPELINE[normalizeStage(project.current_stage)]
   return meta?.owner === 'external'
@@ -199,7 +206,7 @@ export function canSubmitQcReviewFeedback(
 ): boolean {
   if (!usesExternalIntakeFlow(project.channel)) return false
   if (!isInternalRole(role)) return false
-  if (normalizeZerodhaBoardStage(project.current_stage) !== ZERODHA_FIRST_DRAFT_QC) return false
+  if (normalizeZerodhaBoardStage(project.current_stage, project.channel) !== ZERODHA_FIRST_DRAFT_QC) return false
   if (project.qc_reviewer_id === userId) return true
   if (isChannelSuperAdmin(role) || isSuperAdmin(role)) return true
   // Legacy internal projects may never have had a QC reviewer assigned
@@ -214,7 +221,7 @@ export function canSubmitClientReviewFeedback(
 ): boolean {
   if (!usesExternalIntakeFlow(project.channel)) return false
   if (!isExternalRole(role) && !isExternalClientAdmin(role)) return false
-  if (!isZerodhaClientReviewStage(project.current_stage)) return false
+  if (!isZerodhaClientReviewStage(project.current_stage, project.channel)) return false
   return project.external_team_member_id === userId || project.created_by === userId
 }
 
@@ -322,7 +329,7 @@ export function getBoardDisplayStage(
 ): string {
   if (options.externalView) {
     if (usesExternalIntakeFlow(options.channelDbName ?? null)) {
-      return mapZerodhaInternalToExternalStage(project.current_stage)
+      return mapZerodhaInternalToExternalStage(project.current_stage, options.channelDbName)
     }
     return mapInternalToExternalStage(project.current_stage)
   }
@@ -344,7 +351,7 @@ export function mapInternalToExternalStage(
   channelDbName?: string | null,
 ): string {
   if (usesExternalIntakeFlow(channelDbName ?? null)) {
-    return mapZerodhaInternalToExternalStage(internalStage)
+    return mapZerodhaInternalToExternalStage(internalStage, channelDbName)
   }
   const stage = normalizeStage(internalStage)
   const idx = STAGES_INTERNAL.indexOf(stage as typeof STAGES_INTERNAL[number])

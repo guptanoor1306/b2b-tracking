@@ -142,39 +142,64 @@ export function ExternalRequestModal({
           value={form.title}
           onChange={e => set('title', e.target.value)}
         />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Select
-            label="Type of video *"
-            placeholder="Select type"
-            value={form.content_type}
-            onChange={e => set('content_type', e.target.value)}
-            options={contentTypeOptions}
-          />
-          {!isCashCopium && (
+        {isCashCopium ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Select
-              label="Language *"
-              placeholder="Select language"
-              value={form.video_language ?? ''}
-              onChange={e => set('video_language', e.target.value)}
-              options={VIDEO_LANGUAGES.map(l => ({ value: l, label: l }))}
+              label="Type of video *"
+              placeholder="Select type"
+              value={form.content_type}
+              onChange={e => set('content_type', e.target.value)}
+              options={contentTypeOptions}
             />
-          )}
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <Input
-              label="Release date *"
-              type="date"
-              min={minReleaseDate}
-              value={form.target_delivery_date}
-              onChange={e => set('target_delivery_date', e.target.value)}
-            />
-            <p className="mt-1.5 text-xs text-zinc-500">
-              Must be at least <strong>3 working days</strong> from today.
-              Earliest: {format(parseISO(minReleaseDate), 'dd MMM yyyy')}.
-            </p>
+            <div>
+              <Input
+                label="Release date *"
+                type="date"
+                min={minReleaseDate}
+                value={form.target_delivery_date}
+                onChange={e => set('target_delivery_date', e.target.value)}
+              />
+              <p className="mt-1.5 text-xs text-zinc-500">
+                Must be at least <strong>3 working days</strong> from today.
+                Earliest: {format(parseISO(minReleaseDate), 'dd MMM yyyy')}.
+              </p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Select
+                label="Type of video *"
+                placeholder="Select type"
+                value={form.content_type}
+                onChange={e => set('content_type', e.target.value)}
+                options={contentTypeOptions}
+              />
+              <Select
+                label="Language *"
+                placeholder="Select language"
+                value={form.video_language ?? ''}
+                onChange={e => set('video_language', e.target.value)}
+                options={VIDEO_LANGUAGES.map(l => ({ value: l, label: l }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <Input
+                  label="Release date *"
+                  type="date"
+                  min={minReleaseDate}
+                  value={form.target_delivery_date}
+                  onChange={e => set('target_delivery_date', e.target.value)}
+                />
+                <p className="mt-1.5 text-xs text-zinc-500">
+                  Must be at least <strong>3 working days</strong> from today.
+                  Earliest: {format(parseISO(minReleaseDate), 'dd MMM yyyy')}.
+                </p>
+              </div>
+            </div>
+          </>
+        )}
         {isCashCopium ? (
           <Input
             label="Drive link *"

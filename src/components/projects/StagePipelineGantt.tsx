@@ -20,6 +20,7 @@ import { StageReminderButton } from '@/components/projects/StageReminderButton'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { updateStageHistoryDate } from '@/lib/actions/projects'
 import { isStageDurationOverSla, normalizeStage, isProjectTimelineLocked, resolvePipelineStage } from '@/lib/timelines'
+import { slaLevelForProject } from '@/lib/stage-sla'
 import { mapInternalToExternalStage } from '@/lib/views'
 import {
   filterZerodhaIntakeFromHistory,
@@ -32,7 +33,7 @@ const ROW_MIN_H = 56
 
 type Props = {
   history: StageHistory[]
-  project: Pick<Project, 'level_of_video' | 'video_language' | 'channel' | 'editor_id' | 'editor_2_id' | 'designer_id' | 'designer_2_id' | 'uses_teleprompter' | 'is_on_hold' | 'on_hold_since' | 'current_stage' | 'delivered_date'>
+  project: Pick<Project, 'level_of_video' | 'content_type' | 'video_language' | 'channel' | 'editor_id' | 'editor_2_id' | 'designer_id' | 'designer_2_id' | 'uses_teleprompter' | 'is_on_hold' | 'on_hold_since' | 'current_stage' | 'delivered_date'>
   holdPeriods?: HoldPeriod[]
   currentStage?: string
   projectId: string
@@ -527,7 +528,7 @@ export function StagePipelineGantt({
         d.startedAt,
         endIso,
         holidays,
-        project.level_of_video,
+        slaLevelForProject(project),
         project,
         effectiveHoldPeriods,
         timelineLocked,
@@ -597,7 +598,7 @@ export function StagePipelineGantt({
               animStartIso,
               animEndIso,
               holidays,
-              project.level_of_video,
+              slaLevelForProject(project),
               project,
               effectiveHoldPeriods,
               timelineLocked,

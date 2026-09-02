@@ -6,8 +6,12 @@ import {
   externalIntakeChannelSlug,
   DEFAULT_ZERODHA_STAGE_SLA,
   filterZerodhaSlaRows,
+  DEFAULT_CASH_COPIUM_STAGE_SLA,
+  filterCashCopiumSlaRows,
+  cashCopiumStageSlaRows,
 } from '@/lib/zerodha-sla'
 import { getChannelBySlug } from '@/lib/channels'
+import { isCashAndCopiumChannelSlug } from '@/lib/external-intake-flow'
 
 function mapSlaRow(row: Record<string, unknown>): StageSlaRow {
   return {
@@ -27,9 +31,12 @@ function mapSlaRow(row: Record<string, unknown>): StageSlaRow {
 
 async function seedChannelStageSla(channelSlug: string): Promise<StageSlaRow[]> {
   const supabase = await createClient()
-  const defaults = usesExternalIntakeFlow(getChannelBySlug(channelSlug)?.dbName)
-    ? DEFAULT_ZERODHA_STAGE_SLA
-    : DEFAULT_STAGE_SLA
+  const channel = getChannelBySlug(channelSlug)
+  const defaults = isCashAndCopiumChannelSlug(channelSlug)
+    ? DEFAULT_CASH_COPIUM_STAGE_SLA
+    : usesExternalIntakeFlow(channel?.dbName)
+      ? DEFAULT_ZERODHA_STAGE_SLA
+      : DEFAULT_STAGE_SLA
 
   const { error } = await supabase.from('channel_stage_sla').insert(
     defaults.map(r => ({
@@ -67,6 +74,9 @@ async function fetchChannelStageSla(channelSlug: string): Promise<StageSlaRow[]>
     .order('sort_order')
 
   if (error) {
+    if (isCashAndCopiumChannelSlug(channelSlug)) {
+      return cashCopiumStageSlaRows()
+    }
     if (usesExternalIntakeFlow(getChannelBySlug(channelSlug)?.dbName)) {
       return DEFAULT_ZERODHA_STAGE_SLA.map((r, i) => ({ ...r, id: `zerodha-${i}` }))
     }
@@ -77,11 +87,19 @@ async function fetchChannelStageSla(channelSlug: string): Promise<StageSlaRow[]>
     try {
       return await seedChannelStageSla(channelSlug)
     } catch {
+      if (isCashAndCopiumChannelSlug(channelSlug)) {
+        return cashCopiumStageSlaRows()
+      }
       return DEFAULT_ZERODHA_STAGE_SLA.map((r, i) => ({ ...r, id: `zerodha-${i}` }))
     }
   }
 
-  return filterZerodhaSlaRows(data.map(mapSlaRow))
+  const mapped = data.map(mapSlaRow)
+  if (isCashAndCopiumChannelSlug(channelSlug)) {
+    const filtered = filterCashCopiumSlaRows(mapped)
+    return filtered.length ? filtered : cashCopiumStageSlaRows()
+  }
+  return filterZerodhaSlaRows(mapped)
 }
 
 export async function fetchStageSlaConfig(channelDbName?: string | null): Promise<StageSlaRow[]> {

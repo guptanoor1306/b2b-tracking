@@ -610,9 +610,9 @@ export async function changeProjectStage(
   }
 
   if (usesExternalIntakeFlow(project.channel)) {
-    const qcError = getZerodhaQcStageMoveError(project.current_stage, newStage)
+    const qcError = getZerodhaQcStageMoveError(project.current_stage, newStage, project.channel)
     if (qcError) return { error: qcError }
-    const reviewLinkError = getZerodhaQcReviewLinkError(newStage, project.assets_link)
+    const reviewLinkError = getZerodhaQcReviewLinkError(newStage, project.assets_link, project.channel)
     if (reviewLinkError) return { error: reviewLinkError }
   }
 
@@ -642,7 +642,7 @@ export async function changeProjectStage(
 
   if (
     usesExternalIntakeFlow(project.channel)
-    && normalizeZerodhaBoardStage(newStage) === ZERODHA_FIRST_DRAFT_QC
+    && normalizeZerodhaBoardStage(newStage, project.channel) === ZERODHA_FIRST_DRAFT_QC
     && !project.qc_reviewer_id
   ) {
     const qcId = await defaultQcReviewerId(channelSlug)

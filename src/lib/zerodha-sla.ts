@@ -5,6 +5,17 @@ import {
   isCashAndCopiumChannelDbName,
   usesExternalIntakeFlow,
 } from '@/lib/external-intake-flow'
+import {
+  STAGES_CASH_COPIUM_INTERNAL,
+  STAGES_CASH_COPIUM_EXTERNAL,
+  CASH_COPIUM_CLIENT_REVIEW_STAGES,
+  CASH_COPIUM_REVIEW_TO_DONE,
+  normalizeCashCopiumBoardStage,
+  mapCashCopiumInternalToExternalStage,
+  DEFAULT_CASH_COPIUM_STAGE_SLA,
+  cashCopiumStageSlaRows,
+  filterCashCopiumSlaRows,
+} from '@/lib/cash-and-copium-sla'
 
 export {
   usesExternalIntakeFlow,
@@ -163,20 +174,29 @@ export const ZERODHA_REVIEW_TO_DONE: Record<string, string> = {
   [ZERODHA_SECOND_DRAFT_REVIEW]: ZERODHA_SECOND_DRAFT_REVIEW_DONE,
 }
 
-export function isZerodhaClientReviewStage(stage: string): boolean {
-  return (ZERODHA_CLIENT_REVIEW_STAGES as readonly string[]).includes(normalizeZerodhaBoardStage(stage))
+export function isZerodhaClientReviewStage(stage: string, channelDbName?: string | null): boolean {
+  const normalized = normalizeZerodhaBoardStage(stage, channelDbName)
+  if (isCashAndCopiumChannelDbName(channelDbName)) {
+    return (CASH_COPIUM_CLIENT_REVIEW_STAGES as readonly string[]).includes(normalized)
+  }
+  return (ZERODHA_CLIENT_REVIEW_STAGES as readonly string[]).includes(normalized)
 }
 
-export function zerodhaReviewDoneStage(reviewStage: string): string | null {
-  return ZERODHA_REVIEW_TO_DONE[normalizeZerodhaBoardStage(reviewStage)] ?? null
+export function zerodhaReviewDoneStage(reviewStage: string, channelDbName?: string | null): string | null {
+  const normalized = normalizeZerodhaBoardStage(reviewStage, channelDbName)
+  if (isCashAndCopiumChannelDbName(channelDbName)) {
+    return CASH_COPIUM_REVIEW_TO_DONE[normalized] ?? null
+  }
+  return ZERODHA_REVIEW_TO_DONE[normalized] ?? null
 }
 
 export function hasClientReviewSubmission(
   submissions: { review_stage: string }[],
   reviewStage: string,
+  channelDbName?: string | null,
 ): boolean {
-  const stage = normalizeZerodhaBoardStage(reviewStage)
-  return submissions.some(s => normalizeZerodhaBoardStage(s.review_stage) === stage)
+  const stage = normalizeZerodhaBoardStage(reviewStage, channelDbName)
+  return submissions.some(s => normalizeZerodhaBoardStage(s.review_stage, channelDbName) === stage)
 }
 
 export function stageBeforeQc(channelDbName: string | null | undefined): string {
@@ -219,15 +239,22 @@ export const STAGES_ZERODHA_EXTERNAL = [
 ] as const
 
 export function internalStagesForChannel(channelDbName: string | null | undefined): readonly string[] {
-  return usesExternalIntakeFlow(channelDbName) ? STAGES_ZERODHA_INTERNAL : STAGES_INTERNAL
+  if (isCashAndCopiumChannelDbName(channelDbName)) return STAGES_CASH_COPIUM_INTERNAL
+  if (usesExternalIntakeFlow(channelDbName)) return STAGES_ZERODHA_INTERNAL
+  return STAGES_INTERNAL
 }
 
 export function externalStagesForChannel(channelDbName: string | null | undefined): readonly string[] {
-  return usesExternalIntakeFlow(channelDbName) ? STAGES_ZERODHA_EXTERNAL : STAGES_EXTERNAL
+  if (isCashAndCopiumChannelDbName(channelDbName)) return STAGES_CASH_COPIUM_EXTERNAL
+  if (usesExternalIntakeFlow(channelDbName)) return STAGES_ZERODHA_EXTERNAL
+  return STAGES_EXTERNAL
 }
 
-/** Map legacy Zerodha rows still on removed stages into the board column layout. */
-export function normalizeZerodhaBoardStage(stage: string): string {
+/** Map legacy board stage names into the channel pipeline layout. */
+export function normalizeZerodhaBoardStage(stage: string, channelDbName?: string | null): string {
+  if (isCashAndCopiumChannelDbName(channelDbName)) {
+    return normalizeCashCopiumBoardStage(stage)
+  }
   if (stage === 'First Cut Changes' || stage === 'Thumbnail Copy + RP Cuts') return 'Storyboard'
   if (stage === 'Video received') return ZERODHA_READY_TO_PRODUCE
   if (stage === 'First Cut' || stage === 'First Cut Received') return ZERODHA_FIRST_CUT
@@ -248,7 +275,7 @@ export function pipelineProgressPercentForChannel(
 ): number {
   const stages = internalStagesForChannel(channelDbName)
   const stage = usesExternalIntakeFlow(channelDbName)
-    ? normalizeZerodhaBoardStage(currentStage)
+    ? normalizeZerodhaBoardStage(currentStage, channelDbName)
     : currentStage
   if (stage === 'Final Delivery') return 100
   const idx = (stages as readonly string[]).indexOf(stage)
@@ -299,9 +326,15 @@ export function isZerodhaChannelSlug(slug: string | null | undefined): boolean {
   return slug === ZERODHA_CHANNEL_SLUG
 }
 
-/** Map Zerodha internal stage → external board column. */
-export function mapZerodhaInternalToExternalStage(internalStage: string): string {
-  const stage = normalizeZerodhaBoardStage(normalizeStage(internalStage))
+/** Map internal stage → external board column. */
+export function mapZerodhaInternalToExternalStage(
+  internalStage: string,
+  channelDbName?: string | null,
+): string {
+  if (isCashAndCopiumChannelDbName(channelDbName)) {
+    return mapCashCopiumInternalToExternalStage(internalStage)
+  }
+  const stage = normalizeZerodhaBoardStage(normalizeStage(internalStage), channelDbName)
   const idx = (STAGES_ZERODHA_INTERNAL as readonly string[]).indexOf(stage)
   if (idx < 0) return STAGES_ZERODHA_EXTERNAL[0]
 
@@ -333,6 +366,15 @@ export const DEFAULT_ZERODHA_STAGE_SLA: Omit<StageSlaRow, 'id'>[] = [
   { stage_name: 'Sound', role_owner: 'Sound Designer', duration_hours: 1.5, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 16 },
   { stage_name: 'Final Delivery', role_owner: 'Internal', duration_hours: 0, level_0_hours: null, level_1_hours: null, level_2_hours: null, level_3_hours: null, level_4_hours: null, parallel_group: null, sort_order: 17 },
 ]
+
+export {
+  DEFAULT_CASH_COPIUM_STAGE_SLA,
+  cashCopiumStageSlaRows,
+  filterCashCopiumSlaRows,
+  STAGES_CASH_COPIUM_INTERNAL,
+  STAGES_CASH_COPIUM_EXTERNAL,
+  CASH_COPIUM_LEVEL_LABELS,
+} from '@/lib/cash-and-copium-sla'
 
 export function zerodhaStageSlaRows(): StageSlaRow[] {
   return DEFAULT_ZERODHA_STAGE_SLA.map((r, i) => ({ ...r, id: `zerodha-${i}` }))
@@ -375,9 +417,13 @@ export function isZerodhaStage(stage: string): boolean {
   return (STAGES_ZERODHA_INTERNAL as readonly string[]).includes(stage)
 }
 
+function pipelineIndexForChannel(channelDbName: string | null | undefined, stage: string): number {
+  const normalized = normalizeZerodhaBoardStage(stage, channelDbName)
+  return (internalStagesForChannel(channelDbName) as readonly string[]).indexOf(normalized)
+}
+
 function zerodhaPipelineIndex(stage: string): number {
-  const normalized = normalizeZerodhaBoardStage(stage)
-  return (STAGES_ZERODHA_INTERNAL as readonly string[]).indexOf(normalized)
+  return pipelineIndexForChannel(ZERODHA_CHANNEL_DB_NAME, stage)
 }
 
 /** Old Zerodha projects already at 1st Cut+ before the Request Received intake flow — keep full timeline. */
@@ -386,8 +432,8 @@ export function isLegacyZerodhaTimelineProject(
   history: StageHistory[],
 ): boolean {
   if (!usesExternalIntakeFlow(project.channel)) return false
-  const idx = zerodhaPipelineIndex(project.current_stage)
-  const firstCutIdx = zerodhaPipelineIndex(ZERODHA_FIRST_CUT)
+  const idx = pipelineIndexForChannel(project.channel, project.current_stage)
+  const firstCutIdx = pipelineIndexForChannel(project.channel, ZERODHA_FIRST_CUT)
   if (firstCutIdx < 0 || idx < firstCutIdx) return false
 
   const firstStage = [...history]
@@ -396,7 +442,7 @@ export function isLegacyZerodhaTimelineProject(
     ?.new_stage
 
   if (!firstStage) return true
-  return normalizeZerodhaBoardStage(firstStage) !== ZERODHA_REQUEST_RECEIVED
+  return normalizeZerodhaBoardStage(firstStage, project.channel) !== ZERODHA_REQUEST_RECEIVED
 }
 
 /** Hide Request Received / Ready to Produce rows on the project detail pipeline timeline. */
@@ -413,15 +459,19 @@ export function filterZerodhaIntakeFromHistory(history: StageHistory[]): StageHi
 }
 
 /** Client-side + server-side guard for Kanban stage moves that bypass Draft QC. */
-export function getZerodhaQcStageMoveError(currentStage: string, newStage: string): string | null {
-  const cur = normalizeZerodhaBoardStage(currentStage)
-  const next = normalizeZerodhaBoardStage(newStage)
+export function getZerodhaQcStageMoveError(
+  currentStage: string,
+  newStage: string,
+  channelDbName?: string | null,
+): string | null {
+  const cur = normalizeZerodhaBoardStage(currentStage, channelDbName)
+  const next = normalizeZerodhaBoardStage(newStage, channelDbName)
   if (cur === next) return null
 
-  const qcIdx = zerodhaPipelineIndex(ZERODHA_FIRST_DRAFT_QC)
-  const postQcIdx = zerodhaPipelineIndex(ZERODHA_FIRST_DRAFT_REVIEW)
-  const curIdx = zerodhaPipelineIndex(cur)
-  const newIdx = zerodhaPipelineIndex(next)
+  const qcIdx = pipelineIndexForChannel(channelDbName, ZERODHA_FIRST_DRAFT_QC)
+  const postQcIdx = pipelineIndexForChannel(channelDbName, ZERODHA_FIRST_DRAFT_REVIEW)
+  const curIdx = pipelineIndexForChannel(channelDbName, cur)
+  const newIdx = pipelineIndexForChannel(channelDbName, next)
   if (qcIdx < 0 || postQcIdx < 0 || curIdx < 0 || newIdx < 0) return null
 
   if (cur === ZERODHA_FIRST_DRAFT_QC) {
@@ -439,8 +489,9 @@ export function getZerodhaQcStageMoveError(currentStage: string, newStage: strin
 export function getZerodhaQcReviewLinkError(
   newStage: string,
   assetsLink: string | null | undefined,
+  channelDbName?: string | null,
 ): string | null {
-  if (normalizeZerodhaBoardStage(newStage) !== ZERODHA_FIRST_DRAFT_QC) return null
+  if (normalizeZerodhaBoardStage(newStage, channelDbName) !== ZERODHA_FIRST_DRAFT_QC) return null
   if (!assetsLink?.trim()) {
     return 'Add a review link on the project page before moving to Draft QC.'
   }

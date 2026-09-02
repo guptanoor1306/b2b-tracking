@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Shield, UserPlus, Trash2, Users } from 'lucide-react'
 import { Profile, ChannelMember, ChannelMemberRole } from '@/lib/types'
-import { STUDIOS_CHANNELS } from '@/lib/channels'
+import { liveStudiosChannels, STUDIOS_CHANNELS } from '@/lib/channels'
 import { CHANNEL_MEMBER_ROLES, ROLE_LABELS } from '@/lib/constants'
 import {
   addChannelMember,
@@ -35,7 +35,8 @@ type AddMode = 'create' | 'existing'
 export function StudiosSettingsClient({ allUsers, membersByChannel }: Props) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
-  const [activeSlug, setActiveSlug] = useState(STUDIOS_CHANNELS[0].slug)
+  const channels = liveStudiosChannels()
+  const [activeSlug, setActiveSlug] = useState(channels[0]?.slug ?? STUDIOS_CHANNELS[0].slug)
   const [addOpen, setAddOpen] = useState(false)
   const [addMode, setAddMode] = useState<AddMode>('create')
   const [selectedUserId, setSelectedUserId] = useState('')
@@ -46,7 +47,7 @@ export function StudiosSettingsClient({ allUsers, membersByChannel }: Props) {
     name: '', email: '', password: '', role: 'Channel Team', organization: '',
   })
 
-  const activeChannel = STUDIOS_CHANNELS.find(c => c.slug === activeSlug)!
+  const activeChannel = (STUDIOS_CHANNELS.find(c => c.slug === activeSlug) ?? channels[0])!
   const members = membersByChannel[activeSlug] ?? []
   const memberIds = useMemo(() => new Set(members.map(m => m.id)), [members])
 
@@ -215,7 +216,7 @@ export function StudiosSettingsClient({ allUsers, membersByChannel }: Props) {
 
       <div className="mb-6 border-b border-zinc-200">
         <nav className="-mb-px flex gap-1 overflow-x-auto" aria-label="Channel tabs">
-          {STUDIOS_CHANNELS.map(ch => {
+          {channels.map(ch => {
             const active = activeSlug === ch.slug
             const count = membersByChannel[ch.slug]?.length ?? 0
             return (

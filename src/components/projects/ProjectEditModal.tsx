@@ -15,6 +15,7 @@ import { useActiveChannel } from '@/context/ChannelContext'
 import {
   isZerodhaChannelDbName,
   isZerodhaChannelSlug,
+  isCashAndCopiumChannelDbName,
   projectLevelOptions,
   VIDEO_LANGUAGES,
 } from '@/lib/zerodha-sla'
@@ -52,6 +53,8 @@ export function ProjectEditModal({ open, onClose, project, users }: Props) {
   const isZerodha = isZerodhaChannelSlug(channel?.slug)
     || isZerodhaChannelDbName(channel?.dbName)
     || isZerodhaChannelDbName(project.channel)
+  const isCashCopium = isCashAndCopiumChannelDbName(channel?.dbName)
+    || isCashAndCopiumChannelDbName(project.channel)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [editClientDetails, setEditClientDetails] = useState(false)
@@ -95,8 +98,8 @@ export function ProjectEditModal({ open, onClose, project, users }: Props) {
       ip: form.ip.trim() || 'TBD',
       content_type: form.content_type || CONTENT_TYPES[0],
       ...(form.video_language ? { video_language: form.video_language } : {}),
-      ...(form.level_of_video ? { level_of_video: form.level_of_video } : {}),
-      ...(form.priority ? { priority: form.priority as Priority } : {}),
+      ...(!isCashCopium && form.level_of_video ? { level_of_video: form.level_of_video } : {}),
+      ...(!isCashCopium && form.priority ? { priority: form.priority as Priority } : {}),
       editor_id: form.editor_id || null,
       editor_2_id: form.editor_2_id || null,
       designer_id: form.designer_id || null,
@@ -181,25 +184,27 @@ export function ProjectEditModal({ open, onClose, project, users }: Props) {
             value={form.ip}
             onChange={e => set('ip', e.target.value)}
           />
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Select
-              label="Level"
-              placeholder={isZerodha && !form.video_language ? 'Select language first' : 'Select level'}
-              options={levelOptions}
-              value={form.level_of_video}
-              onChange={e => set('level_of_video', e.target.value)}
-            />
-            <Select
-              label="Priority (optional)"
-              placeholder="Not set"
-              options={[
-                { value: '', label: 'Not set' },
-                ...PRIORITIES.map(p => ({ value: p, label: p })),
-              ]}
-              value={form.priority}
-              onChange={e => set('priority', e.target.value)}
-            />
-          </div>
+          {!isCashCopium && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Select
+                label="Level"
+                placeholder={isZerodha && !form.video_language ? 'Select language first' : 'Select level'}
+                options={levelOptions}
+                value={form.level_of_video}
+                onChange={e => set('level_of_video', e.target.value)}
+              />
+              <Select
+                label="Priority (optional)"
+                placeholder="Not set"
+                options={[
+                  { value: '', label: 'Not set' },
+                  ...PRIORITIES.map(p => ({ value: p, label: p })),
+                ]}
+                value={form.priority}
+                onChange={e => set('priority', e.target.value)}
+              />
+            </div>
+          )}
         </SlideOverSection>
 
         <SlideOverSection title="Team">

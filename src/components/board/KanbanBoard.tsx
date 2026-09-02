@@ -472,7 +472,7 @@ export function KanbanBoard({
       if (!externalView) {
         const dbName = channel?.dbName ?? project.channel
         if (usesExternalIntakeFlow(dbName)) {
-          return normalizeZerodhaBoardStage(project.current_stage)
+          return normalizeZerodhaBoardStage(project.current_stage, dbName)
         }
         return project.current_stage
       }
@@ -536,7 +536,7 @@ export function KanbanBoard({
     }
 
     if (usesExternalIntakeFlow(channel?.dbName ?? project.channel) && !externalView) {
-      const qcError = getZerodhaQcStageMoveError(project.current_stage, newStage)
+      const qcError = getZerodhaQcStageMoveError(project.current_stage, newStage, channel?.dbName ?? project.channel)
       if (qcError) {
         setDragError(qcError)
         return

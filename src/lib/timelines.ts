@@ -14,6 +14,7 @@ import {
   resolveStageHours,
   totalPipelineHoursFromSla,
   DEFAULT_STAGE_SLA,
+  slaLevelForProject,
 } from '@/lib/stage-sla'
 import {
   usesExternalIntakeFlow,
@@ -21,6 +22,10 @@ import {
   normalizeZerodhaBoardStage,
   suppressProductionMetrics,
   zerodhaStageSlaRows,
+  cashCopiumStageSlaRows,
+  filterCashCopiumSlaRows,
+  filterZerodhaSlaRows,
+  isCashAndCopiumChannelDbName,
 } from '@/lib/zerodha-sla'
 import { HoldPeriod } from '@/lib/types'
 
@@ -56,15 +61,24 @@ let cachedSlaChannel: string | null = null
 
 export function setStageSlaCache(rows: StageSlaRow[], channelDbName?: string | null) {
   cachedSlaChannel = channelDbName ?? null
+  if (isCashAndCopiumChannelDbName(channelDbName)) {
+    cachedSlaRows = rows.length ? filterCashCopiumSlaRows(rows) : cashCopiumStageSlaRows()
+    return
+  }
   if (usesExternalIntakeFlow(channelDbName)) {
-    cachedSlaRows = zerodhaStageSlaRows()
+    cachedSlaRows = rows.length ? filterZerodhaSlaRows(rows) : zerodhaStageSlaRows()
     return
   }
   cachedSlaRows = rows.length ? rows : DEFAULT_STAGE_SLA.map((r, i) => ({ ...r, id: `default-${i}` }))
 }
 
 function slaRowsForChannel(channelDbName?: string | null): StageSlaRow[] {
-  if (usesExternalIntakeFlow(channelDbName ?? cachedSlaChannel)) return zerodhaStageSlaRows()
+  const channel = channelDbName ?? cachedSlaChannel
+  if (channel && channel === cachedSlaChannel && cachedSlaRows.length) {
+    return cachedSlaRows
+  }
+  if (isCashAndCopiumChannelDbName(channel)) return cashCopiumStageSlaRows()
+  if (usesExternalIntakeFlow(channel)) return zerodhaStageSlaRows()
   return cachedSlaRows
 }
 
@@ -124,7 +138,7 @@ export function normalizeStage(stage: string): string {
 /** Channel-aware stage name for SLA, timeline display, and health checks. */
 export function resolvePipelineStage(stage: string, channelDbName?: string | null): string {
   if (usesExternalIntakeFlow(channelDbName)) {
-    return normalizeZerodhaBoardStage(stage)
+    return normalizeZerodhaBoardStage(stage, channelDbName)
   }
   return normalizeStage(stage)
 }
@@ -155,6 +169,7 @@ export function isProjectTimelineLocked(project: {
 
 export function projectTeamContext(project: {
   level_of_video?: string | null
+  content_type?: string | null
   video_language?: string | null
   channel?: string | null
   editor_id?: string | null
@@ -165,6 +180,7 @@ export function projectTeamContext(project: {
 }): ProjectTeamContext & { channel?: string | null } {
   return {
     level_of_video: project.level_of_video,
+    content_type: project.content_type,
     video_language: project.video_language,
     channel: project.channel,
     editor_id: project.editor_id,
@@ -263,6 +279,7 @@ export function getProjectTimeliness(
     target_delivery_date: string | null
     received_date: string | null
     level_of_video?: string | null
+    content_type?: string | null
     video_language?: string | null
     channel?: string | null
     is_on_hold?: boolean
@@ -278,7 +295,7 @@ export function getProjectTimeliness(
   const stage = resolvePipelineStage(project.current_stage, project.channel)
   const targetReleaseDate = resolveTargetReleaseDate(project, holidays)
   const teamCtx = projectTeamContext(project)
-  const slaMap = buildStageSlaHoursMap(project.level_of_video, teamCtx, project.channel)
+  const slaMap = buildStageSlaHoursMap(slaLevelForProject(project), teamCtx, project.channel)
   const base = {
     targetReleaseDate,
     stageSlaHours: slaMap[stage] ?? null,

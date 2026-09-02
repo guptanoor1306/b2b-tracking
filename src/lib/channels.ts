@@ -5,6 +5,8 @@ export type StudioChannel = {
   dbName: string
   tagline: string
   initial: string
+  /** When false, hidden from super admin overview and channel picker */
+  live?: boolean
   /** Tailwind gradient stops for card */
   gradientFrom: string
   gradientTo: string
@@ -56,6 +58,7 @@ export const STUDIOS_CHANNELS: StudioChannel[] = [
     dbName: 'Rohit',
     tagline: 'Creator channel',
     initial: 'R',
+    live: false,
     gradientFrom: 'from-rose-500',
     gradientTo: 'to-pink-600',
     accent: 'text-rose-600',
@@ -68,6 +71,7 @@ export const STUDIOS_CHANNELS: StudioChannel[] = [
     dbName: 'Abid-Bhuvan',
     tagline: 'Creator channel',
     initial: 'AB',
+    live: false,
     gradientFrom: 'from-fuchsia-500',
     gradientTo: 'to-purple-600',
     accent: 'text-fuchsia-600',
@@ -80,6 +84,7 @@ export const STUDIOS_CHANNELS: StudioChannel[] = [
     dbName: 'Karthik Insta',
     tagline: 'Instagram-first content',
     initial: 'KI',
+    live: false,
     gradientFrom: 'from-pink-500',
     gradientTo: 'to-rose-600',
     accent: 'text-pink-600',
@@ -92,6 +97,7 @@ export const STUDIOS_CHANNELS: StudioChannel[] = [
     dbName: 'Leap Finance',
     tagline: 'Finance education',
     initial: 'LF',
+    live: false,
     gradientFrom: 'from-emerald-500',
     gradientTo: 'to-teal-600',
     accent: 'text-emerald-600',
@@ -104,6 +110,7 @@ export const STUDIOS_CHANNELS: StudioChannel[] = [
     dbName: 'Capital Mind',
     tagline: 'Markets & macro',
     initial: 'CM',
+    live: false,
     gradientFrom: 'from-indigo-500',
     gradientTo: 'to-violet-600',
     accent: 'text-indigo-600',
@@ -116,6 +123,7 @@ export const STUDIOS_CHANNELS: StudioChannel[] = [
     dbName: 'Sensibull',
     tagline: 'Options & derivatives',
     initial: 'S',
+    live: false,
     gradientFrom: 'from-teal-500',
     gradientTo: 'to-cyan-600',
     accent: 'text-teal-600',
@@ -123,6 +131,10 @@ export const STUDIOS_CHANNELS: StudioChannel[] = [
     pillBg: 'bg-teal-600',
   },
 ]
+
+export function liveStudiosChannels(): StudioChannel[] {
+  return STUDIOS_CHANNELS.filter(c => c.live !== false)
+}
 
 export const ACTIVE_CHANNEL_COOKIE = 'active_channel'
 

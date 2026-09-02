@@ -1,4 +1,6 @@
 import { STAGES_INTERNAL, STAGE_ROLE_OWNER, DUAL_ASSIGNEE_STAGES } from '@/lib/constants'
+import { isCashAndCopiumChannelDbName } from '@/lib/external-intake-flow'
+import { cashCopiumLevelKey } from '@/lib/cash-and-copium-sla'
 
 export type StageSlaRow = {
   id: string
@@ -32,6 +34,7 @@ export const DEFAULT_STAGE_SLA: Omit<StageSlaRow, 'id'>[] = [
 
 export type ProjectTeamContext = {
   level_of_video?: string | null
+  content_type?: string | null
   video_language?: string | null
   channel?: string | null
   editor_id?: string | null
@@ -60,8 +63,13 @@ export function resolveStageHours(
 ): number {
   let hours = row.duration_hours
 
-  const lk = levelKey(level)
-  if (lk && row[lk] != null) hours = row[lk]!
+  if (isCashAndCopiumChannelDbName(project?.channel)) {
+    const lk = cashCopiumLevelKey(project?.content_type ?? level)
+    if (lk && row[lk] != null) hours = row[lk]!
+  } else {
+    const lk = levelKey(level)
+    if (lk && row[lk] != null) hours = row[lk]!
+  }
 
   // Teleprompter split applies to Varsity First Cut (12h base) only
   if (row.stage_name === 'First Cut' && row.duration_hours === 12) {
@@ -79,6 +87,16 @@ export function resolveStageHours(
   }
 
   return hours
+}
+
+/** Content type for Cash & Copium; level_of_video elsewhere. */
+export function slaLevelForProject(project: {
+  channel?: string | null
+  level_of_video?: string | null
+  content_type?: string | null
+}): string | null {
+  if (isCashAndCopiumChannelDbName(project.channel)) return project.content_type ?? null
+  return project.level_of_video ?? null
 }
 
 /** Total pipeline hours for target release (respects parallel groups) */

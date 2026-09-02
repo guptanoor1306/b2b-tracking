@@ -33,9 +33,9 @@ export function ClientReviewFeedbackPanel({
   submissions,
 }: Props) {
   const router = useRouter()
-  const reviewStage = normalizeZerodhaBoardStage(currentStage)
-  const isActiveReview = isZerodhaClientReviewStage(reviewStage)
-  const alreadySubmitted = hasClientReviewSubmission(submissions, reviewStage)
+  const reviewStage = normalizeZerodhaBoardStage(currentStage, channelDbName)
+  const isActiveReview = isZerodhaClientReviewStage(reviewStage, channelDbName)
+  const alreadySubmitted = hasClientReviewSubmission(submissions, reviewStage, channelDbName)
   const pastSubmissions = submissions.filter(s => s.items?.length || s.intro_timeline?.trim())
   const needsIntroTimeline = requiresIntroTimelineOnFirstCutReview(channelDbName)
     && reviewStage === ZERODHA_FIRST_CUT_REVIEW

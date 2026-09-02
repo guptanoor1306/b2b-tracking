@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/Input'
 import { formatDate, cn } from '@/lib/utils'
 import { formatSlaDuration } from '@/lib/timelines'
 import { SettingsPanel, SettingsCard } from '@/components/settings/SettingsLayout'
-import { usesExternalIntakeFlow, ZERODHA_LEVEL_LABELS } from '@/lib/zerodha-sla'
+import { usesExternalIntakeFlow, ZERODHA_LEVEL_LABELS, isCashAndCopiumChannelDbName, CASH_COPIUM_LEVEL_LABELS } from '@/lib/zerodha-sla'
 import { History, Pencil, X, Check } from 'lucide-react'
 
 type Props = {
@@ -20,6 +20,11 @@ type Props = {
 }
 
 type LevelKey = 'level_0_hours' | 'level_1_hours' | 'level_2_hours' | 'level_3_hours' | 'level_4_hours'
+
+const CASH_COPIUM_LEVEL_COLUMNS: { key: LevelKey; label: string }[] = [
+  { key: 'level_1_hours', label: 'Long-Form' },
+  { key: 'level_0_hours', label: 'Reel' },
+]
 
 const ZERODHA_LEVEL_COLUMNS: { key: LevelKey; label: string }[] = [
   { key: 'level_0_hours', label: 'L0 · Gif' },
@@ -42,8 +47,13 @@ function levelCell(row: StageSlaRow, key: LevelKey) {
 
 export function StageSlaSettings({ rows, activity, channelDbName }: Props) {
   const router = useRouter()
+  const isCashCopium = isCashAndCopiumChannelDbName(channelDbName)
   const externalIntake = usesExternalIntakeFlow(channelDbName)
-  const levelColumns = externalIntake ? ZERODHA_LEVEL_COLUMNS : VARSITY_LEVEL_COLUMNS
+  const levelColumns = isCashCopium
+    ? CASH_COPIUM_LEVEL_COLUMNS
+    : externalIntake
+      ? ZERODHA_LEVEL_COLUMNS
+      : VARSITY_LEVEL_COLUMNS
   const [editing, setEditing] = useState<string | null>(null)
   const [form, setForm] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
@@ -75,9 +85,11 @@ export function StageSlaSettings({ rows, activity, channelDbName }: Props) {
     router.refresh()
   }
 
-  const description = externalIntake
-    ? 'Zerodha Online SLAs. Early and late steps are shared across levels; Storyboard through Animation vary by level (Graphics & Animation run in parallel). Hindi projects use the same level options and SLAs as English.'
-    : 'Set SLA hours per pipeline stage. Changes apply to active in-pipeline projects and all new projects. Delivered projects keep their original target dates.'
+  const description = isCashCopium
+    ? 'Cash & Copium SLAs by content type (Long-Form and Reel). Shared stages use the default column; type-specific hours appear in Long-Form / Reel.'
+    : externalIntake
+      ? 'Zerodha Online SLAs. Early and late steps are shared across levels; Storyboard through Animation vary by level (Graphics & Animation run in parallel). Hindi projects use the same level options and SLAs as English.'
+      : 'Set SLA hours per pipeline stage. Changes apply to active in-pipeline projects and all new projects. Delivered projects keep their original target dates.'
 
   return (
     <SettingsPanel
@@ -101,8 +113,10 @@ export function StageSlaSettings({ rows, activity, channelDbName }: Props) {
       {externalIntake && (
         <SettingsCard padding="sm" className="border-blue-100 bg-blue-50/50">
           <p className="text-sm text-blue-900">
-            <span className="font-medium">Level key:</span>{' '}
-            {Object.entries(ZERODHA_LEVEL_LABELS).map(([level, label]) => `${level} ${label}`).join(' · ')}
+            <span className="font-medium">{isCashCopium ? 'Type key:' : 'Level key:'}</span>{' '}
+            {isCashCopium
+              ? Object.entries(CASH_COPIUM_LEVEL_LABELS).map(([type, label]) => `${type} · ${label}`).join(' · ')
+              : Object.entries(ZERODHA_LEVEL_LABELS).map(([level, label]) => `${level} ${label}`).join(' · ')}
           </p>
         </SettingsCard>
       )}
