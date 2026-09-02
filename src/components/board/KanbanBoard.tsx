@@ -27,6 +27,7 @@ import {
 } from '@/lib/design/theme-v2'
 import {
   isZerodhaChannelDbName,
+  usesExternalIntakeFlow,
   normalizeZerodhaBoardStage,
   pipelineProgressPercentForChannel,
   isPendingRequestReview,
@@ -470,7 +471,7 @@ export function KanbanBoard({
     (project: Project) => {
       if (!externalView) {
         const dbName = channel?.dbName ?? project.channel
-        if (isZerodhaChannelDbName(dbName)) {
+        if (usesExternalIntakeFlow(dbName)) {
           return normalizeZerodhaBoardStage(project.current_stage)
         }
         return project.current_stage
@@ -534,7 +535,7 @@ export function KanbanBoard({
       return
     }
 
-    if (isZerodhaChannelDbName(channel?.dbName ?? project.channel) && !externalView) {
+    if (usesExternalIntakeFlow(channel?.dbName ?? project.channel) && !externalView) {
       const qcError = getZerodhaQcStageMoveError(project.current_stage, newStage)
       if (qcError) {
         setDragError(qcError)

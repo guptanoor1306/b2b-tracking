@@ -7,12 +7,14 @@ import { getSessionProfile } from '@/lib/auth'
 import { getActiveChannelRole } from '@/lib/channel-context'
 import { canSubmitClientReviewFeedback, effectiveRoleForChannel, resolveStageAssigneeId } from '@/lib/views'
 import {
-  isZerodhaChannelDbName,
   isZerodhaClientReviewStage,
   normalizeZerodhaBoardStage,
   zerodhaReviewDoneStage,
   ZERODHA_FIRST_DRAFT_QC,
+  ZERODHA_FIRST_CUT_REVIEW,
+  usesExternalIntakeFlow,
 } from '@/lib/zerodha-sla'
+import { requiresIntroTimelineOnFirstCutReview } from '@/lib/external-intake-flow'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchChannelSuperAdmins } from '@/lib/data/channel-access'
 import { computeProjectHealth } from '@/lib/timelines'
@@ -40,19 +42,23 @@ export async function defaultQcReviewerId(channelSlug: string | null): Promise<s
   return superAdmins[0]?.id ?? null
 }
 
-export async function submitClientReviewFeedback(projectId: string, feedbackItems: string[]) {
+export async function submitClientReviewFeedback(
+  projectId: string,
+  feedbackItems: string[],
+  introTimeline?: string | null,
+) {
   const profile = await getSessionProfile()
   if (!profile) return { error: 'Unauthorized' }
   const channelRole = await getActiveChannelRole(profile)
   const role = effectiveRoleForChannel(channelRole, profile.role)
 
   const items = feedbackItems.map(s => s.trim()).filter(Boolean)
-  if (!items.length) return { error: 'Add at least one feedback item before submitting' }
+  const intro = introTimeline?.trim() ?? ''
 
   const supabase = await createClient()
   const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).single()
   if (!project) return { error: 'Project not found' }
-  if (!isZerodhaChannelDbName(project.channel)) return { error: 'Not supported for this channel' }
+  if (!usesExternalIntakeFlow(project.channel)) return { error: 'Not supported for this channel' }
 
   if (!canSubmitClientReviewFeedback(role, project, profile.id)) {
     return { error: 'Unauthorized' }
@@ -61,6 +67,15 @@ export async function submitClientReviewFeedback(projectId: string, feedbackItem
   const reviewStage = normalizeZerodhaBoardStage(project.current_stage)
   if (!isZerodhaClientReviewStage(reviewStage)) {
     return { error: 'Project is not awaiting client review feedback' }
+  }
+
+  const needsIntro = requiresIntroTimelineOnFirstCutReview(project.channel)
+    && reviewStage === ZERODHA_FIRST_CUT_REVIEW
+  if (needsIntro && !intro) {
+    return { error: 'Intro timeline is required before submitting' }
+  }
+  if (!needsIntro && !items.length) {
+    return { error: 'Add at least one feedback item before submitting' }
   }
 
   const doneStage = zerodhaReviewDoneStage(reviewStage)
@@ -83,21 +98,24 @@ export async function submitClientReviewFeedback(projectId: string, feedbackItem
       project_id: projectId,
       review_stage: reviewStage,
       submitted_by: profile.id,
+      intro_timeline: intro || null,
     })
     .select('id')
     .single()
 
   if (subError || !submission) return { error: subError?.message ?? 'Failed to save submission' }
 
-  const { error: itemsError } = await admin.from('client_review_feedback_items').insert(
-    items.map((comment, index) => ({
-      submission_id: submission.id,
-      comment,
-      sort_order: index,
-    })),
-  )
+  if (items.length) {
+    const { error: itemsError } = await admin.from('client_review_feedback_items').insert(
+      items.map((comment, index) => ({
+        submission_id: submission.id,
+        comment,
+        sort_order: index,
+      })),
+    )
 
-  if (itemsError) return { error: itemsError.message }
+    if (itemsError) return { error: itemsError.message }
+  }
 
   const holidays = await fetchHolidayDates()
   const now = new Date().toISOString()
@@ -127,7 +145,9 @@ export async function submitClientReviewFeedback(projectId: string, feedbackItem
     new_stage: doneStage,
     changed_by: profile.id,
     assignee_id: resolvedAssignee,
-    note: `Client submitted ${items.length} feedback item(s)`,
+    note: needsIntro
+      ? 'Client submitted intro timeline'
+      : `Client submitted ${items.length} feedback item(s)`,
     is_hold_event: false,
   })
 

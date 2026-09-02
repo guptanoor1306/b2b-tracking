@@ -14,6 +14,7 @@ import { useActiveChannel } from '@/context/ChannelContext'
 import {
   isZerodhaChannelDbName,
   isZerodhaChannelSlug,
+  usesExternalIntakeFlow,
   projectLevelOptions,
   VIDEO_LANGUAGES,
 } from '@/lib/zerodha-sla'
@@ -47,6 +48,7 @@ export function QuickAddModal({ open, onClose, users, holidays = [] }: Props) {
   const router = useRouter()
   const channel = useActiveChannel()
   const isZerodha = isZerodhaChannelSlug(channel?.slug) || isZerodhaChannelDbName(channel?.dbName)
+  const externalIntake = usesExternalIntakeFlow(channel?.dbName)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState(emptyForm())
@@ -68,6 +70,10 @@ export function QuickAddModal({ open, onClose, users, holidays = [] }: Props) {
   })
 
   const handleSubmit = async () => {
+    if (externalIntake && !isZerodha && !form.target_delivery_date) {
+      setError('Release date is required')
+      return
+    }
     if (isZerodha && !form.video_language) {
       setError('Video language is required')
       return
@@ -103,7 +109,7 @@ export function QuickAddModal({ open, onClose, users, holidays = [] }: Props) {
       external_team_member_id: form.external_team_member_id || null,
       received_date: form.received_date || null,
       picked_up_date: form.received_date || null,
-      target_delivery_date: isZerodha ? (form.target_delivery_date || null) : null,
+      target_delivery_date: externalIntake ? (form.target_delivery_date || null) : null,
     })
 
     setLoading(false)
@@ -148,7 +154,7 @@ export function QuickAddModal({ open, onClose, users, holidays = [] }: Props) {
         </div>
         <Select label="Priority" placeholder="Select priority" options={PRIORITIES.map(p => ({ value: p, label: p }))} value={form.priority} onChange={e => set('priority', e.target.value)} />
         <Input label="Start date" type="date" value={form.received_date} onChange={e => set('received_date', e.target.value)} />
-        {isZerodha && (
+        {externalIntake && (
           <Input label="Release date *" type="date" value={form.target_delivery_date} onChange={e => set('target_delivery_date', e.target.value)} />
         )}
 

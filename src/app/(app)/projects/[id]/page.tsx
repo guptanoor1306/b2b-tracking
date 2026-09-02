@@ -26,7 +26,7 @@ import {
 } from '@/lib/views'
 import { fetchClientReviewSubmissions } from '@/lib/data/client-review-feedback'
 import { fetchQcReviewSubmissions, fetchCurrentQcSubmission } from '@/lib/data/qc-review-feedback'
-import { isZerodhaChannelDbName } from '@/lib/zerodha-sla'
+import { usesExternalIntakeFlow } from '@/lib/zerodha-sla'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig, fetchProjectHoldPeriods } from '@/lib/data/stage-sla'
 import { fetchProjectStageHistory } from '@/lib/data/stage-history'
@@ -55,7 +55,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
 
   const channelName = await getActiveChannelDbName()
   const channelSlug = await getActiveChannelSlug()
-  const isZerodha = isZerodhaChannelDbName(project.channel)
+  const externalIntake = usesExternalIntakeFlow(project.channel)
   const [history, channelMembers, commentsRes, holidays, stageSla, holdPeriods, rpCuts, clientReviewSubmissions, qcSubmissions, currentQcSubmission] = await Promise.all([
     fetchProjectStageHistory(id, project),
     channelSlug ? fetchChannelMembers(channelSlug) : Promise.resolve([]),
@@ -64,9 +64,9 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     fetchStageSlaConfig(channelName),
     fetchProjectHoldPeriods(id),
     canViewRpCuts(role) ? fetchRpCuts(id) : Promise.resolve([]),
-    isZerodha ? fetchClientReviewSubmissions(id) : Promise.resolve([]),
-    isZerodha && pipelineInternal ? fetchQcReviewSubmissions(id) : Promise.resolve([]),
-    isZerodha && pipelineInternal ? fetchCurrentQcSubmission(id) : Promise.resolve(null),
+    externalIntake ? fetchClientReviewSubmissions(id) : Promise.resolve([]),
+    externalIntake && pipelineInternal ? fetchQcReviewSubmissions(id) : Promise.resolve([]),
+    externalIntake && pipelineInternal ? fetchCurrentQcSubmission(id) : Promise.resolve(null),
   ])
   setStageSlaCache(stageSla, channelName)
 

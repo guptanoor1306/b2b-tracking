@@ -1,6 +1,22 @@
 import { LEVELS_OF_VIDEO, STAGES_EXTERNAL, STAGES_INTERNAL } from '@/lib/constants'
 import { normalizeStage } from '@/lib/timelines'
 import { StageHistory } from '@/lib/types'
+import {
+  isCashAndCopiumChannelDbName,
+  usesExternalIntakeFlow,
+} from '@/lib/external-intake-flow'
+
+export {
+  usesExternalIntakeFlow,
+  isCashAndCopiumChannelDbName,
+  isCashAndCopiumChannelSlug,
+  CASH_AND_COPIUM_CHANNEL_DB_NAME,
+  CASH_AND_COPIUM_CHANNEL_SLUG,
+  CASH_AND_COPIUM_CONTENT_TYPES,
+  externalIntakeChannelSlug,
+  requiresIntroTimelineOnFirstCutReview,
+  type ReelTimestampPair,
+} from '@/lib/external-intake-flow'
 
 /** Zerodha-only intake stages (external submissions → internal review). */
 export const ZERODHA_REQUEST_RECEIVED = 'Request Received'
@@ -19,7 +35,7 @@ export function isPendingRequestReview(project: {
   current_stage: string
   request_status?: RequestStatus | string | null
 }): boolean {
-  return isZerodhaChannelDbName(project.channel)
+  return usesExternalIntakeFlow(project.channel)
     && project.current_stage === ZERODHA_REQUEST_RECEIVED
     && (project.request_status === 'pending' || project.request_status == null)
 }
@@ -61,7 +77,7 @@ export function suppressProductionMetrics(project: {
   if (!channel) return false
   const scoped = { ...project, channel }
   if (isAwaitingRequestReview(scoped) || isDeclinedRequest(scoped)) return true
-  return isZerodhaChannelDbName(channel) && isZerodhaIntakeStage(project.current_stage)
+  return usesExternalIntakeFlow(channel) && isZerodhaIntakeStage(project.current_stage)
 }
 
 /** Dashboard row label before production starts — no On track / Delayed / At risk. */
@@ -86,8 +102,13 @@ export function hasIntakeMaterials(project: {
   script_link?: string | null
   screen_captures_link?: string | null
   audio_link?: string | null
+  drive_link?: string | null
 }): boolean {
-  return isZerodhaChannelDbName(project.channel) && (
+  if (!usesExternalIntakeFlow(project.channel)) return false
+  if (isCashAndCopiumChannelDbName(project.channel)) {
+    return !!project.drive_link?.trim() || isZerodhaIntakeStage(project.current_stage)
+  }
+  return (
     !!project.script_link || !!project.screen_captures_link || !!project.audio_link
     || isZerodhaIntakeStage(project.current_stage)
   )
@@ -198,11 +219,11 @@ export const STAGES_ZERODHA_EXTERNAL = [
 ] as const
 
 export function internalStagesForChannel(channelDbName: string | null | undefined): readonly string[] {
-  return isZerodhaChannelDbName(channelDbName) ? STAGES_ZERODHA_INTERNAL : STAGES_INTERNAL
+  return usesExternalIntakeFlow(channelDbName) ? STAGES_ZERODHA_INTERNAL : STAGES_INTERNAL
 }
 
 export function externalStagesForChannel(channelDbName: string | null | undefined): readonly string[] {
-  return isZerodhaChannelDbName(channelDbName) ? STAGES_ZERODHA_EXTERNAL : STAGES_EXTERNAL
+  return usesExternalIntakeFlow(channelDbName) ? STAGES_ZERODHA_EXTERNAL : STAGES_EXTERNAL
 }
 
 /** Map legacy Zerodha rows still on removed stages into the board column layout. */
@@ -226,7 +247,7 @@ export function pipelineProgressPercentForChannel(
   channelDbName?: string | null,
 ): number {
   const stages = internalStagesForChannel(channelDbName)
-  const stage = isZerodhaChannelDbName(channelDbName)
+  const stage = usesExternalIntakeFlow(channelDbName)
     ? normalizeZerodhaBoardStage(currentStage)
     : currentStage
   if (stage === 'Final Delivery') return 100
@@ -271,7 +292,7 @@ export function isZerodhaChannelDbName(channel: string | null | undefined): bool
 }
 
 export function channelUsesTeleprompterFlow(channelDbName: string | null | undefined): boolean {
-  return !isZerodhaChannelDbName(channelDbName)
+  return !usesExternalIntakeFlow(channelDbName)
 }
 
 export function isZerodhaChannelSlug(slug: string | null | undefined): boolean {
@@ -364,7 +385,7 @@ export function isLegacyZerodhaTimelineProject(
   project: { channel: string; current_stage: string },
   history: StageHistory[],
 ): boolean {
-  if (!isZerodhaChannelDbName(project.channel)) return false
+  if (!usesExternalIntakeFlow(project.channel)) return false
   const idx = zerodhaPipelineIndex(project.current_stage)
   const firstCutIdx = zerodhaPipelineIndex(ZERODHA_FIRST_CUT)
   if (firstCutIdx < 0 || idx < firstCutIdx) return false
@@ -383,7 +404,7 @@ export function shouldHideZerodhaIntakeFromTimeline(
   project: { channel: string; current_stage: string },
   history: StageHistory[],
 ): boolean {
-  if (!isZerodhaChannelDbName(project.channel)) return false
+  if (!usesExternalIntakeFlow(project.channel)) return false
   return !isLegacyZerodhaTimelineProject(project, history)
 }
 

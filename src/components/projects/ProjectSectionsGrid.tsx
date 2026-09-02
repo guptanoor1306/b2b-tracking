@@ -12,7 +12,7 @@ import { QcReviewFeedbackPanel } from '@/components/projects/QcReviewFeedbackPan
 import { isZerodhaClientReviewStage } from '@/lib/zerodha-sla'
 import { updateProject, saveRpCuts, RpCutInput } from '@/lib/actions/projects'
 import { ExternalLink, Plus, Trash2 } from 'lucide-react'
-import { hasIntakeMaterials, isZerodhaChannelDbName } from '@/lib/zerodha-sla'
+import { hasIntakeMaterials, isCashAndCopiumChannelDbName, usesExternalIntakeFlow } from '@/lib/zerodha-sla'
 import { cn } from '@/lib/utils'
 
 const MAX_CUTS = 10
@@ -116,7 +116,8 @@ export function ProjectSectionsGrid({
   const intakeVideoLink = project.drive_link
   const productionDriveLink = project.drive_link || project.final_file_link
   const showIntakeSidebar = hasIntakeMaterials(project)
-  const showQcReview = internalView && isZerodhaChannelDbName(project.channel)
+  const isCashCopium = isCashAndCopiumChannelDbName(project.channel)
+  const showQcReview = internalView && usesExternalIntakeFlow(project.channel)
   const showClientReview = showIntakeSidebar
   const canEditIntakeFields = canEditIntakeMaterials && !internalView
   const canEditReviewLinkFields = canEditLinks && internalView
@@ -368,10 +369,16 @@ export function ProjectSectionsGrid({
       <div className="px-4 py-1">
         {canEditIntakeFields ? (
           <div className="space-y-2 py-2">
-            <Input label="Script link" placeholder="https://..." value={links.script_link} onChange={e => setLinks(l => ({ ...l, script_link: e.target.value }))} />
-            <Input label="Video link" placeholder="https://..." value={links.drive_link} onChange={e => setLinks(l => ({ ...l, drive_link: e.target.value }))} />
-            <Input label="Screen captures" placeholder="https://..." value={links.screen_captures_link} onChange={e => setLinks(l => ({ ...l, screen_captures_link: e.target.value }))} />
-            <Input label="Audio link" placeholder="https://..." value={links.audio_link} onChange={e => setLinks(l => ({ ...l, audio_link: e.target.value }))} />
+            {isCashCopium ? (
+              <Input label="Drive link" placeholder="https://..." value={links.drive_link} onChange={e => setLinks(l => ({ ...l, drive_link: e.target.value }))} />
+            ) : (
+              <>
+                <Input label="Script link" placeholder="https://..." value={links.script_link} onChange={e => setLinks(l => ({ ...l, script_link: e.target.value }))} />
+                <Input label="Video link" placeholder="https://..." value={links.drive_link} onChange={e => setLinks(l => ({ ...l, drive_link: e.target.value }))} />
+                <Input label="Screen captures" placeholder="https://..." value={links.screen_captures_link} onChange={e => setLinks(l => ({ ...l, screen_captures_link: e.target.value }))} />
+                <Input label="Audio link" placeholder="https://..." value={links.audio_link} onChange={e => setLinks(l => ({ ...l, audio_link: e.target.value }))} />
+              </>
+            )}
             <Textarea
               label="Thumbnail copy"
               placeholder="Text for the thumbnail"
@@ -379,22 +386,40 @@ export function ProjectSectionsGrid({
               onChange={e => setCopy(c => ({ ...c, thumbnail_copy: e.target.value }))}
               rows={2}
             />
-            <Textarea
-              label="Title copy"
-              placeholder="Title text"
-              value={copy.title_copy}
-              onChange={e => setCopy(c => ({ ...c, title_copy: e.target.value }))}
-              rows={2}
-            />
+            {!isCashCopium && (
+              <Textarea
+                label="Title copy"
+                placeholder="Title text"
+                value={copy.title_copy}
+                onChange={e => setCopy(c => ({ ...c, title_copy: e.target.value }))}
+                rows={2}
+              />
+            )}
           </div>
         ) : (
           <>
-            <TruncatedLink label="Script link" url={project.script_link} />
-            <TruncatedLink label="Video link" url={intakeVideoLink} />
-            <TruncatedLink label="Screen captures" url={project.screen_captures_link} />
-            <TruncatedLink label="Audio link" url={project.audio_link} />
+            {isCashCopium ? (
+              <TruncatedLink label="Drive link" url={intakeVideoLink} />
+            ) : (
+              <>
+                <TruncatedLink label="Script link" url={project.script_link} />
+                <TruncatedLink label="Video link" url={intakeVideoLink} />
+                <TruncatedLink label="Screen captures" url={project.screen_captures_link} />
+                <TruncatedLink label="Audio link" url={project.audio_link} />
+              </>
+            )}
             <ReadCopy label="Thumbnail copy" value={project.thumbnail_copy} />
-            <ReadCopy label="Title copy" value={project.title_copy} />
+            {!isCashCopium && <ReadCopy label="Title copy" value={project.title_copy} />}
+            {isCashCopium && project.content_type === 'Reel' && (project.reel_timestamps ?? []).length > 0 && (
+              <div className="border-b border-zinc-100 py-2.5 last:border-0">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Reel timestamps</p>
+                <ul className="mt-1 space-y-1">
+                  {(project.reel_timestamps ?? []).map((pair, i) => (
+                    <li key={i} className="text-xs text-zinc-800">{pair.start} → {pair.end}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -445,6 +470,7 @@ export function ProjectSectionsGrid({
               <div className="mb-4">
                 <ClientReviewFeedbackPanel
                 projectId={project.id}
+                channelDbName={project.channel}
                 currentStage={project.current_stage}
                 canSubmit={canSubmitClientReview}
                 submissions={clientReviewSubmissions}

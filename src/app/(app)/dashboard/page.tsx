@@ -29,7 +29,7 @@ import {
   effectiveRoleForChannel,
   isChannelSuperAdmin,
 } from '@/lib/views'
-import { isZerodhaChannelDbName } from '@/lib/zerodha-sla'
+import { usesExternalIntakeFlow } from '@/lib/zerodha-sla'
 
 type SearchParams = Promise<Record<string, string | undefined>>
 
@@ -118,7 +118,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   )
   const inPipelineMonth = filterByMonth ? inPipelineView.length : inPipeline.length
 
-  const showSuperadminInsights = showCreateReport && isZerodhaChannelDbName(channelName) && !usesExternalAdminDashboard(effectiveRole)
+  const showSuperadminInsights = showCreateReport && usesExternalIntakeFlow(channelName) && !usesExternalAdminDashboard(effectiveRole)
   const onTimeDelivery = usesExternalAdminDashboard(effectiveRole)
     ? null
     : computeOnTimeDeliveryStats(deliveredOnTime.length, deliveredLate.length)

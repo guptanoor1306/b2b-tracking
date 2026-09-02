@@ -2,8 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { Profile } from '@/lib/types'
 import { DEFAULT_STAGE_SLA, StageSlaRow } from '@/lib/stage-sla'
 import {
-  isZerodhaChannelDbName,
-  ZERODHA_CHANNEL_SLUG,
+  usesExternalIntakeFlow,
+  externalIntakeChannelSlug,
   DEFAULT_ZERODHA_STAGE_SLA,
   filterZerodhaSlaRows,
 } from '@/lib/zerodha-sla'
@@ -27,7 +27,7 @@ function mapSlaRow(row: Record<string, unknown>): StageSlaRow {
 
 async function seedChannelStageSla(channelSlug: string): Promise<StageSlaRow[]> {
   const supabase = await createClient()
-  const defaults = isZerodhaChannelDbName(getChannelBySlug(channelSlug)?.dbName)
+  const defaults = usesExternalIntakeFlow(getChannelBySlug(channelSlug)?.dbName)
     ? DEFAULT_ZERODHA_STAGE_SLA
     : DEFAULT_STAGE_SLA
 
@@ -67,7 +67,7 @@ async function fetchChannelStageSla(channelSlug: string): Promise<StageSlaRow[]>
     .order('sort_order')
 
   if (error) {
-    if (isZerodhaChannelDbName(getChannelBySlug(channelSlug)?.dbName)) {
+    if (usesExternalIntakeFlow(getChannelBySlug(channelSlug)?.dbName)) {
       return DEFAULT_ZERODHA_STAGE_SLA.map((r, i) => ({ ...r, id: `zerodha-${i}` }))
     }
     return DEFAULT_STAGE_SLA.map((r, i) => ({ ...r, id: `default-${i}` }))
@@ -85,8 +85,9 @@ async function fetchChannelStageSla(channelSlug: string): Promise<StageSlaRow[]>
 }
 
 export async function fetchStageSlaConfig(channelDbName?: string | null): Promise<StageSlaRow[]> {
-  if (isZerodhaChannelDbName(channelDbName)) {
-    return fetchChannelStageSla(ZERODHA_CHANNEL_SLUG)
+  const slug = externalIntakeChannelSlug(channelDbName ?? null)
+  if (slug) {
+    return fetchChannelStageSla(slug)
   }
 
   const supabase = await createClient()

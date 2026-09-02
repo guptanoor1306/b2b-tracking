@@ -9,7 +9,7 @@ import { formatDate, formatWaitingSince, cn } from '@/lib/utils'
 import { businessDaysLateExcluding } from '@/lib/businessTime'
 import { welcomeFirstName, HEALTH_PILL_V2 } from '@/lib/design/theme-v2'
 import { Zap, ArrowRight, Clock } from 'lucide-react'
-import { isAwaitingRequestReview, isZerodhaChannelDbName, suppressProductionMetrics } from '@/lib/zerodha-sla'
+import { isAwaitingRequestReview, usesExternalIntakeFlow, suppressProductionMetrics } from '@/lib/zerodha-sla'
 import { mapInternalToExternalStage, needsExternalClientAttention } from '@/lib/views'
 import { CreateRequestButton } from '@/components/board/CreateRequestButton'
 import { CreateReportButton } from '@/components/reports/ChannelReportModal'
@@ -59,15 +59,15 @@ export function AdminDashboard({
   releaseScheduleItems = [],
   recentComments = [],
 }: Props) {
-  const isZerodha = isZerodhaChannelDbName(channelDbName)
+  const externalIntake = usesExternalIntakeFlow(channelDbName)
   const stageLabel = (project: Project) => {
     if (!externalView) return project.current_stage
     return mapInternalToExternalStage(project.current_stage, channelDbName ?? project.channel)
   }
 
   const attentionPool = allInPipeline ?? inPipeline
-  const newProjectsReceived = isZerodha ? inPipeline.filter(isAwaitingRequestReview) : []
-  const pipelineProjects = isZerodha
+  const newProjectsReceived = externalIntake ? inPipeline.filter(isAwaitingRequestReview) : []
+  const pipelineProjects = externalIntake
     ? inPipeline.filter(p => !isAwaitingRequestReview(p))
     : inPipeline
   const needsAttention = (() => {
@@ -218,9 +218,9 @@ export function AdminDashboard({
         {/* 3. New projects + recent comments */}
         <div className={cn(
           'grid gap-4',
-          isZerodha && !externalView ? 'lg:grid-cols-2' : 'grid-cols-1',
+          externalIntake && !externalView ? 'lg:grid-cols-2' : 'grid-cols-1',
         )}>
-          {isZerodha && !externalView && (
+          {externalIntake && !externalView && (
             <NewProjectsReceivedSection projects={newProjectsReceived} />
           )}
           <RecentCommentsSection items={recentComments} />

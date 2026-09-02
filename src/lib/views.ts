@@ -12,7 +12,7 @@ import {
   STAGE_PIPELINE,
 } from '@/lib/constants'
 import {
-  isZerodhaChannelDbName,
+  usesExternalIntakeFlow,
   mapZerodhaInternalToExternalStage,
   ZERODHA_READY_TO_PRODUCE,
   hasIntakeMaterials,
@@ -114,7 +114,7 @@ export function needsExternalClientAttention(
   channelDbName?: string | null,
 ): boolean {
   if (isDeclinedRequest(project)) return true
-  if (isZerodhaChannelDbName(channelDbName ?? project.channel)) {
+  if (usesExternalIntakeFlow(channelDbName ?? project.channel)) {
     return ZERODHA_CLIENT_REVIEW_STAGES.has(normalizeZerodhaBoardStage(project.current_stage))
   }
   const meta = STAGE_PIPELINE[normalizeStage(project.current_stage)]
@@ -188,7 +188,7 @@ export function canChangeStages(role: Role | string): boolean {
 
 /** External users cannot drag cards on Zerodha — feedback is submitted on project detail instead. */
 export function canMoveBoardCards(role: Role | string, channelDbName?: string | null): boolean {
-  if (isZerodhaChannelDbName(channelDbName) && isExternalRole(role)) return false
+  if (usesExternalIntakeFlow(channelDbName) && isExternalRole(role)) return false
   return isInternalRole(role) || isExternalRole(role)
 }
 
@@ -197,7 +197,7 @@ export function canSubmitQcReviewFeedback(
   project: Pick<Project, 'channel' | 'current_stage' | 'qc_reviewer_id'>,
   userId: string,
 ): boolean {
-  if (!isZerodhaChannelDbName(project.channel)) return false
+  if (!usesExternalIntakeFlow(project.channel)) return false
   if (!isInternalRole(role)) return false
   if (normalizeZerodhaBoardStage(project.current_stage) !== ZERODHA_FIRST_DRAFT_QC) return false
   if (project.qc_reviewer_id === userId) return true
@@ -212,7 +212,7 @@ export function canSubmitClientReviewFeedback(
   project: Pick<Project, 'channel' | 'current_stage' | 'external_team_member_id' | 'created_by'>,
   userId: string,
 ): boolean {
-  if (!isZerodhaChannelDbName(project.channel)) return false
+  if (!usesExternalIntakeFlow(project.channel)) return false
   if (!isExternalRole(role) && !isExternalClientAdmin(role)) return false
   if (!isZerodhaClientReviewStage(project.current_stage)) return false
   return project.external_team_member_id === userId || project.created_by === userId
@@ -282,11 +282,11 @@ export function usesInternalBoardView(globalRole: Role | string, channelRole: st
 export const shouldFilterBoardToTeam = shouldFilterBoardToSelf
 
 export function canCreateExternalRequest(role: Role | string, channelDbName: string | null | undefined): boolean {
-  return isZerodhaChannelDbName(channelDbName) && isExternalRole(role)
+  return usesExternalIntakeFlow(channelDbName) && isExternalRole(role)
 }
 
 export function canReviewExternalRequest(role: Role | string, channelDbName: string | null | undefined): boolean {
-  return isZerodhaChannelDbName(channelDbName) && isInternalRole(role)
+  return usesExternalIntakeFlow(channelDbName) && isInternalRole(role)
 }
 
 /** External submitter may resubmit a declined Zerodha request after updating materials. */
@@ -295,7 +295,7 @@ export function canResubmitDeclinedRequest(
   project: Pick<Project, 'channel' | 'current_stage' | 'request_status' | 'external_team_member_id' | 'created_by'>,
   userId: string,
 ): boolean {
-  if (!isZerodhaChannelDbName(project.channel)) return false
+  if (!usesExternalIntakeFlow(project.channel)) return false
   if (!isDeclinedRequest(project)) return false
   if (!isExternalRole(role) && !isExternalClientAdmin(role)) return false
   return project.external_team_member_id === userId || project.created_by === userId
@@ -303,7 +303,7 @@ export function canResubmitDeclinedRequest(
 
 /** Only LearnApp internal team may move Zerodha requests to Ready to Produce. */
 export function canMarkReadyToProduce(role: Role | string, channelDbName: string | null | undefined): boolean {
-  if (!isZerodhaChannelDbName(channelDbName)) return true
+  if (!usesExternalIntakeFlow(channelDbName)) return true
   return isInternalRole(role)
 }
 
@@ -321,7 +321,7 @@ export function getBoardDisplayStage(
   options: { externalView: boolean; viewerUserId?: string; teamBoardView?: boolean; channelDbName?: string | null },
 ): string {
   if (options.externalView) {
-    if (isZerodhaChannelDbName(options.channelDbName ?? null)) {
+    if (usesExternalIntakeFlow(options.channelDbName ?? null)) {
       return mapZerodhaInternalToExternalStage(project.current_stage)
     }
     return mapInternalToExternalStage(project.current_stage)
@@ -343,7 +343,7 @@ export function mapInternalToExternalStage(
   internalStage: string,
   channelDbName?: string | null,
 ): string {
-  if (isZerodhaChannelDbName(channelDbName ?? null)) {
+  if (usesExternalIntakeFlow(channelDbName ?? null)) {
     return mapZerodhaInternalToExternalStage(internalStage)
   }
   const stage = normalizeStage(internalStage)

@@ -7,7 +7,7 @@ import { getSessionProfile } from '@/lib/auth'
 import { getActiveChannelRole } from '@/lib/channel-context'
 import { canSubmitQcReviewFeedback, effectiveRoleForChannel, resolveStageAssigneeId } from '@/lib/views'
 import {
-  isZerodhaChannelDbName,
+  usesExternalIntakeFlow,
   normalizeZerodhaBoardStage,
   ZERODHA_FIRST_DRAFT_QC,
   ZERODHA_FIRST_DRAFT_REVIEW,
@@ -40,7 +40,7 @@ export async function submitQcReviewFeedback(
   const supabase = await createClient()
   const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).single()
   if (!project) return { error: 'Project not found' }
-  if (!isZerodhaChannelDbName(project.channel)) return { error: 'Not supported for this channel' }
+  if (!usesExternalIntakeFlow(project.channel)) return { error: 'Not supported for this channel' }
 
   if (!canSubmitQcReviewFeedback(role, project, profile.id)) {
     return { error: 'Unauthorized' }

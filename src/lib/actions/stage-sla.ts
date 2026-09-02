@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireChannelAdmin } from '@/lib/channel-context'
 import { createClient } from '@/lib/supabase/server'
 import { DEFAULT_STAGE_SLA } from '@/lib/stage-sla'
-import { isZerodhaChannelDbName } from '@/lib/zerodha-sla'
+import { usesExternalIntakeFlow } from '@/lib/zerodha-sla'
 import { recalculateActiveProjectTargets } from '@/lib/recalculate-project-targets'
 
 type SlaUpdatePayload = {
@@ -38,7 +38,7 @@ export async function updateStageSla(stageName: string, updates: SlaUpdatePayloa
   const { profile, channel } = await requireChannelAdmin()
   const supabase = await createClient()
 
-  if (isZerodhaChannelDbName(channel.dbName)) {
+  if (usesExternalIntakeFlow(channel.dbName)) {
     const { data: existing } = await supabase
       .from('channel_stage_sla')
       .select('*')

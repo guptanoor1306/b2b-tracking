@@ -16,7 +16,7 @@ import {
   DEFAULT_STAGE_SLA,
 } from '@/lib/stage-sla'
 import {
-  isZerodhaChannelDbName,
+  usesExternalIntakeFlow,
   isZerodhaIntakeStage,
   normalizeZerodhaBoardStage,
   suppressProductionMetrics,
@@ -56,7 +56,7 @@ let cachedSlaChannel: string | null = null
 
 export function setStageSlaCache(rows: StageSlaRow[], channelDbName?: string | null) {
   cachedSlaChannel = channelDbName ?? null
-  if (isZerodhaChannelDbName(channelDbName)) {
+  if (usesExternalIntakeFlow(channelDbName)) {
     cachedSlaRows = zerodhaStageSlaRows()
     return
   }
@@ -64,7 +64,7 @@ export function setStageSlaCache(rows: StageSlaRow[], channelDbName?: string | n
 }
 
 function slaRowsForChannel(channelDbName?: string | null): StageSlaRow[] {
-  if (isZerodhaChannelDbName(channelDbName ?? cachedSlaChannel)) return zerodhaStageSlaRows()
+  if (usesExternalIntakeFlow(channelDbName ?? cachedSlaChannel)) return zerodhaStageSlaRows()
   return cachedSlaRows
 }
 
@@ -99,7 +99,7 @@ export function buildStageSlaHoursMap(
   channelDbName?: string | null,
 ): Partial<Record<string, number>> {
   const channel = resolveChannelDbName(project, channelDbName)
-  if (isZerodhaChannelDbName(channel)) {
+  if (usesExternalIntakeFlow(channel)) {
     const map: Partial<Record<string, number>> = {}
     for (const row of slaRowsForChannel(channel)) {
       const h = resolveStageHours(row, level, project)
@@ -123,7 +123,7 @@ export function normalizeStage(stage: string): string {
 
 /** Channel-aware stage name for SLA, timeline display, and health checks. */
 export function resolvePipelineStage(stage: string, channelDbName?: string | null): string {
-  if (isZerodhaChannelDbName(channelDbName)) {
+  if (usesExternalIntakeFlow(channelDbName)) {
     return normalizeZerodhaBoardStage(stage)
   }
   return normalizeStage(stage)
@@ -189,7 +189,7 @@ export function totalPipelineHours(
   channelDbName?: string | null,
 ): number {
   const channel = resolveChannelDbName(project, channelDbName)
-  if (isZerodhaChannelDbName(channel)) {
+  if (usesExternalIntakeFlow(channel)) {
     return totalPipelineHoursFromSla(slaRowsForChannel(channel), level, project)
   }
   return totalPipelineHoursFromSla(slaRowsForChannel(channel), level, project)
@@ -298,7 +298,7 @@ export function getProjectTimeliness(
     }
   }
 
-  if (isZerodhaChannelDbName(project.channel) && isZerodhaIntakeStage(project.current_stage)) {
+  if (usesExternalIntakeFlow(project.channel) && isZerodhaIntakeStage(project.current_stage)) {
     return {
       ...base,
       status: 'on_time',

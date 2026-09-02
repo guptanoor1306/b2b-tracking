@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/Input'
 import { formatDate, cn } from '@/lib/utils'
 import { formatSlaDuration } from '@/lib/timelines'
 import { SettingsPanel, SettingsCard } from '@/components/settings/SettingsLayout'
-import { isZerodhaChannelDbName, ZERODHA_LEVEL_LABELS } from '@/lib/zerodha-sla'
+import { usesExternalIntakeFlow, ZERODHA_LEVEL_LABELS } from '@/lib/zerodha-sla'
 import { History, Pencil, X, Check } from 'lucide-react'
 
 type Props = {
@@ -42,8 +42,8 @@ function levelCell(row: StageSlaRow, key: LevelKey) {
 
 export function StageSlaSettings({ rows, activity, channelDbName }: Props) {
   const router = useRouter()
-  const isZerodha = isZerodhaChannelDbName(channelDbName)
-  const levelColumns = isZerodha ? ZERODHA_LEVEL_COLUMNS : VARSITY_LEVEL_COLUMNS
+  const externalIntake = usesExternalIntakeFlow(channelDbName)
+  const levelColumns = externalIntake ? ZERODHA_LEVEL_COLUMNS : VARSITY_LEVEL_COLUMNS
   const [editing, setEditing] = useState<string | null>(null)
   const [form, setForm] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
@@ -75,7 +75,7 @@ export function StageSlaSettings({ rows, activity, channelDbName }: Props) {
     router.refresh()
   }
 
-  const description = isZerodha
+  const description = externalIntake
     ? 'Zerodha Online SLAs. Early and late steps are shared across levels; Storyboard through Animation vary by level (Graphics & Animation run in parallel). Hindi projects use the same level options and SLAs as English.'
     : 'Set SLA hours per pipeline stage. Changes apply to active in-pipeline projects and all new projects. Delivered projects keep their original target dates.'
 
@@ -98,7 +98,7 @@ export function StageSlaSettings({ rows, activity, channelDbName }: Props) {
         </div>
       )}
 
-      {isZerodha && (
+      {externalIntake && (
         <SettingsCard padding="sm" className="border-blue-100 bg-blue-50/50">
           <p className="text-sm text-blue-900">
             <span className="font-medium">Level key:</span>{' '}
@@ -126,7 +126,7 @@ export function StageSlaSettings({ rows, activity, channelDbName }: Props) {
 
       <SettingsCard padding="none" className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className={cn('w-full text-sm', isZerodha ? 'min-w-[980px]' : 'min-w-[680px]')}>
+          <table className={cn('w-full text-sm', externalIntake ? 'min-w-[980px]' : 'min-w-[680px]')}>
             <thead>
               <tr className="border-b border-zinc-100 bg-zinc-50/80">
                 <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Stage</th>

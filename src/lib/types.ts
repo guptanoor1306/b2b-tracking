@@ -1,6 +1,8 @@
 export type Role = 'Super Admin' | 'Member' | 'Channel Admin' | 'Channel Team' | 'Agency' | 'Zerodha Viewer' | 'External Client Admin'
 export type ChannelMemberRole = 'Channel Admin' | 'Channel Team' | 'Agency' | 'Zerodha Viewer' | 'External Client Admin' | 'Channel Super Admin'
 
+export type ReelTimestampPair = { start: string; end: string }
+
 export type ChannelMember = Profile & {
   channel_role: ChannelMemberRole
 }
@@ -72,6 +74,7 @@ export type Project = {
   screen_captures_link: string | null
   audio_link: string | null
   drive_link: string | null
+  reel_timestamps: ReelTimestampPair[] | null
   final_file_link: string | null
   thumbnail_copy: string | null
   title_copy: string | null
@@ -194,6 +197,7 @@ export type ClientReviewSubmission = {
   review_stage: string
   submitted_by: string | null
   submitted_at: string
+  intro_timeline?: string | null
   items?: ClientReviewFeedbackItem[]
   submitter?: Profile | null
 }

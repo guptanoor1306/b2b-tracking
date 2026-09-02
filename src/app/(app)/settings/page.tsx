@@ -6,11 +6,11 @@ import { fetchStageSlaConfig, fetchSettingsActivityLogs } from '@/lib/data/stage
 import { setStageSlaCache } from '@/lib/timelines'
 import { SettingsClient } from '@/components/settings/SettingsClient'
 import { isSuperAdmin, isExternalClientAdmin } from '@/lib/views'
-import { isZerodhaChannelDbName } from '@/lib/zerodha-sla'
+import { usesExternalIntakeFlow } from '@/lib/zerodha-sla'
 
 export default async function SettingsPage() {
   const { profile, channel } = await requireChannelAdmin()
-  const isZerodha = isZerodhaChannelDbName(channel.dbName)
+  const externalIntake = usesExternalIntakeFlow(channel.dbName)
   const channelRole = await getActiveChannelRole(profile)
   if (isExternalClientAdmin(channelRole ?? '')) redirect('/dashboard')
 
@@ -18,7 +18,7 @@ export default async function SettingsPage() {
     fetchChannelMembers(channel.slug),
     fetchHolidays(),
     fetchStageSlaConfig(channel.dbName),
-    fetchSettingsActivityLogs(channel.slug, isZerodha),
+    fetchSettingsActivityLogs(channel.slug, externalIntake),
   ])
 
   setStageSlaCache(stageSla, channel.dbName)

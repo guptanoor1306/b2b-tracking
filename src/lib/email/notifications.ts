@@ -16,7 +16,7 @@ import {
 } from '@/lib/email/templates'
 import { getProjectTeamMemberIds } from '@/lib/projects/team'
 import { getChannelByDbName, getChannelBySlug } from '@/lib/channels'
-import { isZerodhaChannelDbName } from '@/lib/zerodha-sla'
+import { usesExternalIntakeFlow } from '@/lib/zerodha-sla'
 import { Project } from '@/lib/types'
 import { resolveStageAssigneeId } from '@/lib/views'
 import { FINAL_STAGE } from '@/lib/constants'
@@ -440,7 +440,7 @@ async function fetchChannelSuperAdminsForNotifications(channelSlug: string): Pro
 export async function notifyRequestReceived(
   project: Pick<Project, 'id' | 'title' | 'channel' | 'target_delivery_date' | 'content_type' | 'external_team_member_id' | 'created_by'>,
 ): Promise<void> {
-  if (!isZerodhaChannelDbName(project.channel)) return
+  if (!usesExternalIntakeFlow(project.channel)) return
   const channelSlug = channelSlugFromProject(project)
   if (!channelSlug) return
 
@@ -481,7 +481,7 @@ export async function notifyRequestReceived(
 export async function notifyRequestResubmitted(
   project: Pick<Project, 'id' | 'title' | 'channel' | 'external_team_member_id' | 'created_by'>,
 ): Promise<void> {
-  if (!isZerodhaChannelDbName(project.channel)) return
+  if (!usesExternalIntakeFlow(project.channel)) return
   const channelSlug = channelSlugFromProject(project)
   if (!channelSlug) return
 
@@ -516,7 +516,7 @@ async function notifyZerodhaSuperAdminsRequestStatus(
   status: 'approved' | 'declined',
   reason?: string,
 ): Promise<void> {
-  if (!isZerodhaChannelDbName(project.channel)) return
+  if (!usesExternalIntakeFlow(project.channel)) return
   const channelSlug = channelSlugFromProject(project)
   if (!channelSlug) return
 

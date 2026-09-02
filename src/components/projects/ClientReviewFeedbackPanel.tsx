@@ -10,13 +10,16 @@ import { ClientReviewSubmission } from '@/lib/types'
 import {
   isZerodhaClientReviewStage,
   normalizeZerodhaBoardStage,
+  ZERODHA_FIRST_CUT_REVIEW,
 } from '@/lib/zerodha-sla'
 import { hasClientReviewSubmission } from '@/lib/zerodha-sla'
+import { requiresIntroTimelineOnFirstCutReview } from '@/lib/external-intake-flow'
 import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
 type Props = {
   projectId: string
+  channelDbName: string
   currentStage: string
   canSubmit: boolean
   submissions: ClientReviewSubmission[]
@@ -24,6 +27,7 @@ type Props = {
 
 export function ClientReviewFeedbackPanel({
   projectId,
+  channelDbName,
   currentStage,
   canSubmit,
   submissions,
@@ -32,9 +36,12 @@ export function ClientReviewFeedbackPanel({
   const reviewStage = normalizeZerodhaBoardStage(currentStage)
   const isActiveReview = isZerodhaClientReviewStage(reviewStage)
   const alreadySubmitted = hasClientReviewSubmission(submissions, reviewStage)
-  const pastSubmissions = submissions.filter(s => s.items?.length)
+  const pastSubmissions = submissions.filter(s => s.items?.length || s.intro_timeline?.trim())
+  const needsIntroTimeline = requiresIntroTimelineOnFirstCutReview(channelDbName)
+    && reviewStage === ZERODHA_FIRST_CUT_REVIEW
 
   const [items, setItems] = useState<string[]>([''])
+  const [introTimeline, setIntroTimeline] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -43,7 +50,11 @@ export function ClientReviewFeedbackPanel({
   const handleSubmit = async () => {
     setLoading(true)
     setError('')
-    const result = await submitClientReviewFeedback(projectId, items)
+    const result = await submitClientReviewFeedback(
+      projectId,
+      items,
+      needsIntroTimeline ? introTimeline : undefined,
+    )
     setLoading(false)
     if (result.error) {
       setError(result.error)
@@ -64,13 +75,21 @@ export function ClientReviewFeedbackPanel({
           {sub.submitter?.name ? ` · ${sub.submitter.name}` : ''}
         </span>
       </div>
-      <ol className="list-decimal space-y-2 pl-4">
-        {(sub.items ?? []).map((item, i) => (
-          <li key={item.id} className="text-sm text-zinc-800 leading-relaxed">
-            {item.comment}
-          </li>
-        ))}
-      </ol>
+      {sub.intro_timeline?.trim() && (
+        <div className="mb-3 rounded-md border border-violet-100 bg-violet-50/50 px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-700">Intro timeline</p>
+          <p className="mt-1 text-sm text-zinc-800 whitespace-pre-wrap">{sub.intro_timeline}</p>
+        </div>
+      )}
+      {(sub.items ?? []).length > 0 && (
+        <ol className="list-decimal space-y-2 pl-4">
+          {(sub.items ?? []).map(item => (
+            <li key={item.id} className="text-sm text-zinc-800 leading-relaxed">
+              {item.comment}
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   )), [pastSubmissions])
 
@@ -82,15 +101,28 @@ export function ClientReviewFeedbackPanel({
         <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-4">
           <h4 className="text-sm font-semibold text-zinc-900">Submit review feedback</h4>
           <p className="mt-1 text-xs text-zinc-600">
-            Add all feedback for <strong>{reviewStage}</strong> below, then submit once.
-            Feedback cannot be edited after submission.
+            {needsIntroTimeline
+              ? <>Add the <strong>Intro timeline</strong> and any feedback for <strong>{reviewStage}</strong>, then submit once.</>
+              : <>Add all feedback for <strong>{reviewStage}</strong> below, then submit once.</>}
+            {' '}Feedback cannot be edited after submission.
           </p>
+          {needsIntroTimeline && (
+            <div className="mt-3">
+              <Textarea
+                label="Intro timeline *"
+                placeholder="Describe the intro timeline for this video…"
+                value={introTimeline}
+                onChange={e => setIntroTimeline(e.target.value)}
+                rows={3}
+              />
+            </div>
+          )}
           <div className="mt-3 space-y-2">
             {items.map((item, index) => (
               <div key={index} className="flex gap-2">
                 <div className="flex-1">
                   <Textarea
-                    label={`Feedback ${index + 1}`}
+                    label={needsIntroTimeline ? `Feedback ${index + 1} (optional)` : `Feedback ${index + 1}`}
                     placeholder="Describe the change or comment…"
                     value={item}
                     onChange={e => setItems(prev => prev.map((v, i) => i === index ? e.target.value : v))}
@@ -120,7 +152,7 @@ export function ClientReviewFeedbackPanel({
               <Plus size={14} /> Add feedback
             </Button>
             <Button size="sm" loading={loading} onClick={handleSubmit}>
-              Submit all feedback
+              {needsIntroTimeline ? 'Submit intro timeline & feedback' : 'Submit all feedback'}
             </Button>
           </div>
         </div>

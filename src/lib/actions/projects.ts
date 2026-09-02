@@ -6,7 +6,11 @@ import { getSessionProfile } from '@/lib/auth'
 import { getActiveChannelRole } from '@/lib/channel-context'
 import { FINAL_STAGE } from '@/lib/constants'
 import { getActiveChannelDbName } from '@/lib/channel-context'
-import { isZerodhaChannelDbName } from '@/lib/zerodha-sla'
+import { isZerodhaChannelDbName, usesExternalIntakeFlow, isCashAndCopiumChannelDbName } from '@/lib/zerodha-sla'
+import {
+  CASH_AND_COPIUM_CONTENT_TYPES,
+  type ReelTimestampPair,
+} from '@/lib/external-intake-flow'
 import {
   isInternalRole,
   resolveStageAssigneeId,
@@ -83,6 +87,7 @@ type ProjectInput = {
   thumbnail_copy?: string | null
   title_copy?: string | null
   thumbnail_file_link?: string | null
+  reel_timestamps?: ReelTimestampPair[] | null
   priority?: string
   blocker?: string | null
   next_action?: string | null
@@ -121,13 +126,15 @@ export async function createProject(input: ProjectInput) {
   const holidays = await fetchHolidayDates()
   const channelName = await getActiveChannelDbName()
 
-  if (isZerodhaChannelDbName(channelName)) {
-    if (!input.video_language) return { error: 'Video language is required' }
-    if (!input.level_of_video) return { error: 'Video level is required' }
+  if (usesExternalIntakeFlow(channelName)) {
+    if (isZerodhaChannelDbName(channelName)) {
+      if (!input.video_language) return { error: 'Video language is required' }
+      if (!input.level_of_video) return { error: 'Video level is required' }
+    }
     if (!input.target_delivery_date) return { error: 'Release date is required' }
   }
 
-  const initialStage = isZerodhaChannelDbName(channelName) ? ZERODHA_READY_TO_PRODUCE : 'Video received'
+  const initialStage = usesExternalIntakeFlow(channelName) ? ZERODHA_READY_TO_PRODUCE : 'Video received'
   const now = new Date().toISOString()
   const target_delivery_date = input.target_delivery_date ?? null
 
@@ -202,13 +209,17 @@ export async function createProject(input: ProjectInput) {
 export type ExternalRequestInput = {
   title: string
   content_type: string
-  script_link: string
+  target_delivery_date: string
+  thumbnail_copy: string
+  /** Zerodha: script link; Cash & Copium: unused */
+  script_link?: string
+  /** Zerodha: video link; Cash & Copium: single drive link */
   drive_link: string
   screen_captures_link?: string
-  audio_link: string
-  thumbnail_copy: string
-  target_delivery_date: string
-  video_language: string
+  audio_link?: string
+  video_language?: string
+  /** Cash & Copium Reel type only */
+  reel_timestamps?: ReelTimestampPair[]
 }
 
 export async function createExternalProjectRequest(input: ExternalRequestInput) {
@@ -219,6 +230,9 @@ export async function createExternalProjectRequest(input: ExternalRequestInput) 
   if (!canCreateExternalRequest(session.role, channelName)) {
     return { error: 'Unauthorized' }
   }
+
+  const isCashCopium = isCashAndCopiumChannelDbName(channelName)
+  const isZerodha = isZerodhaChannelDbName(channelName)
 
   const title = input.title?.trim()
   const content_type = input.content_type?.trim()
@@ -232,15 +246,31 @@ export async function createExternalProjectRequest(input: ExternalRequestInput) 
 
   if (!title) return { error: 'Title is required' }
   if (!content_type) return { error: 'Type of video is required' }
-  if (!(CONTENT_TYPES as readonly string[]).includes(content_type)) {
+  if (isCashCopium) {
+    if (!(CASH_AND_COPIUM_CONTENT_TYPES as readonly string[]).includes(content_type)) {
+      return { error: 'Invalid video type' }
+    }
+  } else if (!(CONTENT_TYPES as readonly string[]).includes(content_type)) {
     return { error: 'Invalid video type' }
   }
-  if (!script_link) return { error: 'Script link is required' }
-  if (!drive_link) return { error: 'Video link is required' }
-  if (!audio_link) return { error: 'Audio link is required' }
+  if (isZerodha) {
+    if (!script_link) return { error: 'Script link is required' }
+    if (!audio_link) return { error: 'Audio link is required' }
+    if (!video_language) return { error: 'Language is required' }
+  }
+  if (!drive_link) return { error: isCashCopium ? 'Drive link is required' : 'Video link is required' }
   if (!thumbnail_copy) return { error: 'Thumbnail copy is required' }
   if (!target_delivery_date) return { error: 'Release date is required' }
-  if (!video_language) return { error: 'Language is required' }
+
+  let reel_timestamps: ReelTimestampPair[] | null = null
+  if (isCashCopium && content_type === 'Reel') {
+    const pairs = (input.reel_timestamps ?? []).filter(p => p.start.trim() || p.end.trim())
+    if (pairs.length < 1) return { error: 'Add at least one start/end timestamp for Reel' }
+    if (pairs.some(p => !p.start.trim() || !p.end.trim())) {
+      return { error: 'Each timestamp pair needs both start and end' }
+    }
+    reel_timestamps = pairs.map(p => ({ start: p.start.trim(), end: p.end.trim() }))
+  }
 
   const { profile } = session
   const supabase = await createClient()
@@ -260,13 +290,14 @@ export async function createExternalProjectRequest(input: ExternalRequestInput) 
       ip: 'TBD',
       content_type,
       priority: 'Medium',
-      script_link,
+      script_link: isZerodha ? script_link : null,
       drive_link,
-      screen_captures_link: screen_captures_link || null,
-      audio_link,
+      screen_captures_link: isZerodha ? (screen_captures_link || null) : null,
+      audio_link: isZerodha ? audio_link : null,
       thumbnail_copy,
       target_delivery_date,
-      video_language,
+      video_language: isZerodha ? video_language : null,
+      reel_timestamps,
       received_date: today,
       channel: channelName,
       current_stage: initialStage,
@@ -319,7 +350,7 @@ export async function approveExternalRequest(projectId: string) {
   const holidays = await fetchHolidayDates()
   const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).single()
   if (!project) return { error: 'Project not found' }
-  if (!isZerodhaChannelDbName(project.channel) || project.current_stage !== ZERODHA_REQUEST_RECEIVED) {
+  if (!usesExternalIntakeFlow(project.channel) || project.current_stage !== ZERODHA_REQUEST_RECEIVED) {
     return { error: 'This request is not awaiting review' }
   }
   if (project.request_status === 'declined') {
@@ -458,20 +489,20 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
 
   if (!isInternal) {
     const shared = ['notes', 'blocker', 'next_action', 'next_action_due_date']
-    const zerodhaIntakeFields = ['script_link', 'screen_captures_link', 'audio_link', 'drive_link', 'thumbnail_copy', 'title_copy', 'video_language']
-    if (isZerodhaChannelDbName(existing.channel)) {
-      zerodhaIntakeFields.push('target_delivery_date')
+    const intakeFields = ['script_link', 'screen_captures_link', 'audio_link', 'drive_link', 'thumbnail_copy', 'title_copy', 'video_language', 'reel_timestamps']
+    if (usesExternalIntakeFlow(existing.channel)) {
+      intakeFields.push('target_delivery_date')
     }
     const allowed =
       session.role === 'Agency'
-        ? ['drive_link', 'assets_link', 'final_file_link', ...zerodhaIntakeFields, ...shared]
+        ? ['drive_link', 'assets_link', 'final_file_link', ...intakeFields, ...shared]
         : session.role === 'Zerodha Viewer' || isExternalClientAdmin(session.role)
-          ? [...zerodhaIntakeFields, ...shared]
+          ? [...intakeFields, ...shared]
           : []
     const keys = Object.keys(input)
     if (keys.some(k => !allowed.includes(k))) return { error: 'Cannot edit this field' }
 
-    const intakeKeys = keys.filter(k => zerodhaIntakeFields.includes(k))
+    const intakeKeys = keys.filter(k => intakeFields.includes(k))
     if (intakeKeys.length > 0 && hasIntakeMaterials(existing)) {
       if (!canEditIntakeMaterials(session.role, existing, profile.id)) {
         return { error: 'Unauthorized' }
@@ -494,7 +525,7 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
     patch.graphic_designer_id = input.designer_id
   }
 
-  if (isZerodhaChannelDbName(existing.channel)) {
+  if (usesExternalIntakeFlow(existing.channel)) {
     const lang = input.video_language !== undefined ? input.video_language : existing.video_language
     const level = input.level_of_video !== undefined ? input.level_of_video : existing.level_of_video
     const settingProductionMeta =
@@ -578,7 +609,7 @@ export async function changeProjectStage(
     return { error: 'Ready to Produce can only be marked by LearnApp.' }
   }
 
-  if (isZerodhaChannelDbName(project.channel)) {
+  if (usesExternalIntakeFlow(project.channel)) {
     const qcError = getZerodhaQcStageMoveError(project.current_stage, newStage)
     if (qcError) return { error: qcError }
     const reviewLinkError = getZerodhaQcReviewLinkError(newStage, project.assets_link)
@@ -610,7 +641,7 @@ export async function changeProjectStage(
   }
 
   if (
-    isZerodhaChannelDbName(project.channel)
+    usesExternalIntakeFlow(project.channel)
     && normalizeZerodhaBoardStage(newStage) === ZERODHA_FIRST_DRAFT_QC
     && !project.qc_reviewer_id
   ) {
@@ -621,7 +652,7 @@ export async function changeProjectStage(
     }
   }
 
-  const resolvedAssignee = isZerodhaChannelDbName(project.channel)
+  const resolvedAssignee = usesExternalIntakeFlow(project.channel)
     ? await resolveZerodhaStageAssigneeId(projectForAssignee, newStage, channelSlug)
     : resolveStageAssigneeId(project, newStage)
   updates.stage_assignee_id = resolvedAssignee
@@ -638,7 +669,7 @@ export async function changeProjectStage(
   }
 
   if (
-    isZerodhaChannelDbName(project.channel)
+    usesExternalIntakeFlow(project.channel)
     && project.current_stage === ZERODHA_REQUEST_RECEIVED
     && normalizeStage(newStage) === ZERODHA_READY_TO_PRODUCE
   ) {
