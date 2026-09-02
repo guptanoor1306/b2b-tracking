@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { finishLogin } from '@/lib/actions/channels'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 
@@ -25,8 +26,8 @@ export default function LoginPage() {
       return
     }
 
-    // Full navigation so auth cookies are available to the server on the next request
-    window.location.assign('/')
+    const destination = await finishLogin()
+    window.location.assign(destination)
   }
 
   return (

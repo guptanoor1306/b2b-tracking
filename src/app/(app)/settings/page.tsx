@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { requireChannelAdmin, getActiveChannelRole } from '@/lib/channel-context'
+import { requireChannelAdmin } from '@/lib/channel-context'
 import { fetchChannelMembers } from '@/lib/data/channel-access'
 import { fetchHolidays } from '@/lib/data/holidays'
 import { fetchStageSlaConfig, fetchSettingsActivityLogs } from '@/lib/data/stage-sla'
@@ -9,10 +9,9 @@ import { isSuperAdmin, isExternalClientAdmin } from '@/lib/views'
 import { usesExternalIntakeFlow } from '@/lib/zerodha-sla'
 
 export default async function SettingsPage() {
-  const { profile, channel } = await requireChannelAdmin()
+  const { profile, channel, channelRole } = await requireChannelAdmin()
   const externalIntake = usesExternalIntakeFlow(channel.dbName)
-  const channelRole = await getActiveChannelRole(profile)
-  if (isExternalClientAdmin(channelRole ?? '')) redirect('/dashboard')
+  if (isExternalClientAdmin(channelRole)) redirect('/dashboard')
 
   const [members, holidays, stageSla, slaActivity] = await Promise.all([
     fetchChannelMembers(channel.slug),

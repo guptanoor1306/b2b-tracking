@@ -1,6 +1,9 @@
+import { unstable_cache } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { canUseDataCache, createCachedReadClient } from '@/lib/supabase/cache-read'
 import { Profile } from '@/lib/types'
 import { DEFAULT_STAGE_SLA, StageSlaRow } from '@/lib/stage-sla'
+import { stageSlaCacheTag } from '@/lib/cache-tags'
 import {
   usesExternalIntakeFlow,
   externalIntakeChannelSlug,
@@ -29,8 +32,7 @@ function mapSlaRow(row: Record<string, unknown>): StageSlaRow {
   }
 }
 
-async function seedChannelStageSla(channelSlug: string): Promise<StageSlaRow[]> {
-  const supabase = await createClient()
+async function seedChannelStageSla(channelSlug: string, supabase = createCachedReadClient()): Promise<StageSlaRow[]> {
   const channel = getChannelBySlug(channelSlug)
   const defaults = isCashAndCopiumChannelSlug(channelSlug)
     ? DEFAULT_CASH_COPIUM_STAGE_SLA
@@ -65,8 +67,8 @@ async function seedChannelStageSla(channelSlug: string): Promise<StageSlaRow[]> 
   return (data ?? []).map(mapSlaRow)
 }
 
-async function fetchChannelStageSla(channelSlug: string): Promise<StageSlaRow[]> {
-  const supabase = await createClient()
+async function fetchChannelStageSlaUncached(channelSlug: string): Promise<StageSlaRow[]> {
+  const supabase = createCachedReadClient()
   const { data, error } = await supabase
     .from('channel_stage_sla')
     .select('*')
@@ -102,12 +104,75 @@ async function fetchChannelStageSla(channelSlug: string): Promise<StageSlaRow[]>
   return filterZerodhaSlaRows(mapped)
 }
 
-export async function fetchStageSlaConfig(channelDbName?: string | null): Promise<StageSlaRow[]> {
-  const slug = externalIntakeChannelSlug(channelDbName ?? null)
-  if (slug) {
-    return fetchChannelStageSla(slug)
+function getCachedChannelStageSla(channelSlug: string) {
+  return unstable_cache(
+    async () => fetchChannelStageSlaUncached(channelSlug),
+    ['channel-stage-sla', channelSlug],
+    { revalidate: 3600, tags: [stageSlaCacheTag(channelSlug)] },
+  )()
+}
+
+async function fetchVarsityStageSlaUncached(): Promise<StageSlaRow[]> {
+  const supabase = createCachedReadClient()
+  const { data } = await supabase
+    .from('settings_stage_sla')
+    .select('*')
+    .order('sort_order')
+
+  if (!data?.length) {
+    return DEFAULT_STAGE_SLA.map((r, i) => ({
+      ...r,
+      id: `default-${i}`,
+    }))
   }
 
+  return data.map(mapSlaRow)
+}
+
+const fetchVarsityStageSlaCached = unstable_cache(
+  fetchVarsityStageSlaUncached,
+  ['varsity-stage-sla'],
+  { revalidate: 3600, tags: [stageSlaCacheTag('varsity')] },
+)
+
+async function fetchChannelStageSlaLive(channelSlug: string): Promise<StageSlaRow[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('channel_stage_sla')
+    .select('*')
+    .eq('channel_slug', channelSlug)
+    .order('sort_order')
+
+  if (error) {
+    if (isCashAndCopiumChannelSlug(channelSlug)) {
+      return cashCopiumStageSlaRows()
+    }
+    if (usesExternalIntakeFlow(getChannelBySlug(channelSlug)?.dbName)) {
+      return DEFAULT_ZERODHA_STAGE_SLA.map((r, i) => ({ ...r, id: `zerodha-${i}` }))
+    }
+    return DEFAULT_STAGE_SLA.map((r, i) => ({ ...r, id: `default-${i}` }))
+  }
+
+  if (!data?.length) {
+    try {
+      return await seedChannelStageSla(channelSlug, supabase)
+    } catch {
+      if (isCashAndCopiumChannelSlug(channelSlug)) {
+        return cashCopiumStageSlaRows()
+      }
+      return DEFAULT_ZERODHA_STAGE_SLA.map((r, i) => ({ ...r, id: `zerodha-${i}` }))
+    }
+  }
+
+  const mapped = data.map(mapSlaRow)
+  if (isCashAndCopiumChannelSlug(channelSlug)) {
+    const filtered = filterCashCopiumSlaRows(mapped)
+    return filtered.length ? filtered : cashCopiumStageSlaRows()
+  }
+  return filterZerodhaSlaRows(mapped)
+}
+
+async function fetchVarsityStageSlaLive(): Promise<StageSlaRow[]> {
   const supabase = await createClient()
   const { data } = await supabase
     .from('settings_stage_sla')
@@ -122,6 +187,20 @@ export async function fetchStageSlaConfig(channelDbName?: string | null): Promis
   }
 
   return data.map(mapSlaRow)
+}
+
+export async function fetchStageSlaConfig(channelDbName?: string | null): Promise<StageSlaRow[]> {
+  const slug = externalIntakeChannelSlug(channelDbName ?? null)
+  if (!canUseDataCache()) {
+    if (slug) return fetchChannelStageSlaLive(slug)
+    return fetchVarsityStageSlaLive()
+  }
+
+  if (slug) {
+    return getCachedChannelStageSla(slug)
+  }
+
+  return fetchVarsityStageSlaCached()
 }
 
 export async function fetchProjectHoldPeriods(projectId: string) {
@@ -153,11 +232,16 @@ export async function fetchHoldPeriodsForProjects(projectIds: string[]) {
   return map
 }
 
-export async function fetchOpenHoldStarters(): Promise<Record<string, Pick<Profile, 'id' | 'name' | 'email'>>> {
+export async function fetchOpenHoldStarters(
+  projectIds?: string[],
+): Promise<Record<string, Pick<Profile, 'id' | 'name' | 'email'>>> {
+  if (!projectIds?.length) return {}
+
   const supabase = await createClient()
   const { data } = await supabase
     .from('project_hold_periods')
     .select('project_id, starter:profiles!project_hold_periods_started_by_fkey(id, name, email)')
+    .in('project_id', projectIds)
     .is('ended_at', null)
 
   const starters: Record<string, Pick<Profile, 'id' | 'name' | 'email'>> = {}

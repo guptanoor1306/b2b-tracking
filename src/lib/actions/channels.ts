@@ -1,7 +1,7 @@
 'use server'
 
 import { cookies } from 'next/headers'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireProfile, getSessionProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
@@ -9,7 +9,8 @@ import { ACTIVE_CHANNEL_COOKIE, getChannelBySlug } from '@/lib/channels'
 import { fetchUserChannelSlugs, fetchChannelRole } from '@/lib/data/channel-access'
 import { isSuperAdmin, canManageChannelMembers } from '@/lib/views'
 import { ChannelMemberRole } from '@/lib/types'
-import { getActiveChannelSlug } from '@/lib/channel-context'
+import { getActiveChannelSlug, resolvePostAuthDestination } from '@/lib/channel-context'
+import { channelMembersCacheTag } from '@/lib/cache-tags'
 import { notifyChannelAccess } from '@/lib/email/notifications'
 
 export async function enterChannel(slug: string) {
@@ -70,6 +71,7 @@ export async function addChannelMember(
 
   if (error) return { error: error.message }
 
+  revalidateTag(channelMembersCacheTag(channelSlug), 'max')
   void notifyChannelAccess({ profileId, channelSlug, channelRole }).catch(() => {})
 
   revalidatePath('/studios/settings')
@@ -100,6 +102,7 @@ export async function updateChannelMemberRole(
 
   if (error) return { error: error.message }
 
+  revalidateTag(channelMembersCacheTag(channelSlug), 'max')
   revalidatePath('/studios/settings')
   revalidatePath('/settings')
   return { success: true }
@@ -117,6 +120,7 @@ export async function removeChannelMember(profileId: string, channelSlug: string
 
   if (error) return { error: error.message }
 
+  revalidateTag(channelMembersCacheTag(channelSlug), 'max')
   revalidatePath('/studios/settings')
   revalidatePath('/studios')
   revalidatePath('/settings')
@@ -143,17 +147,12 @@ export async function setSuperAdminRole(profileId: string, isSuper: boolean) {
 }
 
 export async function getLoginRedirectPath(): Promise<string> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return '/login'
-
   const profile = await getSessionProfile()
-  if (!profile) return '/studios'
+  if (!profile) return '/login'
+  return resolvePostAuthDestination(profile)
+}
 
-  const allowed = await fetchUserChannelSlugs(profile)
-  if (allowed.length === 0) return '/studios'
-  if (allowed.length === 1) {
-    return `/studios/enter/${allowed[0]}`
-  }
-  return '/studios'
+/** Called from login page after client sign-in — sets channel cookie and returns destination. */
+export async function finishLogin(): Promise<string> {
+  return getLoginRedirectPath()
 }

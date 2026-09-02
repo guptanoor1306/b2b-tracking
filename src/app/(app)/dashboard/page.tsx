@@ -37,17 +37,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const profile = await getSessionProfile()
   if (!profile) redirect('/login')
 
-  const channelName = await getActiveChannelDbName()
-  const projects = await fetchProjects()
-  const [holidays, stageSla, holdStarters, holdPeriodsByProjectId] = await Promise.all([
+  const channelNamePromise = getActiveChannelDbName()
+  const [channelName, projects, holidays, stageSla] = await Promise.all([
+    channelNamePromise,
+    fetchProjects(),
     fetchHolidayDates(),
-    fetchStageSlaConfig(channelName),
-    fetchOpenHoldStarters(),
-    fetchHoldPeriodsForProjects(projects.map(p => p.id)),
+    channelNamePromise.then(name => fetchStageSlaConfig(name)),
+  ])
+  const projectIds = projects.map(p => p.id)
+  const [holdStarters, holdPeriodsByProjectId, channelRole] = await Promise.all([
+    fetchOpenHoldStarters(projectIds),
+    fetchHoldPeriodsForProjects(projectIds),
+    getActiveChannelRole(profile),
   ])
   setStageSlaCache(stageSla, channelName)
-
-  const channelRole = await getActiveChannelRole(profile)
   const effectiveRole = effectiveRoleForChannel(channelRole, profile.role)
   const showCreateRequest = canCreateExternalRequest(effectiveRole, channelName)
   const showCreateReport = isChannelSuperAdmin(channelRole ?? '')

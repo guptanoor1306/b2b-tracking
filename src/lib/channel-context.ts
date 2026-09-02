@@ -2,6 +2,17 @@ import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { ACTIVE_CHANNEL_COOKIE, getChannelBySlug, slugToDbName, type StudioChannel } from '@/lib/channels'
+
+const CHANNEL_COOKIE_MAX_AGE = 60 * 60 * 24 * 90
+
+export async function setActiveChannelCookie(slug: string) {
+  const jar = await cookies()
+  jar.set(ACTIVE_CHANNEL_COOKIE, slug, {
+    path: '/',
+    maxAge: CHANNEL_COOKIE_MAX_AGE,
+    sameSite: 'lax',
+  })
+}
 import { getSessionProfile } from '@/lib/auth'
 import { fetchUserChannelSlugs, fetchChannelRole } from '@/lib/data/channel-access'
 import { Profile, ChannelMemberRole } from '@/lib/types'
@@ -70,9 +81,13 @@ export async function requireChannelAdmin(): Promise<{
   return { profile, channel, channelRole: channelRole ?? 'Channel Admin' }
 }
 
-export async function resolvePostLoginPath(profile: Pick<Profile, 'id' | 'role'>): Promise<string> {
+/** Sets channel cookie when user has one channel; returns next navigation target. */
+export async function resolvePostAuthDestination(profile: Pick<Profile, 'id' | 'role'>): Promise<string> {
   const allowed = await fetchUserChannelSlugs(profile)
   if (allowed.length === 0) return '/studios'
-  if (allowed.length === 1) return `/studios/enter/${allowed[0]}`
+  if (allowed.length === 1) {
+    await setActiveChannelCookie(allowed[0])
+    return '/dashboard'
+  }
   return '/studios'
 }

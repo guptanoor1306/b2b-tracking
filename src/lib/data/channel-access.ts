@@ -1,8 +1,11 @@
 import { cache } from 'react'
+import { unstable_cache } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { canUseDataCache, createCachedReadClient } from '@/lib/supabase/cache-read'
 import { Profile, ChannelMember, ChannelMemberRole } from '@/lib/types'
 import { allChannelSlugs } from '@/lib/channels'
 import { isSuperAdmin } from '@/lib/views'
+import { channelMembersCacheTag } from '@/lib/cache-tags'
 
 export type ProfileChannelRow = {
   profile_id: string
@@ -61,7 +64,34 @@ export async function fetchChannelSuperAdmins(slug: string): Promise<ChannelMemb
   return members.filter(m => m.channel_role === 'Channel Super Admin')
 }
 
-export async function fetchChannelMembers(slug: string): Promise<ChannelMember[]> {
+async function fetchChannelMembersUncached(slug: string): Promise<ChannelMember[]> {
+  const supabase = createCachedReadClient()
+  const { data, error } = await supabase
+    .from('profile_channels')
+    .select('profile_id, channel_slug, channel_role, profile:profiles(id, name, email, role, is_active, created_at, updated_at, organization)')
+    .eq('channel_slug', slug)
+
+  if (error || !data?.length) return []
+
+  return data
+    .map(row => {
+      const mapped = mapProfileChannelRow(row as Parameters<typeof mapProfileChannelRow>[0])
+      if (!mapped.profile || !mapped.profile.is_active) return null
+      return { ...mapped.profile, channel_role: mapped.channel_role }
+    })
+    .filter((m): m is ChannelMember => Boolean(m))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function getCachedChannelMembers(slug: string) {
+  return unstable_cache(
+    async () => fetchChannelMembersUncached(slug),
+    ['channel-members', slug],
+    { revalidate: 300, tags: [channelMembersCacheTag(slug)] },
+  )()
+}
+
+async function fetchChannelMembersLive(slug: string): Promise<ChannelMember[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('profile_channels')
@@ -78,6 +108,12 @@ export async function fetchChannelMembers(slug: string): Promise<ChannelMember[]
     })
     .filter((m): m is ChannelMember => Boolean(m))
     .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function fetchChannelMembers(slug: string): Promise<ChannelMember[]> {
+  if (!slug) return []
+  if (!canUseDataCache()) return fetchChannelMembersLive(slug)
+  return getCachedChannelMembers(slug)
 }
 
 export async function fetchAllProfileChannels(): Promise<ProfileChannelRow[]> {

@@ -17,7 +17,14 @@ export type ProjectFilters = {
   month?: string
 }
 
-const PROJECT_SELECT = `
+const PROJECT_LIST_SELECT = `
+  *,
+  stage_assignee:profiles!projects_stage_assignee_id_fkey(id, name, email),
+  external_team_member:profiles!projects_external_team_member_id_fkey(id, name, email),
+  graphic_designer:profiles!projects_graphic_designer_id_fkey(id, name, email)
+`
+
+const PROJECT_DETAIL_SELECT = `
   *,
   agency:agencies(id, name),
   owner:profiles!projects_internal_owner_id_fkey(id, name, email),
@@ -39,7 +46,7 @@ export async function fetchAllProjects(): Promise<Project[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('projects')
-    .select(PROJECT_SELECT)
+    .select(PROJECT_DETAIL_SELECT)
     .order('updated_at', { ascending: false })
 
   if (error) throw error
@@ -51,7 +58,7 @@ export async function fetchProjects(filters: ProjectFilters = {}): Promise<Proje
   const channel = await getActiveChannelDbName()
   let query = supabase
     .from('projects')
-    .select(PROJECT_SELECT)
+    .select(PROJECT_LIST_SELECT)
     .eq('channel', channel)
     .order('updated_at', { ascending: false })
 
@@ -91,7 +98,7 @@ export async function fetchProjectById(id: string) {
   const channel = await getActiveChannelDbName()
   const { data, error } = await supabase
     .from('projects')
-    .select(PROJECT_SELECT)
+    .select(PROJECT_DETAIL_SELECT)
     .eq('id', id)
     .eq('channel', channel)
     .single()
@@ -113,7 +120,7 @@ export async function fetchAgencyProjects(profile: Profile): Promise<Project[]> 
 
   const { data, error } = await supabase
     .from('projects')
-    .select(PROJECT_SELECT)
+    .select(PROJECT_DETAIL_SELECT)
     .eq('assigned_agency_id', agency.id)
     .order('updated_at', { ascending: false })
 

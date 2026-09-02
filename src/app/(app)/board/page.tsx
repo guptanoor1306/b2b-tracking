@@ -37,14 +37,17 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
 
   const params = await searchParams
   const month = params.month ?? ALL_MONTHS
-  const projects = await fetchProjects()
-  const [users, holidays, stageSla, channelName, holdPeriodsByProjectId] = await Promise.all([
-    getActiveChannelSlug().then(slug => fetchChannelMembers(slug ?? '')),
+  const channelNamePromise = getActiveChannelDbName()
+  const channelSlugPromise = getActiveChannelSlug()
+  const [channelName, channelSlug, projects, users, holidays, stageSla] = await Promise.all([
+    channelNamePromise,
+    channelSlugPromise,
+    fetchProjects(),
+    channelSlugPromise.then(slug => fetchChannelMembers(slug ?? '')),
     fetchHolidayDates(),
-    getActiveChannelDbName().then(name => fetchStageSlaConfig(name)),
-    getActiveChannelDbName(),
-    fetchHoldPeriodsForProjects(projects.map(p => p.id)),
+    channelNamePromise.then(name => fetchStageSlaConfig(name)),
   ])
+  const holdPeriodsByProjectId = await fetchHoldPeriodsForProjects(projects.map(p => p.id))
   setStageSlaCache(stageSla, channelName)
 
   const channelRole = await getActiveChannelRole(profile)

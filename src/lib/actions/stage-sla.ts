@@ -1,10 +1,11 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireChannelAdmin } from '@/lib/channel-context'
 import { createClient } from '@/lib/supabase/server'
 import { DEFAULT_STAGE_SLA } from '@/lib/stage-sla'
 import { usesExternalIntakeFlow } from '@/lib/zerodha-sla'
+import { stageSlaCacheTag } from '@/lib/cache-tags'
 import { recalculateActiveProjectTargets } from '@/lib/recalculate-project-targets'
 
 type SlaUpdatePayload = {
@@ -78,6 +79,7 @@ export async function updateStageSla(stageName: string, updates: SlaUpdatePayloa
     }
 
     const recalc = await recalculateActiveProjectTargets(supabase, undefined, channel.dbName)
+    revalidateTag(stageSlaCacheTag(channel.slug), 'max')
     revalidatePath('/settings')
     revalidatePath('/board')
     revalidatePath('/dashboard')
@@ -117,6 +119,7 @@ export async function updateStageSla(stageName: string, updates: SlaUpdatePayloa
 
   const recalc = await recalculateActiveProjectTargets(supabase)
 
+  revalidateTag(stageSlaCacheTag('varsity'), 'max')
   revalidatePath('/settings')
   revalidatePath('/board')
   revalidatePath('/dashboard')
@@ -143,6 +146,7 @@ export async function seedStageSlaIfEmpty() {
     }))
   )
   if (error) return { error: error.message }
+  revalidateTag(stageSlaCacheTag('varsity'), 'max')
   revalidatePath('/settings')
   return { success: true }
 }

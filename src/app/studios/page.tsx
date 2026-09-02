@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getSessionProfile } from '@/lib/auth'
+import { setActiveChannelCookie } from '@/lib/channel-context'
 import { createClient } from '@/lib/supabase/server'
 import { fetchAllProjects } from '@/lib/data/projects'
 import { fetchUserChannelSlugs, fetchChannelMemberCounts } from '@/lib/data/channel-access'
@@ -31,7 +32,8 @@ export default async function StudiosPage({ searchParams }: { searchParams: Sear
   ])
 
   if (accessibleSlugs.length === 1) {
-    redirect(`/studios/enter/${accessibleSlugs[0]}`)
+    await setActiveChannelCookie(accessibleSlugs[0])
+    redirect('/dashboard')
   }
 
   const superAdmin = isSuperAdmin(profile.role)

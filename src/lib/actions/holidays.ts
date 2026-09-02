@@ -1,8 +1,9 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireChannelAdmin } from '@/lib/channel-context'
 import { createClient } from '@/lib/supabase/server'
+import { HOLIDAYS_CACHE_TAG } from '@/lib/cache-tags'
 
 export async function addHoliday(holidayDate: string, name?: string) {
   await requireChannelAdmin()
@@ -15,6 +16,7 @@ export async function addHoliday(holidayDate: string, name?: string) {
 
   if (error) return { error: error.message }
 
+  revalidateTag(HOLIDAYS_CACHE_TAG, 'max')
   revalidatePath('/settings')
   revalidatePath('/board')
   revalidatePath('/dashboard')
@@ -29,6 +31,7 @@ export async function removeHoliday(id: string) {
 
   if (error) return { error: error.message }
 
+  revalidateTag(HOLIDAYS_CACHE_TAG, 'max')
   revalidatePath('/settings')
   revalidatePath('/board')
   revalidatePath('/dashboard')
