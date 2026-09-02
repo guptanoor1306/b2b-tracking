@@ -8,9 +8,19 @@ ALTER TABLE projects
 ALTER TABLE client_review_submissions
   ADD COLUMN IF NOT EXISTS intro_timeline TEXT;
 
+-- Must exist in channels before profile_channels / channel_stage_sla FK updates
+INSERT INTO channels (slug, name, db_name, sort_order)
+VALUES ('cash-and-copium', 'Cash & Copium', 'Cash & Copium', 3)
+ON CONFLICT (slug) DO UPDATE SET
+  name = EXCLUDED.name,
+  db_name = EXCLUDED.db_name;
+
 -- Rename legacy Tharun rows
 UPDATE projects SET channel = 'Cash & Copium' WHERE channel = 'Tharun';
 UPDATE profile_channels SET channel_slug = 'cash-and-copium' WHERE channel_slug = 'tharun';
+
+-- Drop legacy channel row after access is moved
+DELETE FROM channels WHERE slug = 'tharun';
 
 -- Seed Cash & Copium SLA (same pipeline as Zerodha Online)
 INSERT INTO channel_stage_sla (
