@@ -4,14 +4,14 @@ import { useState, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { Project, Comment, RpCut, ClientReviewSubmission, QcReviewSubmission, ReelTimestampPair } from '@/lib/types'
 import { Input } from '@/components/ui/Input'
-import { Textarea } from '@/components/ui/Textarea'
 import { Button } from '@/components/ui/Button'
 import { CommentsSection } from '@/components/projects/CommentsSection'
 import { ClientReviewFeedbackPanel } from '@/components/projects/ClientReviewFeedbackPanel'
 import { QcReviewFeedbackPanel } from '@/components/projects/QcReviewFeedbackPanel'
+import { ProjectLinkField, ProjectTextField } from '@/components/projects/ProjectLinkField'
 import { isZerodhaClientReviewStage } from '@/lib/zerodha-sla'
 import { updateProject, saveRpCuts, RpCutInput } from '@/lib/actions/projects'
-import { ExternalLink, Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { hasIntakeMaterials, isCashAndCopiumChannelDbName, usesExternalIntakeFlow } from '@/lib/zerodha-sla'
 import { cn } from '@/lib/utils'
 
@@ -45,44 +45,6 @@ function SectionCard({
       {footer && (
         <div className="shrink-0 border-t border-zinc-100 px-4 py-2.5">{footer}</div>
       )}
-    </div>
-  )
-}
-
-function TruncatedLink({ label, url }: { label: string; url: string | null | undefined }) {
-  const raw = url?.trim()
-  const href = raw
-    ? (/^https?:\/\//i.test(raw) ? raw : `https://${raw}`)
-    : null
-  return (
-    <div className="border-b border-zinc-100 py-2.5 last:border-0">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">{label}</p>
-      {!href ? (
-        <p className="mt-1 text-xs italic text-zinc-400">Not added</p>
-      ) : (
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={href}
-          className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-violet-700 hover:text-violet-800"
-        >
-          <ExternalLink size={11} className="shrink-0" />
-          <span className="truncate">{href}</span>
-        </a>
-      )}
-    </div>
-  )
-}
-
-function ReadCopy({ label, value }: { label: string; value: string | null | undefined }) {
-  const text = value?.trim()
-  return (
-    <div className="border-b border-zinc-100 py-2.5 last:border-0">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">{label}</p>
-      <p className={cn('mt-1 text-xs leading-relaxed break-words', text ? 'text-zinc-800' : 'italic text-zinc-400')}>
-        {text || 'Not added'}
-      </p>
     </div>
   )
 }
@@ -161,76 +123,27 @@ export function ProjectSectionsGrid({
   const showQcReview = internalView && usesExternalIntakeFlow(project.channel)
   const showClientReview = showIntakeSidebar
   const canEditIntakeFields = canEditIntakeMaterials && !internalView
-  const canEditReviewLinkFields = canEditLinks && internalView
-  const canEditProductionLinkFields = canEditLinks && internalView
+  const canEditReviewLink = canEditLinks && internalView
 
-  const [links, setLinks] = useState({
-    assets_link: project.assets_link ?? '',
-    drive_link: showIntakeSidebar ? (intakeVideoLink ?? '') : (productionDriveLink ?? ''),
-    script_link: project.script_link ?? '',
-    screen_captures_link: project.screen_captures_link ?? '',
-    audio_link: project.audio_link ?? '',
-  })
-  const [copy, setCopy] = useState({
-    thumbnail_copy: project.thumbnail_copy ?? '',
-    title_copy: project.title_copy ?? '',
-  })
   const [cuts, setCuts] = useState<CutForm[]>(() =>
     rpCuts.length
       ? rpCuts.map(c => ({ id: c.id, timestamps: c.timestamps ?? '', thumbnail: c.thumbnail ?? '' }))
       : [{ timestamps: '', thumbnail: '' }],
   )
 
-  const [linksLoading, setLinksLoading] = useState(false)
-  const [copyLoading, setCopyLoading] = useState(false)
-  const [intakeLoading, setIntakeLoading] = useState(false)
   const [cutsLoading, setCutsLoading] = useState(false)
   const [cutsError, setCutsError] = useState('')
 
-  const saveLinks = async () => {
-    setLinksLoading(true)
-    await updateProject(project.id, {
-      assets_link: links.assets_link.trim() || null,
-      drive_link: links.drive_link.trim() || null,
-      script_link: links.script_link.trim() || null,
-      screen_captures_link: links.screen_captures_link.trim() || null,
-      audio_link: links.audio_link.trim() || null,
-    })
-    setLinksLoading(false)
-    router.refresh()
+  const refresh = () => router.refresh()
+
+  const saveLinkField = async (field: 'assets_link' | 'drive_link' | 'script_link' | 'screen_captures_link' | 'audio_link', value: string) => {
+    await updateProject(project.id, { [field]: value.trim() || null })
+    refresh()
   }
 
-  const saveIntakeMaterials = async () => {
-    setIntakeLoading(true)
-    await updateProject(project.id, {
-      script_link: links.script_link.trim() || null,
-      drive_link: links.drive_link.trim() || null,
-      screen_captures_link: links.screen_captures_link.trim() || null,
-      audio_link: links.audio_link.trim() || null,
-      thumbnail_copy: copy.thumbnail_copy.trim() || null,
-      title_copy: copy.title_copy.trim() || null,
-    })
-    setIntakeLoading(false)
-    router.refresh()
-  }
-
-  const saveReviewLink = async () => {
-    setLinksLoading(true)
-    await updateProject(project.id, {
-      assets_link: links.assets_link.trim() || null,
-    })
-    setLinksLoading(false)
-    router.refresh()
-  }
-
-  const saveCopy = async () => {
-    setCopyLoading(true)
-    await updateProject(project.id, {
-      thumbnail_copy: copy.thumbnail_copy.trim() || null,
-      title_copy: copy.title_copy.trim() || null,
-    })
-    setCopyLoading(false)
-    router.refresh()
+  const saveCopyField = async (field: 'thumbnail_copy' | 'title_copy', value: string) => {
+    await updateProject(project.id, { [field]: value.trim() || null })
+    refresh()
   }
 
   const saveCuts = async () => {
@@ -242,7 +155,7 @@ export function ProjectSectionsGrid({
     const result = await saveRpCuts(project.id, payload)
     setCutsLoading(false)
     if (result.error) { setCutsError(result.error); return }
-    router.refresh()
+    refresh()
   }
 
   const inActiveClientReview = showClientReview && isZerodhaClientReviewStage(project.current_stage, project.channel)
@@ -250,38 +163,20 @@ export function ProjectSectionsGrid({
   const filledCuts = cuts.filter(c => c.timestamps.trim() || c.thumbnail.trim()).length
 
   const reviewSection = (
-    <SectionCard
-      title={showIntakeSidebar ? 'Client review' : 'Content Links'}
-      footer={canEditReviewLinkFields ? (
-        <div className="flex justify-end">
-          <Button size="sm" loading={linksLoading} onClick={showIntakeSidebar ? saveReviewLink : saveLinks}>Save</Button>
-        </div>
-      ) : undefined}
-    >
-      {canEditReviewLinkFields ? (
-        <div className="space-y-3">
-          <Input
-            label="Review link"
-            placeholder="Paste review link"
-            value={links.assets_link}
-            onChange={e => setLinks(l => ({ ...l, assets_link: e.target.value }))}
-          />
-          {!showIntakeSidebar && canEditProductionLinkFields && (
-            <Input
-              label="Drive video link"
-              placeholder="Paste drive or video link"
-              value={links.drive_link}
-              onChange={e => setLinks(l => ({ ...l, drive_link: e.target.value }))}
-            />
-          )}
-        </div>
-      ) : (
-        <>
-          <TruncatedLink label="Review link" url={project.assets_link} />
-          {!showIntakeSidebar && (
-            <TruncatedLink label="Drive video link" url={productionDriveLink} />
-          )}
-        </>
+    <SectionCard title={showIntakeSidebar ? 'Client review' : 'Content Links'}>
+      <ProjectLinkField
+        label="Review link"
+        url={project.assets_link}
+        canEdit={canEditReviewLink}
+        onSave={value => saveLinkField('assets_link', value)}
+      />
+      {!showIntakeSidebar && (
+        <ProjectLinkField
+          label="Drive video link"
+          url={productionDriveLink}
+          canEdit={canEditReviewLink}
+          onSave={value => saveLinkField('drive_link', value)}
+        />
       )}
     </SectionCard>
   )
@@ -379,25 +274,14 @@ export function ProjectSectionsGrid({
         <h3 className="text-sm font-semibold text-zinc-900">Review materials</h3>
         <p className="mt-0.5 text-[11px] text-zinc-500">Internal client review link</p>
       </div>
-      <div className="px-4 py-3">
-        {canEditReviewLinkFields ? (
-          <Input
-            label="Review link"
-            placeholder="Paste review link"
-            value={links.assets_link}
-            onChange={e => setLinks(l => ({ ...l, assets_link: e.target.value }))}
-          />
-        ) : (
-          <TruncatedLink label="Review link" url={project.assets_link} />
-        )}
+      <div className="px-4 py-1">
+        <ProjectLinkField
+          label="Review link"
+          url={project.assets_link}
+          canEdit={canEditReviewLink}
+          onSave={value => saveLinkField('assets_link', value)}
+        />
       </div>
-      {canEditReviewLinkFields && (
-        <div className="border-t border-zinc-100 px-4 py-2.5">
-          <Button size="sm" loading={linksLoading} onClick={saveReviewLink} className="w-full">
-            Save review link
-          </Button>
-        </div>
-      )}
     </div>
   )
 
@@ -408,59 +292,60 @@ export function ProjectSectionsGrid({
         <p className="mt-0.5 text-[11px] text-zinc-500">Links and copy from the request</p>
       </div>
       <div className="px-4 py-1">
-        {canEditIntakeFields ? (
-          <div className="space-y-2 py-2">
-            {isCashCopium ? (
-              <Input label="Drive link" placeholder="https://..." value={links.drive_link} onChange={e => setLinks(l => ({ ...l, drive_link: e.target.value }))} />
-            ) : (
-              <>
-                <Input label="Script link" placeholder="https://..." value={links.script_link} onChange={e => setLinks(l => ({ ...l, script_link: e.target.value }))} />
-                <Input label="Video link" placeholder="https://..." value={links.drive_link} onChange={e => setLinks(l => ({ ...l, drive_link: e.target.value }))} />
-                <Input label="Screen captures" placeholder="https://..." value={links.screen_captures_link} onChange={e => setLinks(l => ({ ...l, screen_captures_link: e.target.value }))} />
-                <Input label="Audio link" placeholder="https://..." value={links.audio_link} onChange={e => setLinks(l => ({ ...l, audio_link: e.target.value }))} />
-              </>
-            )}
-            <Textarea
-              label="Thumbnail copy"
-              placeholder="Text for the thumbnail"
-              value={copy.thumbnail_copy}
-              onChange={e => setCopy(c => ({ ...c, thumbnail_copy: e.target.value }))}
-              rows={2}
-            />
-            {!isCashCopium && (
-              <Textarea
-                label="Title copy"
-                placeholder="Title text"
-                value={copy.title_copy}
-                onChange={e => setCopy(c => ({ ...c, title_copy: e.target.value }))}
-                rows={2}
-              />
-            )}
-          </div>
+        {isCashCopium ? (
+          <ProjectLinkField
+            label="Drive link"
+            url={intakeVideoLink}
+            canEdit={canEditIntakeFields}
+            onSave={value => saveLinkField('drive_link', value)}
+          />
         ) : (
           <>
-            {isCashCopium ? (
-              <TruncatedLink label="Drive link" url={intakeVideoLink} />
-            ) : (
-              <>
-                <TruncatedLink label="Script link" url={project.script_link} />
-                <TruncatedLink label="Video link" url={intakeVideoLink} />
-                <TruncatedLink label="Screen captures" url={project.screen_captures_link} />
-                <TruncatedLink label="Audio link" url={project.audio_link} />
-              </>
-            )}
-            <ReadCopy label="Thumbnail copy" value={project.thumbnail_copy} />
-            {!isCashCopium && <ReadCopy label="Title copy" value={project.title_copy} />}
+            <ProjectLinkField
+              label="Script link"
+              url={project.script_link}
+              canEdit={canEditIntakeFields}
+              onSave={value => saveLinkField('script_link', value)}
+            />
+            <ProjectLinkField
+              label="Video link"
+              url={intakeVideoLink}
+              canEdit={canEditIntakeFields}
+              onSave={value => saveLinkField('drive_link', value)}
+            />
+            <ProjectLinkField
+              label="Screen captures"
+              url={project.screen_captures_link}
+              canEdit={canEditIntakeFields}
+              onSave={value => saveLinkField('screen_captures_link', value)}
+            />
+            <ProjectLinkField
+              label="Audio link"
+              url={project.audio_link}
+              canEdit={canEditIntakeFields}
+              onSave={value => saveLinkField('audio_link', value)}
+            />
           </>
         )}
+        <ProjectTextField
+          label="Thumbnail copy"
+          value={project.thumbnail_copy}
+          canEdit={canEditIntakeFields}
+          onSave={value => saveCopyField('thumbnail_copy', value)}
+          multiline
+          placeholder="Text for the thumbnail"
+        />
+        {!isCashCopium && (
+          <ProjectTextField
+            label="Title copy"
+            value={project.title_copy}
+            canEdit={canEditIntakeFields}
+            onSave={value => saveCopyField('title_copy', value)}
+            multiline
+            placeholder="Title text"
+          />
+        )}
       </div>
-      {canEditIntakeFields && (
-        <div className="border-t border-zinc-100 px-4 py-2.5">
-          <Button size="sm" loading={intakeLoading} onClick={saveIntakeMaterials} className="w-full">
-            Save materials
-          </Button>
-        </div>
-      )}
     </div>
   )
 
@@ -533,25 +418,21 @@ export function ProjectSectionsGrid({
   return (
     <div className={cn('grid gap-4', canViewRpCuts ? 'lg:grid-cols-2' : 'md:grid-cols-2')}>
       {reviewSection}
-      <SectionCard
-        title="Client Information"
-        footer={canEditCopy ? (
-          <div className="flex justify-end">
-            <Button size="sm" loading={copyLoading} onClick={saveCopy}>Save</Button>
-          </div>
-        ) : undefined}
-      >
-        {canEditCopy ? (
-          <div className="space-y-3">
-            <Textarea label="Thumbnail copy" value={copy.thumbnail_copy} onChange={e => setCopy(c => ({ ...c, thumbnail_copy: e.target.value }))} rows={3} />
-            <Textarea label="Title copy" value={copy.title_copy} onChange={e => setCopy(c => ({ ...c, title_copy: e.target.value }))} rows={3} />
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <ReadCopy label="Thumbnail copy" value={project.thumbnail_copy} />
-            <ReadCopy label="Title copy" value={project.title_copy} />
-          </div>
-        )}
+      <SectionCard title="Client Information">
+        <ProjectTextField
+          label="Thumbnail copy"
+          value={project.thumbnail_copy}
+          canEdit={canEditCopy}
+          onSave={value => saveCopyField('thumbnail_copy', value)}
+          multiline
+        />
+        <ProjectTextField
+          label="Title copy"
+          value={project.title_copy}
+          canEdit={canEditCopy}
+          onSave={value => saveCopyField('title_copy', value)}
+          multiline
+        />
       </SectionCard>
       <SectionCard
         title="Feedback & Changes"

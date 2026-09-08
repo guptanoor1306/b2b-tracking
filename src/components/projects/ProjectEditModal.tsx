@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button'
 import { SlideOver, SlideOverSection } from '@/components/ui/SlideOver'
 import { UserSearchSelect } from '@/components/ui/UserSearchSelect'
 import { updateProject } from '@/lib/actions/projects'
+import { ProjectLinkField } from '@/components/projects/ProjectLinkField'
 import { useActiveChannel } from '@/context/ChannelContext'
 import {
   isZerodhaChannelDbName,
@@ -43,7 +44,6 @@ function buildForm(project: Project) {
     writer_id: project.writer_id ?? '',
     external_team_member_id: project.external_team_member_id ?? '',
     qc_reviewer_id: project.qc_reviewer_id ?? '',
-    assets_link: project.assets_link ?? '',
   }
 }
 
@@ -108,7 +108,6 @@ export function ProjectEditModal({ open, onClose, project, users }: Props) {
       writer_id: form.writer_id || null,
       external_team_member_id: form.external_team_member_id || null,
       ...(isZerodha ? { qc_reviewer_id: form.qc_reviewer_id || null } : {}),
-      assets_link: form.assets_link || null,
     })
     setLoading(false)
     if (result.error) {
@@ -228,11 +227,15 @@ export function ProjectEditModal({ open, onClose, project, users }: Props) {
         </SlideOverSection>
 
         <SlideOverSection title="Review link">
-          <Input
+          <ProjectLinkField
             label="Review link"
-            placeholder="https://..."
-            value={form.assets_link}
-            onChange={e => set('assets_link', e.target.value)}
+            url={project.assets_link}
+            canEdit
+            onSave={async value => {
+              const result = await updateProject(project.id, { assets_link: value.trim() || null })
+              if (result.error) throw new Error(result.error)
+              router.refresh()
+            }}
           />
         </SlideOverSection>
       </div>
