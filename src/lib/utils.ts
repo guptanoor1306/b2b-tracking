@@ -74,7 +74,13 @@ export function monthLabel(month: string): string {
 export const ALL_MONTHS = 'all'
 
 export function isAllMonths(month: string | null | undefined): boolean {
-  return !month || month === ALL_MONTHS
+  return month === ALL_MONTHS
+}
+
+/** Month query param for Home / Dashboard — defaults to current month when omitted. */
+export function resolveMonthFilter(monthParam: string | null | undefined): string {
+  if (!monthParam) return currentMonth()
+  return monthParam
 }
 
 export function isDateInMonth(dateStr: string | null | undefined, month: string): boolean {

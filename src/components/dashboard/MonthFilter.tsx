@@ -65,7 +65,7 @@ export function MonthFilter({ month, variant = 'light' }: Props) {
 
   const pushMonth = (value: string) => {
     const params = new URLSearchParams(searchParams.toString())
-    if (isAllMonths(value)) params.delete('month')
+    if (isAllMonths(value)) params.set('month', ALL_MONTHS)
     else params.set('month', value)
     const qs = params.toString()
     router.push(qs ? `${window.location.pathname}?${qs}` : window.location.pathname)

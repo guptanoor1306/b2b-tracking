@@ -15,8 +15,8 @@ import { ExternalDashboard } from '@/components/dashboard/ExternalDashboard'
 import { MonthFilterSlot } from '@/components/dashboard/MonthFilterSlot'
 import type { ReleaseScheduleItem } from '@/components/dashboard/ReleaseScheduleModal'
 import {
-  ALL_MONTHS,
   isAllMonths,
+  resolveMonthFilter,
   isProjectRelevantInMonth,
   isDeliveredInMonth,
 } from '@/lib/utils'
@@ -55,7 +55,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const showCreateRequest = canCreateExternalRequest(effectiveRole, channelName)
   const showCreateReport = isChannelSuperAdmin(channelRole ?? '')
   const params = await searchParams
-  const month = params.month ?? ALL_MONTHS
+  const month = resolveMonthFilter(params.month)
   const monthFilter = <MonthFilterSlot month={month} />
   const releaseScheduleItems: ReleaseScheduleItem[] = projects
     .filter(p => p.target_delivery_date)

@@ -12,7 +12,7 @@ import { setStageSlaCache } from '@/lib/timelines'
 import { getSessionProfile } from '@/lib/auth'
 import { getActiveChannelRole, getActiveChannelDbName, getActiveChannelSlug } from '@/lib/channel-context'
 import { redirect } from 'next/navigation'
-import { ALL_MONTHS, filterProjectsByMonth } from '@/lib/utils'
+import { filterProjectsByMonth, resolveMonthFilter } from '@/lib/utils'
 import { parseCsvFilter, formatCsvFilter } from '@/lib/board-filters'
 import { isZerodhaChannelDbName, externalStagesForChannel, internalStagesForChannel, VIDEO_LANGUAGES } from '@/lib/zerodha-sla'
 import {
@@ -36,7 +36,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   if (!profile) redirect('/login')
 
   const params = await searchParams
-  const month = params.month ?? ALL_MONTHS
+  const month = resolveMonthFilter(params.month)
   const channelNamePromise = getActiveChannelDbName()
   const channelSlugPromise = getActiveChannelSlug()
   const [channelName, channelSlug, projects, users, holidays, stageSla] = await Promise.all([
