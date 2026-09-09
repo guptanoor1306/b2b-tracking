@@ -46,12 +46,21 @@ export async function submitQcReviewFeedback(
     return { error: 'Unauthorized' }
   }
 
-  if (normalizeZerodhaBoardStage(project.current_stage, project.channel) !== ZERODHA_FIRST_DRAFT_QC) {
+  const qcStage = normalizeZerodhaBoardStage(project.current_stage, project.channel)
+  if (qcStage !== ZERODHA_FIRST_DRAFT_QC) {
+    if (goodToGo && qcStage === ZERODHA_FIRST_DRAFT_REVIEW) {
+      return { success: true, nextStage: project.current_stage }
+    }
     return { error: 'Project is not at Draft QC stage' }
   }
 
   const existing = await fetchCurrentQcSubmission(projectId)
-  if (existing) return { error: 'QC has already been submitted for this round' }
+  if (existing) {
+    if (goodToGo && existing.is_good_to_go) {
+      return { success: true, nextStage: ZERODHA_FIRST_DRAFT_REVIEW }
+    }
+    return { error: 'QC has already been submitted for this round' }
+  }
 
   const admin = createAdminClient()
   const { data: submission, error: subError } = await admin

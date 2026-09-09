@@ -30,29 +30,40 @@ export function QcReviewFeedbackPanel({
   const router = useRouter()
   const isAtQc = normalizeZerodhaBoardStage(currentStage, channelDbName) === ZERODHA_FIRST_DRAFT_QC
   const returnStage = stageBeforeQc(channelDbName)
-  const showForm = canSubmit && isAtQc && !currentQcSubmission
-
   const [items, setItems] = useState<string[]>([''])
-  const [loading, setLoading] = useState(false)
+  const [pending, setPending] = useState<'good' | 'back' | null>(null)
+  const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
 
+  const showForm = canSubmit && isAtQc && !currentQcSubmission && !submitted
   const filledItems = items.map(s => s.trim()).filter(Boolean)
+  const busy = pending !== null
 
   const handleGoodToGo = async () => {
-    setLoading(true)
+    if (busy) return
+    setPending('good')
     setError('')
     const result = await submitQcReviewFeedback(projectId, [], true)
-    setLoading(false)
-    if (result.error) { setError(result.error); return }
+    if (result.error) {
+      setPending(null)
+      setError(result.error)
+      return
+    }
+    setSubmitted(true)
     router.refresh()
   }
 
   const handleSendBack = async () => {
-    setLoading(true)
+    if (busy) return
+    setPending('back')
     setError('')
     const result = await submitQcReviewFeedback(projectId, items, false)
-    setLoading(false)
-    if (result.error) { setError(result.error); return }
+    if (result.error) {
+      setPending(null)
+      setError(result.error)
+      return
+    }
+    setSubmitted(true)
     router.refresh()
   }
 
@@ -70,13 +81,21 @@ export function QcReviewFeedbackPanel({
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             <button
               type="button"
-              disabled={loading}
+              disabled={busy}
               onClick={handleGoodToGo}
-              className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-left transition-colors hover:bg-emerald-100/80 disabled:opacity-60"
+              className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-left transition-colors hover:bg-emerald-100/80 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-600" />
+              {pending === 'good' ? (
+                <span className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-200 border-t-emerald-600" />
+                </span>
+              ) : (
+                <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-600" />
+              )}
               <span>
-                <span className="block text-sm font-semibold text-emerald-900">Good to go</span>
+                <span className="block text-sm font-semibold text-emerald-900">
+                  {pending === 'good' ? 'Approving…' : 'Good to go'}
+                </span>
                 <span className="mt-0.5 block text-xs text-emerald-800/90">→ 1st Draft Review</span>
               </span>
             </button>
@@ -116,7 +135,7 @@ export function QcReviewFeedbackPanel({
                 <Button size="sm" variant="secondary" onClick={() => setItems(prev => [...prev, ''])}>
                   <Plus size={14} /> Add note
                 </Button>
-                <Button size="sm" loading={loading} disabled={filledItems.length === 0} onClick={handleSendBack}>
+                <Button size="sm" loading={pending === 'back'} disabled={busy || filledItems.length === 0} onClick={handleSendBack}>
                   Send back for changes
                 </Button>
               </div>
