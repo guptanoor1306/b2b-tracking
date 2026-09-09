@@ -232,6 +232,25 @@ export async function fetchHoldPeriodsForProjects(projectIds: string[]) {
   return map
 }
 
+export async function fetchHoldPeriodsForChannel(channelDbName: string) {
+  if (!channelDbName) return {} as Record<string, Awaited<ReturnType<typeof fetchProjectHoldPeriods>>>
+
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('project_hold_periods')
+    .select('*, project:projects!inner(channel)')
+    .eq('project.channel', channelDbName)
+    .order('started_at')
+
+  const map: Record<string, NonNullable<typeof data>> = {}
+  for (const row of data ?? []) {
+    const id = row.project_id as string
+    if (!map[id]) map[id] = []
+    map[id].push(row)
+  }
+  return map
+}
+
 export async function fetchOpenHoldStarters(
   projectIds?: string[],
 ): Promise<Record<string, Pick<Profile, 'id' | 'name' | 'email'>>> {
@@ -242,6 +261,27 @@ export async function fetchOpenHoldStarters(
     .from('project_hold_periods')
     .select('project_id, starter:profiles!project_hold_periods_started_by_fkey(id, name, email)')
     .in('project_id', projectIds)
+    .is('ended_at', null)
+
+  const starters: Record<string, Pick<Profile, 'id' | 'name' | 'email'>> = {}
+  for (const row of data ?? []) {
+    const raw = row.starter as Pick<Profile, 'id' | 'name' | 'email'> | Pick<Profile, 'id' | 'name' | 'email'>[] | null
+    const starter = Array.isArray(raw) ? raw[0] : raw
+    if (starter) starters[row.project_id] = starter
+  }
+  return starters
+}
+
+export async function fetchOpenHoldStartersForChannel(
+  channelDbName: string,
+): Promise<Record<string, Pick<Profile, 'id' | 'name' | 'email'>>> {
+  if (!channelDbName) return {}
+
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('project_hold_periods')
+    .select('project_id, starter:profiles!project_hold_periods_started_by_fkey(id, name, email), project:projects!inner(channel)')
+    .eq('project.channel', channelDbName)
     .is('ended_at', null)
 
   const starters: Record<string, Pick<Profile, 'id' | 'name' | 'email'>> = {}

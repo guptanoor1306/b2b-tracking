@@ -16,11 +16,8 @@ import { CreateReportButton } from '@/components/reports/ChannelReportModal'
 import { ReleaseScheduleButton } from '@/components/dashboard/ReleaseScheduleButton'
 import type { ReleaseScheduleItem } from '@/components/dashboard/ReleaseScheduleModal'
 import { RecentCommentsSection } from '@/components/dashboard/RecentCommentsSection'
-import { TeamPerformanceVitals } from '@/components/dashboard/TeamPerformanceVitals'
 import { DashboardStatsRow } from '@/components/dashboard/DashboardStatsRow'
-import { TimelineMetricsWidget } from '@/components/dashboard/TimelineMetricsWidget'
-import type { TeamPerformanceStats } from '@/lib/data/team-stats'
-import type { OnTimeDeliveryStats, TimelineMetrics } from '@/lib/data/dashboard-metrics'
+import type { OnTimeDeliveryStats } from '@/lib/data/dashboard-metrics'
 import type { HoldPeriod } from '@/lib/types'
 import type { RecentCommentFeedItem } from '@/lib/data/comments'
 import type { ReactNode } from 'react'
@@ -43,8 +40,7 @@ type Props = {
   workspaceLabel?: string
   showCreateRequest?: boolean
   showCreateReport?: boolean
-  timelineMetrics?: TimelineMetrics | null
-  teamPerformance?: TeamPerformanceStats | null
+  insights?: ReactNode
   releaseScheduleItems?: ReleaseScheduleItem[]
   recentComments?: RecentCommentFeedItem[]
 }
@@ -54,8 +50,7 @@ export function AdminDashboard({
   holdPeriodsByProjectId = {},
   externalView = false, channelDbName = null, workspaceLabel, showCreateRequest = false,
   showCreateReport = false,
-  timelineMetrics = null,
-  teamPerformance = null,
+  insights = null,
   releaseScheduleItems = [],
   recentComments = [],
 }: Props) {
@@ -226,17 +221,9 @@ export function AdminDashboard({
           <RecentCommentsSection items={recentComments} />
         </div>
 
-        {/* 4. Team performance */}
-        {teamPerformance && teamPerformance.members.length > 0 && (
-          <TeamPerformanceVitals stats={teamPerformance} month={month} />
-        )}
+        {insights}
 
-        {/* 5. Average stage times */}
-        {timelineMetrics && timelineMetrics.metrics.length > 0 && (
-          <TimelineMetricsWidget metrics={timelineMetrics} month={month} />
-        )}
-
-        {/* 6. Project lists */}
+        {/* 4. Project lists */}
         <div className="space-y-4">
           <CollapsibleProjectSection
             title="In Pipeline"

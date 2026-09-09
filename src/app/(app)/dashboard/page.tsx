@@ -1,18 +1,18 @@
+import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getSessionProfile } from '@/lib/auth'
-import { getActiveChannelRole, getActiveChannelDbName, getActiveChannelSlug } from '@/lib/channel-context'
+import { getActiveChannelRole, getActiveChannelDbName } from '@/lib/channel-context'
 import { fetchProjects } from '@/lib/data/projects'
-import { fetchChannelMembers } from '@/lib/data/channel-access'
-import { computeTeamPerformance } from '@/lib/data/team-stats'
-import { computeOnTimeDeliveryStats, computeTimelineMetrics } from '@/lib/data/dashboard-metrics'
-import { fetchStageHistoryForProjects } from '@/lib/data/stage-history-batch'
-import { fetchRecentComments } from '@/lib/data/comments'
+import { computeOnTimeDeliveryStats } from '@/lib/data/dashboard-metrics'
+import { fetchRecentCommentsForChannel } from '@/lib/data/comments'
 import { fetchHolidayDates } from '@/lib/data/holidays'
-import { fetchStageSlaConfig, fetchOpenHoldStarters, fetchHoldPeriodsForProjects } from '@/lib/data/stage-sla'
+import { fetchStageSlaConfig, fetchOpenHoldStartersForChannel, fetchHoldPeriodsForChannel } from '@/lib/data/stage-sla'
 import { setStageSlaCache } from '@/lib/timelines'
 import { AdminDashboard } from '@/components/dashboard/AdminDashboard'
 import { ExternalDashboard } from '@/components/dashboard/ExternalDashboard'
 import { MonthFilterSlot } from '@/components/dashboard/MonthFilterSlot'
+import { SuperadminInsights } from '@/components/dashboard/SuperadminInsights'
+import { SuperadminInsightsFallback } from '@/components/dashboard/SuperadminInsightsFallback'
 import type { ReleaseScheduleItem } from '@/components/dashboard/ReleaseScheduleModal'
 import {
   isAllMonths,
@@ -37,25 +37,32 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const profile = await getSessionProfile()
   if (!profile) redirect('/login')
 
+  const params = await searchParams
+  const month = resolveMonthFilter(params.month)
   const channelNamePromise = getActiveChannelDbName()
-  const [channelName, projects, holidays, stageSla] = await Promise.all([
+  const [
+    channelName,
+    projects,
+    holidays,
+    stageSla,
+    channelRole,
+    holdStarters,
+    holdPeriodsByProjectId,
+    recentComments,
+  ] = await Promise.all([
     channelNamePromise,
-    fetchProjects(),
+    channelNamePromise.then(name => fetchProjects({ month }, name)),
     fetchHolidayDates(),
     channelNamePromise.then(name => fetchStageSlaConfig(name)),
-  ])
-  const projectIds = projects.map(p => p.id)
-  const [holdStarters, holdPeriodsByProjectId, channelRole] = await Promise.all([
-    fetchOpenHoldStarters(projectIds),
-    fetchHoldPeriodsForProjects(projectIds),
     getActiveChannelRole(profile),
+    channelNamePromise.then(name => fetchOpenHoldStartersForChannel(name)),
+    channelNamePromise.then(name => fetchHoldPeriodsForChannel(name)),
+    channelNamePromise.then(name => fetchRecentCommentsForChannel(name)),
   ])
   setStageSlaCache(stageSla, channelName)
   const effectiveRole = effectiveRoleForChannel(channelRole, profile.role)
   const showCreateRequest = canCreateExternalRequest(effectiveRole, channelName)
   const showCreateReport = isChannelSuperAdmin(channelRole ?? '')
-  const params = await searchParams
-  const month = resolveMonthFilter(params.month)
   const monthFilter = <MonthFilterSlot month={month} />
   const releaseScheduleItems: ReleaseScheduleItem[] = projects
     .filter(p => p.target_delivery_date)
@@ -66,8 +73,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       video_language: p.video_language,
       request_status: p.request_status,
     }))
-
-  const recentComments = await fetchRecentComments(projects.map(p => p.id))
 
   if (usesActionItemsDashboardForChannel(channelRole)) {
     return (
@@ -126,23 +131,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
     ? null
     : computeOnTimeDeliveryStats(deliveredOnTime.length, deliveredLate.length)
 
-  let teamPerformance = null
-  let timelineMetrics = null
-  if (showSuperadminInsights) {
-    const channelSlug = await getActiveChannelSlug()
-    const [members, historyByProject] = await Promise.all([
-      fetchChannelMembers(channelSlug ?? ''),
-      fetchStageHistoryForProjects(projects.map(p => p.id)),
-    ])
-    teamPerformance = computeTeamPerformance(projects, members, month)
-    timelineMetrics = computeTimelineMetrics(
-      projects,
-      historyByProject,
-      holidays,
-      holdPeriodsByProjectId,
-      month,
-    )
-  }
+  const insights = showSuperadminInsights ? (
+    <Suspense fallback={<SuperadminInsightsFallback />}>
+      <SuperadminInsights
+        projects={projects}
+        month={month}
+        holidays={holidays}
+        holdPeriodsByProjectId={holdPeriodsByProjectId}
+      />
+    </Suspense>
+  ) : null
 
   return (
     <AdminDashboard
@@ -163,8 +161,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       workspaceLabel={usesExternalAdminDashboard(effectiveRole) ? 'Client production overview' : undefined}
       showCreateRequest={showCreateRequest}
       showCreateReport={showCreateReport}
-      timelineMetrics={showSuperadminInsights ? timelineMetrics : null}
-      teamPerformance={teamPerformance}
+      insights={insights}
       releaseScheduleItems={releaseScheduleItems}
       recentComments={recentComments}
     />

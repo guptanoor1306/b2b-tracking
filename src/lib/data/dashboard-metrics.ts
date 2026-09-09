@@ -45,7 +45,7 @@ export function computeOnTimeDeliveryStats(onTime: number, late: number): OnTime
   }
 }
 
-function projectsInMetricsScope(projects: Project[], month: string): Project[] {
+export function projectsInMetricsScope(projects: Project[], month: string): Project[] {
   if (isAllMonths(month)) return projects
   return projects.filter(project =>
     isProjectRelevantInMonth(project, month) || isDeliveredInMonth(project, month),

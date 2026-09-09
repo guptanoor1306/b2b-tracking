@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Project, Profile } from '@/lib/types'
-import { calcHealth } from '@/lib/utils'
+import { calcHealth, filterProjectsByMonth, isAllMonths } from '@/lib/utils'
 import { FINAL_STAGE } from '@/lib/constants'
 import { getActiveChannelDbName } from '@/lib/channel-context'
 import { computeProjectHealth } from '@/lib/timelines'
@@ -53,9 +53,12 @@ export async function fetchAllProjects(): Promise<Project[]> {
   return (data ?? []) as Project[]
 }
 
-export async function fetchProjects(filters: ProjectFilters = {}): Promise<Project[]> {
+export async function fetchProjects(
+  filters: ProjectFilters = {},
+  channelOverride?: string,
+): Promise<Project[]> {
   const supabase = await createClient()
-  const channel = await getActiveChannelDbName()
+  const channel = channelOverride ?? await getActiveChannelDbName()
   let query = supabase
     .from('projects')
     .select(PROJECT_LIST_SELECT)
@@ -70,24 +73,20 @@ export async function fetchProjects(filters: ProjectFilters = {}): Promise<Proje
   if (filters.agency) query = query.eq('assigned_agency_id', filters.agency)
   if (filters.owner) query = query.eq('internal_owner_id', filters.owner)
 
+  if (filters.month && !isAllMonths(filters.month)) {
+    const [year, month] = filters.month.split('-').map(Number)
+    const startStr = format(startOfMonth(new Date(year, month - 1)), 'yyyy-MM-dd')
+    // Drop projects delivered before this month; active carry-forward rows stay.
+    query = query.or(`delivered_date.is.null,delivered_date.gte.${startStr}`)
+  }
+
   const { data, error } = await query
   if (error) throw error
 
   let projects = (data ?? []) as Project[]
 
-  if (filters.month) {
-    const [year, month] = filters.month.split('-').map(Number)
-    const start = startOfMonth(new Date(year, month - 1))
-    const end = endOfMonth(start)
-    const startStr = format(start, 'yyyy-MM-dd')
-    const endStr = format(end, 'yyyy-MM-dd')
-
-    projects = projects.filter(p =>
-      (p.received_date && p.received_date >= startStr && p.received_date <= endStr) ||
-      (p.picked_up_date && p.picked_up_date >= startStr && p.picked_up_date <= endStr) ||
-      (p.delivered_date && p.delivered_date >= startStr && p.delivered_date <= endStr) ||
-      (p.target_delivery_date && p.target_delivery_date >= startStr && p.target_delivery_date <= endStr)
-    )
+  if (filters.month && !isAllMonths(filters.month)) {
+    projects = filterProjectsByMonth(projects, filters.month)
   }
 
   return projects
