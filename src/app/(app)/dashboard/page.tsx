@@ -33,6 +33,8 @@ import { usesExternalIntakeFlow } from '@/lib/zerodha-sla'
 
 type SearchParams = Promise<Record<string, string | undefined>>
 
+export const maxDuration = 60
+
 export default async function DashboardPage({ searchParams }: { searchParams: SearchParams }) {
   const profile = await getSessionProfile()
   if (!profile) redirect('/login')

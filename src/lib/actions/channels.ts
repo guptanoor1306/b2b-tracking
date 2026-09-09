@@ -146,13 +146,21 @@ export async function setSuperAdminRole(profileId: string, isSuper: boolean) {
   return { success: true }
 }
 
-export async function getLoginRedirectPath(): Promise<string> {
-  const profile = await getSessionProfile()
-  if (!profile) return '/login'
+async function resolveLoginDestination(): Promise<string> {
+  let profile = await getSessionProfile()
+  if (!profile) {
+    await new Promise(resolve => setTimeout(resolve, 100))
+    profile = await getSessionProfile()
+  }
+  if (!profile) return '/'
   return resolvePostAuthDestination(profile)
 }
 
-/** Called from login page after client sign-in — sets channel cookie and returns destination. */
+export async function getLoginRedirectPath(): Promise<string> {
+  return resolveLoginDestination()
+}
+
+/** Called from login page after client sign-in — returns destination for full-page navigation. */
 export async function finishLogin(): Promise<string> {
-  return getLoginRedirectPath()
+  return resolveLoginDestination()
 }

@@ -26,8 +26,11 @@ export default function LoginPage() {
       return
     }
 
+    // Ensure auth cookies are written before the server action reads the session.
+    await supabase.auth.getSession()
+
     const destination = await finishLogin()
-    window.location.assign(destination)
+    window.location.replace(destination === '/login' ? '/' : destination)
   }
 
   return (
