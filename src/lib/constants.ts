@@ -11,6 +11,7 @@ export const VARSITY_IPS = [
   'Retirement',
   'Real Estate',
   'Career & Income',
+  'Bootcamp Reels',
 ] as const
 
 export const CONTENT_TYPES = [
