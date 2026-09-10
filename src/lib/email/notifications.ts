@@ -335,7 +335,10 @@ async function fetchRequestSubmitter(submitterId: string | null): Promise<Profil
   return profile ?? null
 }
 
-export async function notifyRequestApproved(project: Pick<Project, 'id' | 'title' | 'channel' | 'external_team_member_id' | 'created_by' | 'target_delivery_date'>): Promise<void> {
+export async function notifyRequestApproved(
+  project: Pick<Project, 'id' | 'title' | 'channel' | 'external_team_member_id' | 'created_by' | 'target_delivery_date'>,
+  approverName?: string | null,
+): Promise<void> {
   const submitterId = project.external_team_member_id ?? project.created_by
   const profile = await fetchRequestSubmitter(submitterId)
   if (!profile) return
@@ -354,6 +357,7 @@ export async function notifyRequestApproved(project: Pick<Project, 'id' | 'title
     channelName,
     projectId: project.id,
     releaseDate: project.target_delivery_date,
+    approverName,
   })
 
   const result = await sendEmail({ to: profile.email, subject, text, html })
@@ -367,12 +371,13 @@ export async function notifyRequestApproved(project: Pick<Project, 'id' | 'title
     })
   }
 
-  void notifyZerodhaSuperAdminsRequestStatus(project, 'approved').catch(() => {})
+  void notifyZerodhaSuperAdminsRequestStatus(project, 'approved', undefined, approverName).catch(() => {})
 }
 
 export async function notifyRequestDeclined(
   project: Pick<Project, 'id' | 'title' | 'channel' | 'external_team_member_id' | 'created_by'>,
   reason: string,
+  declinedByName?: string | null,
 ): Promise<void> {
   const submitterId = project.external_team_member_id ?? project.created_by
   const profile = await fetchRequestSubmitter(submitterId)
@@ -386,6 +391,7 @@ export async function notifyRequestDeclined(
     channelName,
     projectId: project.id,
     reason,
+    declinedByName,
   })
 
   const result = await sendEmail({ to: profile.email, subject, text, html })
@@ -400,7 +406,7 @@ export async function notifyRequestDeclined(
     })
   }
 
-  void notifyZerodhaSuperAdminsRequestStatus(project, 'declined', reason).catch(() => {})
+  void notifyZerodhaSuperAdminsRequestStatus(project, 'declined', reason, declinedByName).catch(() => {})
 }
 
 async function fetchZerodhaInternalNotificationRecipients(channelSlug: string): Promise<ProfileRow[]> {
@@ -515,6 +521,7 @@ async function notifyZerodhaSuperAdminsRequestStatus(
   project: Pick<Project, 'id' | 'title' | 'channel'>,
   status: 'approved' | 'declined',
   reason?: string,
+  actorName?: string | null,
 ): Promise<void> {
   if (!usesExternalIntakeFlow(project.channel)) return
   const channelSlug = channelSlugFromProject(project)
@@ -538,6 +545,7 @@ async function notifyZerodhaSuperAdminsRequestStatus(
       projectId: project.id,
       status,
       reason,
+      actorName,
     })
 
     const result = await sendEmail({ to: recipient.email, subject, text, html })

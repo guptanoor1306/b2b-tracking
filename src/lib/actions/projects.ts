@@ -394,7 +394,7 @@ export async function approveExternalRequest(projectId: string) {
 
   await logActivity(projectId, profile.id, 'stage_change', 'current_stage', oldStage, newStage)
 
-  void notifyRequestApproved({ ...project, request_status: 'approved' } as Project).catch(() => {})
+  void notifyRequestApproved({ ...project, request_status: 'approved' } as Project, profile.name).catch(() => {})
 
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/dashboard')
@@ -437,7 +437,7 @@ export async function declineExternalRequest(projectId: string, reason: string) 
 
   await logActivity(projectId, profile.id, 'request_declined', 'request_status', 'pending', 'declined')
 
-  void notifyRequestDeclined(project as Project, text).catch(() => {})
+  void notifyRequestDeclined(project as Project, text, profile.name).catch(() => {})
 
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/dashboard')

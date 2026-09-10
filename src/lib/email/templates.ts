@@ -174,21 +174,29 @@ ${ctaButton(signInUrl, 'Open LearnApp Studios')}
   return { subject, text, html }
 }
 
+function reviewedByLine(actorName: string | null | undefined, pastTense: 'approved' | 'declined'): string {
+  const name = actorName?.trim()
+  if (name) return ` was ${pastTense} by ${name}`
+  return ` has been ${pastTense}`
+}
+
 export function requestApprovedEmail(opts: {
   recipientName: string
   projectTitle: string
   channelName: string
   projectId: string
   releaseDate?: string | null
+  approverName?: string | null
 }) {
   const url = projectUrl(opts.projectId)
   const releaseLine = opts.releaseDate
     ? `\nTarget release: ${opts.releaseDate}\n`
     : ''
+  const reviewed = reviewedByLine(opts.approverName, 'approved')
   const subject = `[${opts.channelName}] Request approved: ${opts.projectTitle}`
   const text = `Hi ${opts.recipientName},
 
-Your production request "${opts.projectTitle}" has been approved and moved into production.${releaseLine}
+Your production request "${opts.projectTitle}"${reviewed} and moved into production.${releaseLine}
 
 View project: ${url}
 
@@ -196,7 +204,7 @@ View project: ${url}
 
   const html = emailShell('Request approved', `
 <p>Hi ${opts.recipientName},</p>
-<p>Your production request <strong>${opts.projectTitle}</strong> has been approved and moved into production.</p>
+<p>Your production request <strong>${opts.projectTitle}</strong>${reviewed} and moved into production.</p>
 ${opts.releaseDate ? `<p>Target release: <strong>${opts.releaseDate}</strong></p>` : ''}
 ${ctaButton(url, 'View project')}
 `)
@@ -210,12 +218,14 @@ export function requestDeclinedEmail(opts: {
   channelName: string
   projectId: string
   reason: string
+  declinedByName?: string | null
 }) {
   const url = projectUrl(opts.projectId)
+  const reviewed = reviewedByLine(opts.declinedByName, 'declined')
   const subject = `[${opts.channelName}] Request declined: ${opts.projectTitle}`
   const text = `Hi ${opts.recipientName},
 
-Your production request "${opts.projectTitle}" was declined.
+Your production request "${opts.projectTitle}"${reviewed}.
 
 Reason: ${opts.reason}
 
@@ -227,7 +237,7 @@ View project: ${url}
 
   const html = emailShell('Request declined', `
 <p>Hi ${opts.recipientName},</p>
-<p>Your production request <strong>${opts.projectTitle}</strong> was declined.</p>
+<p>Your production request <strong>${opts.projectTitle}</strong>${reviewed}.</p>
 <div style="background:#fef2f2;border-radius:8px;padding:12px 16px;margin:16px 0;border:1px solid #fecaca">
   <p style="margin:0;font-size:14px"><strong>Reason:</strong> ${opts.reason}</p>
 </div>
@@ -282,9 +292,15 @@ export function requestResubmittedInternalEmail(opts: {
 }) {
   const url = projectUrl(opts.projectId)
   const subject = `[${opts.channelName}] Request resubmitted: ${opts.projectTitle}`
+  const resubmitLead = opts.submitterName
+    ? `<strong>${opts.submitterName}</strong> resubmitted production request`
+    : 'Production request'
+  const resubmitLeadText = opts.submitterName
+    ? `${opts.submitterName} resubmitted production request`
+    : 'Production request'
   const text = `Hi ${opts.recipientName},
 
-The client resubmitted production request "${opts.projectTitle}"${opts.submitterName ? ` (${opts.submitterName})` : ''} after making updates.
+${resubmitLeadText} "${opts.projectTitle}" after making updates.
 
 Review request: ${url}
 
@@ -292,7 +308,7 @@ Review request: ${url}
 
   const html = emailShell('Request resubmitted', `
 <p>Hi ${opts.recipientName},</p>
-<p>The client resubmitted <strong>${opts.projectTitle}</strong>${opts.submitterName ? ` (<strong>${opts.submitterName}</strong>)` : ''} after making updates.</p>
+<p>${resubmitLead} <strong>${opts.projectTitle}</strong> after making updates.</p>
 ${ctaButton(url, 'Review request')}
 `)
 
@@ -306,14 +322,16 @@ export function requestStatusInternalEmail(opts: {
   projectId: string
   status: 'approved' | 'declined'
   reason?: string | null
+  actorName?: string | null
 }) {
   const url = projectUrl(opts.projectId)
   const label = opts.status === 'approved' ? 'approved' : 'declined'
+  const reviewed = reviewedByLine(opts.actorName, opts.status)
   const subject = `[${opts.channelName}] Request ${label}: ${opts.projectTitle}`
   const reasonLine = opts.status === 'declined' && opts.reason ? `\nReason: ${opts.reason}\n` : ''
   const text = `Hi ${opts.recipientName},
 
-The production request "${opts.projectTitle}" was ${label} by internal admin.${reasonLine}
+The production request "${opts.projectTitle}"${reviewed}.${reasonLine}
 
 View project: ${url}
 
@@ -321,7 +339,7 @@ View project: ${url}
 
   const html = emailShell(`Request ${label}`, `
 <p>Hi ${opts.recipientName},</p>
-<p>The production request <strong>${opts.projectTitle}</strong> was <strong>${label}</strong> by internal admin.</p>
+<p>The production request <strong>${opts.projectTitle}</strong>${reviewed}.</p>
 ${opts.status === 'declined' && opts.reason
   ? `<div style="background:#fef2f2;border-radius:8px;padding:12px 16px;margin:16px 0;border:1px solid #fecaca"><p style="margin:0;font-size:14px"><strong>Reason:</strong> ${opts.reason}</p></div>`
   : ''}
