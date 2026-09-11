@@ -30,8 +30,6 @@ export async function enterChannel(slug: string) {
     sameSite: 'lax',
   })
 
-  revalidatePath('/dashboard')
-  revalidatePath('/board')
   redirect('/dashboard')
 }
 
@@ -147,11 +145,7 @@ export async function setSuperAdminRole(profileId: string, isSuper: boolean) {
 }
 
 async function resolveLoginDestination(): Promise<string> {
-  let profile = await getSessionProfile()
-  if (!profile) {
-    await new Promise(resolve => setTimeout(resolve, 100))
-    profile = await getSessionProfile()
-  }
+  const profile = await getSessionProfile()
   if (!profile) return '/'
   return resolvePostAuthDestination(profile)
 }

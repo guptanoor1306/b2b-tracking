@@ -22,19 +22,20 @@ export default async function StudiosPage({ searchParams }: { searchParams: Sear
     return <MissingProfileNotice email={user.email ?? ''} />
   }
 
-  const params = await searchParams
-  const period = params.period === 'week' ? 'week' : 'month'
-
-  const [accessibleSlugs, memberCounts, projects] = await Promise.all([
-    fetchUserChannelSlugs(profile),
-    fetchChannelMemberCounts(),
-    fetchAllProjects(),
-  ])
+  const accessibleSlugs = await fetchUserChannelSlugs(profile)
 
   if (accessibleSlugs.length === 1) {
     await setActiveChannelCookie(accessibleSlugs[0])
     redirect('/dashboard')
   }
+
+  const params = await searchParams
+  const period = params.period === 'week' ? 'week' : 'month'
+
+  const [memberCounts, projects] = await Promise.all([
+    fetchChannelMemberCounts(),
+    fetchAllProjects(),
+  ])
 
   const superAdmin = isSuperAdmin(profile.role)
   const stats = computeChannelStats(projects, memberCounts, period)
