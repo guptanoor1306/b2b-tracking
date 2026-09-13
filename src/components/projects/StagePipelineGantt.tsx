@@ -26,6 +26,10 @@ import {
   filterZerodhaIntakeFromHistory,
   shouldHideZerodhaIntakeFromTimeline,
 } from '@/lib/zerodha-sla'
+import {
+  filterLaSocialPreWritingFromHistory,
+  shouldHideLaSocialPreWritingFromTimeline,
+} from '@/lib/la-social-sla'
 import { cn } from '@/lib/utils'
 
 const LABEL_WIDTH = 220
@@ -474,6 +478,9 @@ export function StagePipelineGantt({
   const timelineLocked = isProjectTimelineLocked(project)
 
   const timelineHistory = useMemo(() => {
+    if (shouldHideLaSocialPreWritingFromTimeline(project)) {
+      return filterLaSocialPreWritingFromHistory(history, project.channel)
+    }
     if (!shouldHideZerodhaIntakeFromTimeline(project, history)) return history
     return filterZerodhaIntakeFromHistory(history)
   }, [history, project])

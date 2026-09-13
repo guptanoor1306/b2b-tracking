@@ -53,6 +53,18 @@ export const STUDIOS_CHANNELS: StudioChannel[] = [
     pillBg: 'bg-orange-600',
   },
   {
+    slug: 'la-social',
+    name: 'LA Social',
+    dbName: 'LA Social',
+    tagline: 'Social content — reels, statics, carousels & LinkedIn',
+    initial: 'LS',
+    gradientFrom: 'from-sky-500',
+    gradientTo: 'to-indigo-600',
+    accent: 'text-sky-600',
+    ring: 'ring-sky-200',
+    pillBg: 'bg-sky-600',
+  },
+  {
     slug: 'rohit',
     name: 'Rohit',
     dbName: 'Rohit',

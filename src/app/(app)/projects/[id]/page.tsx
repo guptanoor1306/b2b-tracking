@@ -27,6 +27,7 @@ import {
 import { fetchClientReviewSubmissions } from '@/lib/data/client-review-feedback'
 import { fetchQcReviewSubmissions, fetchCurrentQcSubmission } from '@/lib/data/qc-review-feedback'
 import { usesExternalIntakeFlow, isCashAndCopiumChannelDbName } from '@/lib/zerodha-sla'
+import { isLaSocialChannelDbName } from '@/lib/la-social-sla'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig, fetchProjectHoldPeriods } from '@/lib/data/stage-sla'
 import { fetchProjectStageHistory } from '@/lib/data/stage-history'
@@ -56,7 +57,9 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
   const channelName = await getActiveChannelDbName()
   const channelSlug = await getActiveChannelSlug()
   const externalIntake = usesExternalIntakeFlow(project.channel)
-  const showRpCuts = canViewRpCuts(role) && !isCashAndCopiumChannelDbName(project.channel)
+  const showRpCuts = canViewRpCuts(role)
+    && !isCashAndCopiumChannelDbName(project.channel)
+    && !isLaSocialChannelDbName(project.channel)
   const [history, channelMembers, commentsRes, holidays, stageSla, holdPeriods, rpCuts, clientReviewSubmissions, qcSubmissions, currentQcSubmission] = await Promise.all([
     fetchProjectStageHistory(id, project),
     channelSlug ? fetchChannelMembers(channelSlug) : Promise.resolve([]),

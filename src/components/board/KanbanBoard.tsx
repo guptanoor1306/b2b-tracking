@@ -37,6 +37,7 @@ import {
   getZerodhaQcStageMoveError,
   getZerodhaQcReviewLinkError,
   suppressProductionMetrics,
+  finalStageForChannel,
 } from '@/lib/zerodha-sla'
 
 const CARD_BASE = 'rounded-xl border bg-white transition-[box-shadow,opacity] hover:shadow-md'
@@ -79,7 +80,9 @@ function CardContent({
   const progress = pipelineProgressPercentForChannel(project.current_stage, channelDbName ?? project.channel)
   const delayClass = getTimelinessTextClassV2(t.status)
   const showLanguage = isZerodhaChannelDbName(channelDbName ?? project.channel) && project.video_language
+  const deliveredStage = finalStageForChannel(channelDbName ?? project.channel)
   const isDelivered = normalizeStage(project.current_stage) === FINAL_STAGE
+    || project.current_stage === deliveredStage
   const cardAssignees = isDelivered ? getProjectDeliveredAssignees(project) : []
   const assigneeId = resolveStageAssigneeId(project, project.current_stage)
   const displayAssignee = isDelivered

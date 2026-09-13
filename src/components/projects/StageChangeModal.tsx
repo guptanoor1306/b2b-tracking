@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-import { FIRST_CUT_STAGE, STAGES_INTERNAL } from '@/lib/constants'
+import { FIRST_CUT_STAGE } from '@/lib/constants'
 import { normalizeStage } from '@/lib/timelines'
-import { channelUsesTeleprompterFlow } from '@/lib/zerodha-sla'
+import { channelUsesTeleprompterFlow, internalStagesForChannel } from '@/lib/zerodha-sla'
 
 type Props = {
   open: boolean
@@ -73,13 +73,15 @@ export function needsTeleprompterPrompt(
 }
 
 export function StageSelectModal({
-  open, onClose, currentStage, onConfirm,
+  open, onClose, currentStage, channelDbName, onConfirm,
 }: {
   open: boolean
   onClose: () => void
   currentStage: string
+  channelDbName?: string | null
   onConfirm: (stage: string, note: string) => Promise<void>
 }) {
+  const stages = internalStagesForChannel(channelDbName)
   const [stage, setStage] = useState(currentStage)
   const [note, setNote] = useState('')
   const [loading, setLoading] = useState(false)
@@ -100,7 +102,7 @@ export function StageSelectModal({
           value={stage}
           onChange={e => setStage(e.target.value)}
         >
-          {STAGES_INTERNAL.map(s => <option key={s} value={s}>{s}</option>)}
+          {stages.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <div className="flex gap-2 justify-end">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>

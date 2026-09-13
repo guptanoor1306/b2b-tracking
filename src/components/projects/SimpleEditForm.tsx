@@ -3,7 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Project, Profile } from '@/lib/types'
-import { CONTENT_TYPES, LEVELS_OF_VIDEO, PRIORITIES, STAGES_INTERNAL } from '@/lib/constants'
+import { CONTENT_TYPES, LEVELS_OF_VIDEO, PRIORITIES } from '@/lib/constants'
+import { internalStagesForChannel } from '@/lib/zerodha-sla'
+import { isLaSocialChannelDbName, LA_SOCIAL_CONTENT_TYPES } from '@/lib/la-social-sla'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
@@ -20,6 +22,9 @@ type Props = {
 
 export function SimpleEditForm({ project, users, graphicsDesigners }: Props) {
   const router = useRouter()
+  const isLaSocial = isLaSocialChannelDbName(project.channel)
+  const stageOptions = internalStagesForChannel(project.channel)
+  const typeOptions = isLaSocial ? LA_SOCIAL_CONTENT_TYPES : CONTENT_TYPES
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
     title: project.title,
@@ -77,8 +82,10 @@ export function SimpleEditForm({ project, users, graphicsDesigners }: Props) {
       <Input label="Video name" value={form.title} onChange={e => set('title', e.target.value)} />
       <Input label="IP" placeholder="Enter IP" value={form.ip} onChange={e => set('ip', e.target.value)} />
       <div className="grid grid-cols-2 gap-3">
-        <Select label="Type" options={CONTENT_TYPES.map(t => ({ value: t, label: t }))} value={form.content_type} onChange={e => set('content_type', e.target.value)} />
-        <Select label="Level of video" options={LEVELS_OF_VIDEO.map(l => ({ value: l, label: l }))} value={form.level_of_video} onChange={e => set('level_of_video', e.target.value)} />
+        <Select label="Type" options={typeOptions.map(t => ({ value: t, label: t }))} value={form.content_type} onChange={e => set('content_type', e.target.value)} />
+        {!isLaSocial && (
+          <Select label="Level of video" options={LEVELS_OF_VIDEO.map(l => ({ value: l, label: l }))} value={form.level_of_video} onChange={e => set('level_of_video', e.target.value)} />
+        )}
       </div>
       <Select label="Priority" options={PRIORITIES.map(p => ({ value: p, label: p }))} value={form.priority} onChange={e => set('priority', e.target.value)} />
       <Input label="Thumbnail text" value={form.thumbnail_copy} onChange={e => set('thumbnail_copy', e.target.value)} />
@@ -91,7 +98,7 @@ export function SimpleEditForm({ project, users, graphicsDesigners }: Props) {
         onChange={v => set('graphic_designer_id', v)}
         placeholder="Select designer"
       />
-      <Select label="Stage" options={STAGES_INTERNAL.map(s => ({ value: s, label: s }))} value={form.current_stage} onChange={e => set('current_stage', e.target.value)} />
+      <Select label="Stage" options={stageOptions.map(s => ({ value: s, label: s }))} value={form.current_stage} onChange={e => set('current_stage', e.target.value)} />
       <UserSearchSelect
         label="Stage assignee"
         users={users}

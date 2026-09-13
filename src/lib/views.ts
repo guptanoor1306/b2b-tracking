@@ -26,12 +26,17 @@ import {
   isCashAndCopiumChannelDbName,
 } from '@/lib/zerodha-sla'
 import { CASH_COPIUM_CLIENT_REVIEW_STAGES } from '@/lib/cash-and-copium-sla'
+import { isLaSocialChannelDbName, resolveLaSocialStageAssigneeId } from '@/lib/la-social-sla'
 import { Role, Project } from '@/lib/types'
 import { isUserOnProjectTeam } from '@/lib/projects/team'
 
 /** Pick reminder assignee from project team based on stage role */
 export function resolveStageAssigneeId(
   project: {
+    channel?: string | null
+    content_type?: string | null
+    internal_owner_id?: string | null
+    created_by?: string | null
     editor_id?: string | null
     editor_2_id?: string | null
     designer_id?: string | null
@@ -43,6 +48,9 @@ export function resolveStageAssigneeId(
   },
   stage: string
 ): string | null {
+  if (isLaSocialChannelDbName(project.channel)) {
+    return resolveLaSocialStageAssigneeId(project, stage)
+  }
   const s = normalizeStage(stage)
   const editor = project.editor_id ?? project.editor_2_id ?? null
   switch (s) {

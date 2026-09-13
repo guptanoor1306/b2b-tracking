@@ -43,6 +43,7 @@ type Props = {
   insights?: ReactNode
   releaseScheduleItems?: ReleaseScheduleItem[]
   recentComments?: RecentCommentFeedItem[]
+  recentCommentsSlot?: ReactNode
 }
 
 export function AdminDashboard({
@@ -53,6 +54,7 @@ export function AdminDashboard({
   insights = null,
   releaseScheduleItems = [],
   recentComments = [],
+  recentCommentsSlot = null,
 }: Props) {
   const externalIntake = usesExternalIntakeFlow(channelDbName)
   const stageLabel = (project: Project) => {
@@ -218,7 +220,7 @@ export function AdminDashboard({
           {externalIntake && !externalView && (
             <NewProjectsReceivedSection projects={newProjectsReceived} />
           )}
-          <RecentCommentsSection items={recentComments} />
+          {recentCommentsSlot ?? <RecentCommentsSection items={recentComments} />}
         </div>
 
         {insights}

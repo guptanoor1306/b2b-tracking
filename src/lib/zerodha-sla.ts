@@ -16,6 +16,11 @@ import {
   cashCopiumStageSlaRows,
   filterCashCopiumSlaRows,
 } from '@/lib/cash-and-copium-sla'
+import {
+  STAGES_LA_SOCIAL,
+  isLaSocialChannelDbName,
+  finalStageForChannel,
+} from '@/lib/la-social-sla'
 
 export {
   usesExternalIntakeFlow,
@@ -239,6 +244,7 @@ export const STAGES_ZERODHA_EXTERNAL = [
 ] as const
 
 export function internalStagesForChannel(channelDbName: string | null | undefined): readonly string[] {
+  if (isLaSocialChannelDbName(channelDbName)) return STAGES_LA_SOCIAL
   if (isCashAndCopiumChannelDbName(channelDbName)) return STAGES_CASH_COPIUM_INTERNAL
   if (usesExternalIntakeFlow(channelDbName)) return STAGES_ZERODHA_INTERNAL
   return STAGES_INTERNAL
@@ -277,11 +283,14 @@ export function pipelineProgressPercentForChannel(
   const stage = usesExternalIntakeFlow(channelDbName)
     ? normalizeZerodhaBoardStage(currentStage, channelDbName)
     : currentStage
-  if (stage === 'Final Delivery') return 100
+  const finalStage = finalStageForChannel(channelDbName ?? null)
+  if (stage === finalStage || stage === 'Final Delivery') return 100
   const idx = (stages as readonly string[]).indexOf(stage)
   if (idx < 0) return 0
   return Math.round((idx / (stages.length - 1)) * 100)
 }
+
+export { finalStageForChannel, isLaSocialChannelDbName, LA_SOCIAL_RETRO } from '@/lib/la-social-sla'
 
 export type VideoLanguage = 'English' | 'Hindi'
 
@@ -310,6 +319,7 @@ export function projectLevelOptions(
   channelDbName: string | null | undefined,
   language: VideoLanguage | string | null | undefined,
 ): { value: string; label: string }[] {
+  if (isLaSocialChannelDbName(channelDbName)) return []
   if (isZerodhaChannelDbName(channelDbName)) return zerodhaLevelOptions(language)
   return LEVELS_OF_VIDEO.map(level => ({ value: level, label: level }))
 }

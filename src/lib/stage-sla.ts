@@ -1,6 +1,8 @@
 import { STAGES_INTERNAL, STAGE_ROLE_OWNER, DUAL_ASSIGNEE_STAGES } from '@/lib/constants'
 import { isCashAndCopiumChannelDbName } from '@/lib/external-intake-flow'
 import { cashCopiumLevelKey } from '@/lib/cash-and-copium-sla'
+import { isLaSocialChannelDbName, laSocialLevelKey, LA_SOCIAL_TOPIC } from '@/lib/la-social-sla'
+import { internalStagesForChannel } from '@/lib/zerodha-sla'
 
 export type StageSlaRow = {
   id: string
@@ -63,7 +65,13 @@ export function resolveStageHours(
 ): number {
   let hours = row.duration_hours
 
-  if (isCashAndCopiumChannelDbName(project?.channel)) {
+  if (isLaSocialChannelDbName(project?.channel)) {
+    const lk = laSocialLevelKey(project?.content_type ?? level)
+    if (lk && row[lk] != null) hours = row[lk]!
+    if (row.stage_name === 'Editing' && project?.editor_id && project?.editor_2_id && hours > 0) {
+      hours = hours / 2
+    }
+  } else if (isCashAndCopiumChannelDbName(project?.channel)) {
     const lk = cashCopiumLevelKey(project?.content_type ?? level)
     if (lk && row[lk] != null) hours = row[lk]!
   } else {
@@ -95,6 +103,7 @@ export function slaLevelForProject(project: {
   level_of_video?: string | null
   content_type?: string | null
 }): string | null {
+  if (isLaSocialChannelDbName(project.channel)) return project.content_type ?? null
   if (isCashAndCopiumChannelDbName(project.channel)) return project.content_type ?? null
   return project.level_of_video ?? null
 }
@@ -105,18 +114,24 @@ export function totalPipelineHoursFromSla(
   level: string | null | undefined,
   project?: ProjectTeamContext
 ): number {
+  const channelStages = internalStagesForChannel(project?.channel ?? null)
   const sorted = [...rows].sort((a, b) => {
-    const ai = STAGES_INTERNAL.indexOf(a.stage_name as typeof STAGES_INTERNAL[number])
-    const bi = STAGES_INTERNAL.indexOf(b.stage_name as typeof STAGES_INTERNAL[number])
+    const ai = channelStages.indexOf(a.stage_name)
+    const bi = channelStages.indexOf(b.stage_name)
     if (ai >= 0 && bi >= 0) return ai - bi
+    const aiLegacy = STAGES_INTERNAL.indexOf(a.stage_name as typeof STAGES_INTERNAL[number])
+    const biLegacy = STAGES_INTERNAL.indexOf(b.stage_name as typeof STAGES_INTERNAL[number])
+    if (aiLegacy >= 0 && biLegacy >= 0) return aiLegacy - biLegacy
     return a.sort_order - b.sort_order
   })
 
   const seenGroups = new Set<string>()
   let total = 0
+  const finalStage = isLaSocialChannelDbName(project?.channel) ? 'Retro' : 'Final Delivery'
 
   for (const row of sorted) {
-    if (row.stage_name === 'Final Delivery') continue
+    if (row.stage_name === finalStage || row.stage_name === 'Final Delivery') continue
+    if (isLaSocialChannelDbName(project?.channel) && row.stage_name === LA_SOCIAL_TOPIC) continue
     const h = resolveStageHours(row, level, project)
     if (row.parallel_group) {
       if (seenGroups.has(row.parallel_group)) continue

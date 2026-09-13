@@ -6,6 +6,8 @@ export type ProjectTeamFields = {
   sound_designer_id?: string | null
   writer_id?: string | null
   external_team_member_id?: string | null
+  internal_owner_id?: string | null
+  qc_reviewer_id?: string | null
 }
 
 export function getProjectTeamMemberIds(project: ProjectTeamFields): string[] {
@@ -17,6 +19,8 @@ export function getProjectTeamMemberIds(project: ProjectTeamFields): string[] {
     project.sound_designer_id,
     project.writer_id,
     project.external_team_member_id,
+    project.internal_owner_id,
+    project.qc_reviewer_id,
   ].filter((id): id is string => Boolean(id))
   return [...new Set(ids)]
 }

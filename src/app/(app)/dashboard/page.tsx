@@ -4,7 +4,7 @@ import { getSessionProfile } from '@/lib/auth'
 import { getActiveChannelRole, getActiveChannelDbName } from '@/lib/channel-context'
 import { fetchProjects } from '@/lib/data/projects'
 import { computeOnTimeDeliveryStats } from '@/lib/data/dashboard-metrics'
-import { fetchRecentCommentsForChannel } from '@/lib/data/comments'
+import { DashboardRecentCommentsAsync } from '@/components/dashboard/DashboardRecentCommentsAsync'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig, fetchOpenHoldStartersForChannel, fetchHoldPeriodsForChannel } from '@/lib/data/stage-sla'
 import { setStageSlaCache } from '@/lib/timelines'
@@ -50,7 +50,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
     channelRole,
     holdStarters,
     holdPeriodsByProjectId,
-    recentComments,
   ] = await Promise.all([
     channelNamePromise,
     channelNamePromise.then(name => fetchProjects({ month }, name)),
@@ -59,7 +58,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
     getActiveChannelRole(profile),
     channelNamePromise.then(name => fetchOpenHoldStartersForChannel(name)),
     channelNamePromise.then(name => fetchHoldPeriodsForChannel(name)),
-    channelNamePromise.then(name => fetchRecentCommentsForChannel(name)),
   ])
   setStageSlaCache(stageSla, channelName)
   const effectiveRole = effectiveRoleForChannel(channelRole, profile.role)
@@ -89,7 +87,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
         showCreateRequest={showCreateRequest}
         holdStarters={holdStarters}
         releaseScheduleItems={releaseScheduleItems}
-        recentComments={recentComments}
+        recentCommentsSlot={(
+          <Suspense fallback={null}>
+            <DashboardRecentCommentsAsync channelName={channelName} />
+          </Suspense>
+        )}
       />
     )
   }
@@ -165,7 +167,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       showCreateReport={showCreateReport}
       insights={insights}
       releaseScheduleItems={releaseScheduleItems}
-      recentComments={recentComments}
+      recentCommentsSlot={(
+        <Suspense fallback={null}>
+          <DashboardRecentCommentsAsync channelName={channelName} />
+        </Suspense>
+      )}
     />
   )
 }

@@ -13,8 +13,20 @@ import {
   filterCashCopiumSlaRows,
   cashCopiumStageSlaRows,
 } from '@/lib/zerodha-sla'
+import { DEFAULT_LA_SOCIAL_STAGE_SLA } from '@/lib/la-social-sla'
 import { getChannelBySlug } from '@/lib/channels'
 import { isCashAndCopiumChannelSlug } from '@/lib/external-intake-flow'
+import {
+  isLaSocialChannelSlug,
+  isLaSocialChannelDbName,
+  LA_SOCIAL_CHANNEL_SLUG,
+  laSocialStageSlaRows,
+} from '@/lib/la-social-sla'
+
+function channelSlaSlug(channelDbName?: string | null): string | null {
+  if (isLaSocialChannelDbName(channelDbName)) return LA_SOCIAL_CHANNEL_SLUG
+  return externalIntakeChannelSlug(channelDbName ?? null)
+}
 
 function mapSlaRow(row: Record<string, unknown>): StageSlaRow {
   return {
@@ -34,11 +46,13 @@ function mapSlaRow(row: Record<string, unknown>): StageSlaRow {
 
 async function seedChannelStageSla(channelSlug: string, supabase = createCachedReadClient()): Promise<StageSlaRow[]> {
   const channel = getChannelBySlug(channelSlug)
-  const defaults = isCashAndCopiumChannelSlug(channelSlug)
-    ? DEFAULT_CASH_COPIUM_STAGE_SLA
-    : usesExternalIntakeFlow(channel?.dbName)
-      ? DEFAULT_ZERODHA_STAGE_SLA
-      : DEFAULT_STAGE_SLA
+  const defaults = isLaSocialChannelSlug(channelSlug)
+    ? DEFAULT_LA_SOCIAL_STAGE_SLA
+    : isCashAndCopiumChannelSlug(channelSlug)
+      ? DEFAULT_CASH_COPIUM_STAGE_SLA
+      : usesExternalIntakeFlow(channel?.dbName)
+        ? DEFAULT_ZERODHA_STAGE_SLA
+        : DEFAULT_STAGE_SLA
 
   const { error } = await supabase.from('channel_stage_sla').insert(
     defaults.map(r => ({
@@ -76,6 +90,9 @@ async function fetchChannelStageSlaUncached(channelSlug: string): Promise<StageS
     .order('sort_order')
 
   if (error) {
+    if (isLaSocialChannelSlug(channelSlug)) {
+      return DEFAULT_LA_SOCIAL_STAGE_SLA.map((r, i) => ({ ...r, id: `la-social-${i}` }))
+    }
     if (isCashAndCopiumChannelSlug(channelSlug)) {
       return cashCopiumStageSlaRows()
     }
@@ -89,6 +106,9 @@ async function fetchChannelStageSlaUncached(channelSlug: string): Promise<StageS
     try {
       return await seedChannelStageSla(channelSlug)
     } catch {
+      if (isLaSocialChannelSlug(channelSlug)) {
+        return DEFAULT_LA_SOCIAL_STAGE_SLA.map((r, i) => ({ ...r, id: `la-social-${i}` }))
+      }
       if (isCashAndCopiumChannelSlug(channelSlug)) {
         return cashCopiumStageSlaRows()
       }
@@ -97,6 +117,9 @@ async function fetchChannelStageSlaUncached(channelSlug: string): Promise<StageS
   }
 
   const mapped = data.map(mapSlaRow)
+  if (isLaSocialChannelSlug(channelSlug)) {
+    return mapped.length ? mapped : laSocialStageSlaRows()
+  }
   if (isCashAndCopiumChannelSlug(channelSlug)) {
     const filtered = filterCashCopiumSlaRows(mapped)
     return filtered.length ? filtered : cashCopiumStageSlaRows()
@@ -144,6 +167,7 @@ async function fetchChannelStageSlaLive(channelSlug: string): Promise<StageSlaRo
     .order('sort_order')
 
   if (error) {
+    if (isLaSocialChannelSlug(channelSlug)) return laSocialStageSlaRows()
     if (isCashAndCopiumChannelSlug(channelSlug)) {
       return cashCopiumStageSlaRows()
     }
@@ -157,6 +181,7 @@ async function fetchChannelStageSlaLive(channelSlug: string): Promise<StageSlaRo
     try {
       return await seedChannelStageSla(channelSlug, supabase)
     } catch {
+      if (isLaSocialChannelSlug(channelSlug)) return laSocialStageSlaRows()
       if (isCashAndCopiumChannelSlug(channelSlug)) {
         return cashCopiumStageSlaRows()
       }
@@ -165,6 +190,9 @@ async function fetchChannelStageSlaLive(channelSlug: string): Promise<StageSlaRo
   }
 
   const mapped = data.map(mapSlaRow)
+  if (isLaSocialChannelSlug(channelSlug)) {
+    return mapped.length ? mapped : laSocialStageSlaRows()
+  }
   if (isCashAndCopiumChannelSlug(channelSlug)) {
     const filtered = filterCashCopiumSlaRows(mapped)
     return filtered.length ? filtered : cashCopiumStageSlaRows()
@@ -190,7 +218,7 @@ async function fetchVarsityStageSlaLive(): Promise<StageSlaRow[]> {
 }
 
 export async function fetchStageSlaConfig(channelDbName?: string | null): Promise<StageSlaRow[]> {
-  const slug = externalIntakeChannelSlug(channelDbName ?? null)
+  const slug = channelSlaSlug(channelDbName ?? null)
   if (!canUseDataCache()) {
     if (slug) return fetchChannelStageSlaLive(slug)
     return fetchVarsityStageSlaLive()

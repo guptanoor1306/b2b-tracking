@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { EnterChannelButton } from '@/components/studios/EnterChannelButton'
 import {
-  GitBranch, CheckCircle2, PauseCircle, Sparkles, Lock,
+  GitBranch, CheckCircle2, PauseCircle, Lock,
 } from 'lucide-react'
 import { ChannelStats, computeOverviewTotals, periodLabel } from '@/lib/data/channel-stats'
 import { PeriodToggle } from '@/components/ui/PeriodToggle'
@@ -15,12 +15,6 @@ type Props = {
   accessibleSlugs: string[]
   isSuperAdmin: boolean
   profileName: string
-}
-
-function qualityTone(score: number): string {
-  if (score >= 85) return 'text-emerald-700'
-  if (score >= 70) return 'text-amber-700'
-  return 'text-orange-700'
 }
 
 function DistributionBar({ pipeline, delivered, onHold }: { pipeline: number; delivered: number; onHold: number }) {
@@ -44,7 +38,6 @@ const SUMMARY = [
   { key: 'pipeline', label: 'In pipeline', icon: GitBranch, color: 'text-violet-600', bg: 'bg-violet-50' },
   { key: 'delivered', label: 'Delivered', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
   { key: 'onHold', label: 'On hold', icon: PauseCircle, color: 'text-zinc-600', bg: 'bg-zinc-100' },
-  { key: 'quality', label: 'Avg quality', icon: Sparkles, color: 'text-violet-600', bg: 'bg-violet-50' },
 ] as const
 
 export function ChannelOverviewClient({
@@ -58,7 +51,7 @@ export function ChannelOverviewClient({
     inPipeline: s.inPipeline,
     delivered: s.delivered,
     onHold: s.onHold,
-    avgQuality: s.avgQuality,
+    avgQuality: 0,
     projects: [],
   })))
 
@@ -72,7 +65,6 @@ export function ChannelOverviewClient({
     pipeline: totals.inPipeline,
     delivered: totals.delivered,
     onHold: totals.onHold,
-    quality: totals.avgQuality ? `${totals.avgQuality}%` : '—',
   }
 
   return (
@@ -98,7 +90,7 @@ export function ChannelOverviewClient({
         <PeriodToggle period={period} onChange={setPeriod} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         {SUMMARY.map(s => {
           const Icon = s.icon
           return (
@@ -133,7 +125,6 @@ export function ChannelOverviewClient({
                 <th className="w-16 px-3 py-2.5 text-right font-semibold">Active</th>
                 <th className="w-16 px-3 py-2.5 text-right font-semibold">Done</th>
                 <th className="w-16 px-3 py-2.5 text-right font-semibold">Hold</th>
-                <th className="w-16 px-3 py-2.5 text-right font-semibold">Quality</th>
                 <th className="min-w-[140px] px-4 py-2.5 text-left font-semibold">Mix</th>
                 <th className="w-10 px-3 py-2.5" />
               </tr>
@@ -158,9 +149,6 @@ export function ChannelOverviewClient({
                     <td className="px-3 py-3 text-right tabular-nums text-zinc-700">{s.inPipeline}</td>
                     <td className="px-3 py-3 text-right tabular-nums text-emerald-700">{s.delivered}</td>
                     <td className="px-3 py-3 text-right tabular-nums text-zinc-500">{s.onHold}</td>
-                    <td className={cn('px-3 py-3 text-right tabular-nums font-medium', qualityTone(s.avgQuality))}>
-                      {s.avgQuality ? `${s.avgQuality}%` : '—'}
-                    </td>
                     <td className="px-4 py-3">
                       <DistributionBar pipeline={s.inPipeline} delivered={s.delivered} onHold={s.onHold} />
                     </td>
@@ -190,9 +178,6 @@ export function ChannelOverviewClient({
                 <td className="px-3 py-2.5 text-right tabular-nums text-zinc-700">{totals.inPipeline}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700">{totals.delivered}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums text-zinc-500">{totals.onHold}</td>
-                <td className={cn('px-3 py-2.5 text-right tabular-nums font-semibold', qualityTone(totals.avgQuality))}>
-                  {totals.avgQuality ? `${totals.avgQuality}%` : '—'}
-                </td>
                 <td className="px-4 py-2.5">
                   <DistributionBar pipeline={totals.inPipeline} delivered={totals.delivered} onHold={totals.onHold} />
                 </td>

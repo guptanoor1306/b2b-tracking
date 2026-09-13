@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { getSessionProfile } from '@/lib/auth'
 import { setActiveChannelCookie } from '@/lib/channel-context'
 import { createClient } from '@/lib/supabase/server'
-import { fetchAllProjects } from '@/lib/data/projects'
+import { fetchProjectsHubSnapshot } from '@/lib/data/projects-hub'
 import { fetchUserChannelSlugs, fetchChannelMemberCounts } from '@/lib/data/channel-access'
 import { computeChannelStats } from '@/lib/data/channel-stats'
 import { isSuperAdmin } from '@/lib/views'
@@ -34,7 +34,7 @@ export default async function StudiosPage({ searchParams }: { searchParams: Sear
 
   const [memberCounts, projects] = await Promise.all([
     fetchChannelMemberCounts(),
-    fetchAllProjects(),
+    fetchProjectsHubSnapshot(),
   ])
 
   const superAdmin = isSuperAdmin(profile.role)

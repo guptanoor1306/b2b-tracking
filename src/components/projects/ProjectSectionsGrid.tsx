@@ -13,6 +13,7 @@ import { isZerodhaClientReviewStage } from '@/lib/zerodha-sla'
 import { updateProject, saveRpCuts, RpCutInput } from '@/lib/actions/projects'
 import { Plus, Trash2 } from 'lucide-react'
 import { hasIntakeMaterials, isCashAndCopiumChannelDbName, usesExternalIntakeFlow } from '@/lib/zerodha-sla'
+import { isLaSocialChannelDbName } from '@/lib/la-social-sla'
 import { cn } from '@/lib/utils'
 
 const MAX_CUTS = 10
@@ -118,6 +119,7 @@ export function ProjectSectionsGrid({
   const productionDriveLink = project.drive_link || project.final_file_link
   const showIntakeSidebar = hasIntakeMaterials(project)
   const isCashCopium = isCashAndCopiumChannelDbName(project.channel)
+  const isLaSocial = isLaSocialChannelDbName(project.channel)
   const reelTimestamps = normalizeReelTimestamps(project.reel_timestamps)
   const showReelTimestamps = isCashCopium && project.content_type === 'Reel'
   const showQcReview = internalView && usesExternalIntakeFlow(project.channel)
@@ -411,6 +413,31 @@ export function ProjectSectionsGrid({
           {pipeline}
         </div>
         {intakeRightColumn}
+      </div>
+    )
+  }
+
+  if (isLaSocial) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2">
+        <SectionCard title="Content links">
+          <ProjectLinkField
+            label="Drive link"
+            url={project.drive_link}
+            canEdit={canEditLinks}
+            onSave={value => saveLinkField('drive_link', value)}
+          />
+          <p className="text-[11px] text-zinc-500 -mt-2">Brief / reference link for the project</p>
+        </SectionCard>
+        <SectionCard
+          title="Feedback & Changes"
+          badge={comments.length > 0 ? (
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500">{comments.length}</span>
+          ) : undefined}
+        >
+          <CommentsSection projectId={project.id} comments={comments} canAdd variant="light" compact />
+        </SectionCard>
+        {pipeline && <div className="md:col-span-2">{pipeline}</div>}
       </div>
     )
   }

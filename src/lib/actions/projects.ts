@@ -6,7 +6,13 @@ import { getSessionProfile } from '@/lib/auth'
 import { getActiveChannelRole } from '@/lib/channel-context'
 import { FINAL_STAGE } from '@/lib/constants'
 import { getActiveChannelDbName } from '@/lib/channel-context'
-import { isZerodhaChannelDbName, usesExternalIntakeFlow, isCashAndCopiumChannelDbName } from '@/lib/zerodha-sla'
+import { isZerodhaChannelDbName, usesExternalIntakeFlow, isCashAndCopiumChannelDbName, finalStageForChannel } from '@/lib/zerodha-sla'
+import {
+  isLaSocialChannelDbName,
+  LA_SOCIAL_TOPIC,
+  LA_SOCIAL_WRITING,
+  LA_SOCIAL_CONTENT_TYPES,
+} from '@/lib/la-social-sla'
 import {
   CASH_AND_COPIUM_CONTENT_TYPES,
   type ReelTimestampPair,
@@ -134,7 +140,11 @@ export async function createProject(input: ProjectInput) {
     if (!input.target_delivery_date) return { error: 'Release date is required' }
   }
 
-  const initialStage = usesExternalIntakeFlow(channelName) ? ZERODHA_READY_TO_PRODUCE : 'Video received'
+  const initialStage = isLaSocialChannelDbName(channelName)
+    ? LA_SOCIAL_TOPIC
+    : usesExternalIntakeFlow(channelName)
+      ? ZERODHA_READY_TO_PRODUCE
+      : 'Video received'
   const now = new Date().toISOString()
   const target_delivery_date = input.target_delivery_date ?? null
 
@@ -147,7 +157,7 @@ export async function createProject(input: ProjectInput) {
     .insert({
       title: input.title?.trim() || 'Untitled project',
       ip: input.ip?.trim() || '—',
-      content_type: input.content_type || 'Long-Form',
+      content_type: input.content_type || (isLaSocialChannelDbName(channelName) ? LA_SOCIAL_CONTENT_TYPES[0] : 'Long-Form'),
       level_of_video: input.level_of_video ?? null,
       video_language: input.video_language ?? null,
       priority: input.priority || 'Medium',
@@ -161,10 +171,15 @@ export async function createProject(input: ProjectInput) {
       external_team_member_id: input.external_team_member_id ?? null,
       uses_teleprompter: input.uses_teleprompter ?? null,
       graphic_designer_id: input.designer_id ?? input.graphic_designer_id ?? null,
-      stage_assignee_id: input.stage_assignee_id ?? input.editor_id ?? null,
+      internal_owner_id: input.internal_owner_id ?? null,
+      qc_reviewer_id: input.qc_reviewer_id ?? null,
+      stage_assignee_id: isLaSocialChannelDbName(channelName)
+        ? (input.internal_owner_id ?? input.stage_assignee_id ?? profile.id)
+        : (input.stage_assignee_id ?? input.editor_id ?? null),
       received_date: input.received_date ?? null,
       picked_up_date: input.picked_up_date ?? input.received_date ?? null,
       target_delivery_date,
+      drive_link: input.drive_link ?? null,
       channel: channelName,
       current_stage: initialStage,
       status_health: computeProjectHealth({
@@ -554,6 +569,7 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
   const teamFields = [
     'editor_id', 'editor_2_id', 'designer_id', 'designer_2_id',
     'sound_designer_id', 'writer_id', 'external_team_member_id', 'qc_reviewer_id',
+    'internal_owner_id',
   ] as const
   if (teamFields.some(f => input[f] !== undefined)) {
     const merged = { ...existing, ...patch }
@@ -664,8 +680,18 @@ export async function changeProjectStage(
     updates.uses_teleprompter = usesTeleprompter
   }
 
-  if (newStage === FINAL_STAGE && !project.delivered_date) {
+  const channelFinalStage = finalStageForChannel(project.channel)
+  if ((newStage === FINAL_STAGE || newStage === channelFinalStage) && !project.delivered_date) {
     updates.delivered_date = new Date().toISOString().split('T')[0]
+  }
+
+  if (
+    isLaSocialChannelDbName(project.channel)
+    && project.current_stage === LA_SOCIAL_TOPIC
+    && newStage === LA_SOCIAL_WRITING
+    && !project.picked_up_date
+  ) {
+    updates.picked_up_date = new Date().toISOString().split('T')[0]
   }
 
   if (

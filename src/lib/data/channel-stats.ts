@@ -1,4 +1,5 @@
 import { Project } from '@/lib/types'
+import type { ProjectHubRow } from '@/lib/data/projects-hub'
 import { liveStudiosChannels } from '@/lib/channels'
 import { FINAL_STAGE, HEALTH_SCORES } from '@/lib/constants'
 import { computeOverviewTotals, periodLabel, type Period } from '@/lib/data/ip-stats'
@@ -17,7 +18,7 @@ export type ChannelStats = {
   memberCount: number
 }
 
-function isProjectRelevantInPeriod(p: Project, period: Period, anchor: Date): boolean {
+function isProjectRelevantInPeriod(p: Project | ProjectHubRow, period: Period, anchor: Date): boolean {
   if (period === 'month') {
     const month = format(anchor, 'yyyy-MM')
     if (p.current_stage === FINAL_STAGE) return isDeliveredInMonth(p, month)
@@ -44,7 +45,7 @@ function isProjectRelevantInPeriod(p: Project, period: Period, anchor: Date): bo
 }
 
 export function computeChannelStats(
-  projects: Project[],
+  projects: (Project | ProjectHubRow)[],
   memberCounts: Record<string, number>,
   period: Period,
   anchor = new Date()

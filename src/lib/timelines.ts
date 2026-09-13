@@ -26,7 +26,9 @@ import {
   filterCashCopiumSlaRows,
   filterZerodhaSlaRows,
   isCashAndCopiumChannelDbName,
+  finalStageForChannel,
 } from '@/lib/zerodha-sla'
+import { isLaSocialChannelDbName, laSocialStageSlaRows } from '@/lib/la-social-sla'
 import { HoldPeriod } from '@/lib/types'
 
 /** Maps legacy DB stage names to the current pipeline. */
@@ -61,6 +63,10 @@ let cachedSlaChannel: string | null = null
 
 export function setStageSlaCache(rows: StageSlaRow[], channelDbName?: string | null) {
   cachedSlaChannel = channelDbName ?? null
+  if (isLaSocialChannelDbName(channelDbName)) {
+    cachedSlaRows = rows.length ? rows : laSocialStageSlaRows()
+    return
+  }
   if (isCashAndCopiumChannelDbName(channelDbName)) {
     cachedSlaRows = rows.length ? filterCashCopiumSlaRows(rows) : cashCopiumStageSlaRows()
     return
@@ -77,6 +83,7 @@ function slaRowsForChannel(channelDbName?: string | null): StageSlaRow[] {
   if (channel && channel === cachedSlaChannel && cachedSlaRows.length) {
     return cachedSlaRows
   }
+  if (isLaSocialChannelDbName(channel)) return laSocialStageSlaRows()
   if (isCashAndCopiumChannelDbName(channel)) return cashCopiumStageSlaRows()
   if (usesExternalIntakeFlow(channel)) return zerodhaStageSlaRows()
   return cachedSlaRows
@@ -149,7 +156,9 @@ export function effectiveStatusHealth(project: {
   channel?: string | null
   request_status?: string | null
 }): string {
-  if (resolvePipelineStage(project.current_stage, project.channel) === FINAL_STAGE) {
+  const deliveredStage = finalStageForChannel(project.channel)
+  if (resolvePipelineStage(project.current_stage, project.channel) === deliveredStage
+    || resolvePipelineStage(project.current_stage, project.channel) === FINAL_STAGE) {
     return 'Delivered'
   }
   if (suppressProductionMetrics(project)) {
@@ -162,9 +171,11 @@ export function effectiveStatusHealth(project: {
 export function isProjectTimelineLocked(project: {
   current_stage?: string | null
   delivered_date?: string | null
+  channel?: string | null
 }): boolean {
   const stage = normalizeStage(project.current_stage ?? '')
-  return stage === FINAL_STAGE || !!project.delivered_date
+  const deliveredStage = finalStageForChannel(project.channel)
+  return stage === FINAL_STAGE || stage === deliveredStage || !!project.delivered_date
 }
 
 export function projectTeamContext(project: {
@@ -326,7 +337,8 @@ export function getProjectTimeliness(
     }
   }
 
-  if (stage === FINAL_STAGE) {
+  const deliveredStage = finalStageForChannel(project.channel)
+  if (stage === FINAL_STAGE || stage === deliveredStage) {
     return {
       ...base,
       status: 'delivered',

@@ -39,6 +39,7 @@ type Props = {
   holdStarters?: Record<string, DisplayProfile>
   releaseScheduleItems?: ReleaseScheduleItem[]
   recentComments?: RecentCommentFeedItem[]
+  recentCommentsSlot?: ReactNode
 }
 
 export function ExternalDashboard({
@@ -46,6 +47,7 @@ export function ExternalDashboard({
   showCreateRequest = false, holdStarters = {},
   releaseScheduleItems = [],
   recentComments = [],
+  recentCommentsSlot = null,
 }: Props) {
   const myProjects = projects.filter(p => isUserOnProjectTeam(p, userId))
   const inPipeline = myProjects.filter(
@@ -182,7 +184,7 @@ export function ExternalDashboard({
           )}
         </section>
 
-        <RecentCommentsSection items={recentComments} />
+        {recentCommentsSlot ?? <RecentCommentsSection items={recentComments} />}
 
         {showAssignedSections && (
           <div className="space-y-4">

@@ -20,6 +20,10 @@ import {
   projectLevelOptions,
   VIDEO_LANGUAGES,
 } from '@/lib/zerodha-sla'
+import {
+  isLaSocialChannelDbName,
+  LA_SOCIAL_CONTENT_TYPES,
+} from '@/lib/la-social-sla'
 
 type Props = {
   open: boolean
@@ -36,6 +40,7 @@ function buildForm(project: Project) {
     video_language: project.video_language ?? '',
     level_of_video: project.level_of_video ?? '',
     priority: project.priority ?? '',
+    internal_owner_id: project.internal_owner_id ?? '',
     editor_id: project.editor_id ?? '',
     editor_2_id: project.editor_2_id ?? '',
     designer_id: project.designer_id ?? project.graphic_designer_id ?? '',
@@ -55,6 +60,8 @@ export function ProjectEditModal({ open, onClose, project, users }: Props) {
     || isZerodhaChannelDbName(project.channel)
   const isCashCopium = isCashAndCopiumChannelDbName(channel?.dbName)
     || isCashAndCopiumChannelDbName(project.channel)
+  const isLaSocial = isLaSocialChannelDbName(channel?.dbName)
+    || isLaSocialChannelDbName(project.channel)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [editClientDetails, setEditClientDetails] = useState(false)
@@ -72,6 +79,10 @@ export function ProjectEditModal({ open, onClose, project, users }: Props) {
     () => projectLevelOptions(project.channel ?? channel?.dbName, form.video_language || null),
     [project.channel, channel?.dbName, form.video_language],
   )
+
+  const typeOptions = isLaSocial
+    ? LA_SOCIAL_CONTENT_TYPES.map(t => ({ value: t, label: t }))
+    : CONTENT_TYPES.map(t => ({ value: t, label: t }))
 
   const clientSummary = [
     form.content_type,
@@ -96,18 +107,19 @@ export function ProjectEditModal({ open, onClose, project, users }: Props) {
     const result = await updateProject(project.id, {
       title: form.title.trim() || 'Untitled project',
       ip: form.ip.trim() || 'TBD',
-      content_type: form.content_type || CONTENT_TYPES[0],
+      content_type: form.content_type || typeOptions[0]?.value || CONTENT_TYPES[0],
       ...(form.video_language ? { video_language: form.video_language } : {}),
-      ...(!isCashCopium && form.level_of_video ? { level_of_video: form.level_of_video } : {}),
-      ...(!isCashCopium && form.priority ? { priority: form.priority as Priority } : {}),
+      ...(!isCashCopium && !isLaSocial && form.level_of_video ? { level_of_video: form.level_of_video } : {}),
+      ...(!isLaSocial && form.priority ? { priority: form.priority as Priority } : {}),
+      internal_owner_id: isLaSocial ? (form.internal_owner_id || null) : undefined,
       editor_id: form.editor_id || null,
       editor_2_id: form.editor_2_id || null,
       designer_id: form.designer_id || null,
-      designer_2_id: form.designer_2_id || null,
-      sound_designer_id: form.sound_designer_id || null,
+      designer_2_id: isLaSocial ? undefined : (form.designer_2_id || null),
+      sound_designer_id: isLaSocial ? undefined : (form.sound_designer_id || null),
       writer_id: form.writer_id || null,
-      external_team_member_id: form.external_team_member_id || null,
-      ...(isZerodha ? { qc_reviewer_id: form.qc_reviewer_id || null } : {}),
+      external_team_member_id: isLaSocial ? undefined : (form.external_team_member_id || null),
+      qc_reviewer_id: isLaSocial || isZerodha ? (form.qc_reviewer_id || null) : undefined,
     })
     setLoading(false)
     if (result.error) {
@@ -136,108 +148,148 @@ export function ProjectEditModal({ open, onClose, project, users }: Props) {
         <p className="mb-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       )}
       <div className="space-y-7">
-        <SlideOverSection title="Client request">
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 px-4 py-3.5">
-            <p className="text-sm font-semibold text-zinc-900">{form.title || 'Untitled project'}</p>
-            {clientSummary && (
-              <p className="mt-1 text-xs text-zinc-600">{clientSummary}</p>
-            )}
-            <button
-              type="button"
-              onClick={() => setEditClientDetails(v => !v)}
-              className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-700"
-            >
-              {editClientDetails ? 'Hide client details' : 'Change client details'}
-              {editClientDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
-            {editClientDetails && (
-              <div className="mt-3 space-y-3 border-t border-zinc-200/80 pt-3">
-                <Input label="Project name" value={form.title} onChange={e => set('title', e.target.value)} />
+        {isLaSocial ? (
+          <>
+            <SlideOverSection title="Project">
+              <Input label="Project name" value={form.title} onChange={e => set('title', e.target.value)} />
+              <Input label="IP" placeholder="Zero1, PS, or custom" value={form.ip} onChange={e => set('ip', e.target.value)} />
+              <Select
+                label="Type"
+                placeholder="Select type"
+                options={typeOptions}
+                value={form.content_type}
+                onChange={e => set('content_type', e.target.value)}
+              />
+            </SlideOverSection>
+            <SlideOverSection title="Team">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <UserSearchSelect label="Primary POC" users={users} value={form.internal_owner_id} onChange={v => set('internal_owner_id', v)} />
+                <UserSearchSelect label="Writer" users={users} value={form.writer_id} onChange={v => set('writer_id', v)} />
+                <UserSearchSelect label="Writing reviewer" users={users} value={form.qc_reviewer_id} onChange={v => set('qc_reviewer_id', v)} />
+                <UserSearchSelect label="Designer" users={users} value={form.designer_id} onChange={v => set('designer_id', v)} />
+                <UserSearchSelect label="Editor" users={users} value={form.editor_id} onChange={v => set('editor_id', v)} />
+                <UserSearchSelect label="Editor 2 (optional)" users={users} value={form.editor_2_id} onChange={v => set('editor_2_id', v)} />
+              </div>
+            </SlideOverSection>
+            <SlideOverSection title="Brief link">
+              <ProjectLinkField
+                label="Drive link"
+                url={project.drive_link}
+                canEdit
+                onSave={async value => {
+                  const result = await updateProject(project.id, { drive_link: value.trim() || null })
+                  if (result.error) throw new Error(result.error)
+                  router.refresh()
+                }}
+              />
+            </SlideOverSection>
+          </>
+        ) : (
+          <>
+            <SlideOverSection title="Client request">
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 px-4 py-3.5">
+                <p className="text-sm font-semibold text-zinc-900">{form.title || 'Untitled project'}</p>
+                {clientSummary && (
+                  <p className="mt-1 text-xs text-zinc-600">{clientSummary}</p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setEditClientDetails(v => !v)}
+                  className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-700"
+                >
+                  {editClientDetails ? 'Hide client details' : 'Change client details'}
+                  {editClientDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                {editClientDetails && (
+                  <div className="mt-3 space-y-3 border-t border-zinc-200/80 pt-3">
+                    <Input label="Project name" value={form.title} onChange={e => set('title', e.target.value)} />
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <Select
+                        label="Type"
+                        placeholder="Select type"
+                        options={typeOptions}
+                        value={form.content_type}
+                        onChange={e => set('content_type', e.target.value)}
+                      />
+                      {isZerodha && (
+                        <Select
+                          label="Language"
+                          placeholder="Select language"
+                          options={VIDEO_LANGUAGES.map(l => ({ value: l, label: l }))}
+                          value={form.video_language}
+                          onChange={e => set('video_language', e.target.value)}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </SlideOverSection>
+
+            <SlideOverSection title="Production setup">
+              <Input
+                label="IP"
+                placeholder="Enter IP"
+                value={form.ip}
+                onChange={e => set('ip', e.target.value)}
+              />
+              {!isCashCopium && (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Select
-                    label="Type"
-                    placeholder="Select type"
-                    options={CONTENT_TYPES.map(t => ({ value: t, label: t }))}
-                    value={form.content_type}
-                    onChange={e => set('content_type', e.target.value)}
+                    label="Level"
+                    placeholder={isZerodha && !form.video_language ? 'Select language first' : 'Select level'}
+                    options={levelOptions}
+                    value={form.level_of_video}
+                    onChange={e => set('level_of_video', e.target.value)}
                   />
-                  {isZerodha && (
-                    <Select
-                      label="Language"
-                      placeholder="Select language"
-                      options={VIDEO_LANGUAGES.map(l => ({ value: l, label: l }))}
-                      value={form.video_language}
-                      onChange={e => set('video_language', e.target.value)}
-                    />
-                  )}
+                  <Select
+                    label="Priority (optional)"
+                    placeholder="Not set"
+                    options={[
+                      { value: '', label: 'Not set' },
+                      ...PRIORITIES.map(p => ({ value: p, label: p })),
+                    ]}
+                    value={form.priority}
+                    onChange={e => set('priority', e.target.value)}
+                  />
                 </div>
+              )}
+            </SlideOverSection>
+
+            <SlideOverSection title="Team">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <UserSearchSelect label="Editor" users={users} value={form.editor_id} onChange={v => set('editor_id', v)} />
+                <UserSearchSelect label="Editor 2 (optional)" users={users} value={form.editor_2_id} onChange={v => set('editor_2_id', v)} />
+                <UserSearchSelect label="Designer" users={users} value={form.designer_id} onChange={v => set('designer_id', v)} />
+                <UserSearchSelect label="Designer 2 (optional)" users={users} value={form.designer_2_id} onChange={v => set('designer_2_id', v)} />
+                <UserSearchSelect label="Sound designer" users={users} value={form.sound_designer_id} onChange={v => set('sound_designer_id', v)} />
+                <UserSearchSelect label="Writer" users={users} value={form.writer_id} onChange={v => set('writer_id', v)} />
+                <UserSearchSelect label="External team member" users={users} value={form.external_team_member_id} onChange={v => set('external_team_member_id', v)} />
+                {isZerodha && (
+                  <UserSearchSelect
+                    label="Draft QC reviewer"
+                    users={users}
+                    value={form.qc_reviewer_id}
+                    onChange={v => set('qc_reviewer_id', v)}
+                  />
+                )}
               </div>
-            )}
-          </div>
-        </SlideOverSection>
+            </SlideOverSection>
 
-        <SlideOverSection title="Production setup">
-          <Input
-            label="IP"
-            placeholder="Enter IP"
-            value={form.ip}
-            onChange={e => set('ip', e.target.value)}
-          />
-          {!isCashCopium && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Select
-                label="Level"
-                placeholder={isZerodha && !form.video_language ? 'Select language first' : 'Select level'}
-                options={levelOptions}
-                value={form.level_of_video}
-                onChange={e => set('level_of_video', e.target.value)}
+            <SlideOverSection title="Review link">
+              <ProjectLinkField
+                label="Review link"
+                url={project.assets_link}
+                canEdit
+                onSave={async value => {
+                  const result = await updateProject(project.id, { assets_link: value.trim() || null })
+                  if (result.error) throw new Error(result.error)
+                  router.refresh()
+                }}
               />
-              <Select
-                label="Priority (optional)"
-                placeholder="Not set"
-                options={[
-                  { value: '', label: 'Not set' },
-                  ...PRIORITIES.map(p => ({ value: p, label: p })),
-                ]}
-                value={form.priority}
-                onChange={e => set('priority', e.target.value)}
-              />
-            </div>
-          )}
-        </SlideOverSection>
-
-        <SlideOverSection title="Team">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <UserSearchSelect label="Editor" users={users} value={form.editor_id} onChange={v => set('editor_id', v)} />
-            <UserSearchSelect label="Editor 2 (optional)" users={users} value={form.editor_2_id} onChange={v => set('editor_2_id', v)} />
-            <UserSearchSelect label="Designer" users={users} value={form.designer_id} onChange={v => set('designer_id', v)} />
-            <UserSearchSelect label="Designer 2 (optional)" users={users} value={form.designer_2_id} onChange={v => set('designer_2_id', v)} />
-            <UserSearchSelect label="Sound designer" users={users} value={form.sound_designer_id} onChange={v => set('sound_designer_id', v)} />
-            <UserSearchSelect label="Writer" users={users} value={form.writer_id} onChange={v => set('writer_id', v)} />
-            <UserSearchSelect label="External team member" users={users} value={form.external_team_member_id} onChange={v => set('external_team_member_id', v)} />
-            {isZerodha && (
-              <UserSearchSelect
-                label="Draft QC reviewer"
-                users={users}
-                value={form.qc_reviewer_id}
-                onChange={v => set('qc_reviewer_id', v)}
-              />
-            )}
-          </div>
-        </SlideOverSection>
-
-        <SlideOverSection title="Review link">
-          <ProjectLinkField
-            label="Review link"
-            url={project.assets_link}
-            canEdit
-            onSave={async value => {
-              const result = await updateProject(project.id, { assets_link: value.trim() || null })
-              if (result.error) throw new Error(result.error)
-              router.refresh()
-            }}
-          />
-        </SlideOverSection>
+            </SlideOverSection>
+          </>
+        )}
       </div>
     </SlideOver>
   )

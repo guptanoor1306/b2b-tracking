@@ -5,17 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { IpStats, periodLabel, computeOverviewTotals } from '@/lib/data/ip-stats'
 import { PeriodToggle } from '@/components/ui/PeriodToggle'
 import { cn } from '@/lib/utils'
-import { ArrowUpRight, GitBranch, CheckCircle2, PauseCircle, Sparkles } from 'lucide-react'
+import { ArrowUpRight, GitBranch, CheckCircle2, PauseCircle } from 'lucide-react'
 
 type Props = {
   stats: IpStats[]
   period: 'week' | 'month'
-}
-
-function qualityTone(score: number): string {
-  if (score >= 85) return 'text-emerald-700'
-  if (score >= 70) return 'text-amber-700'
-  return 'text-orange-700'
 }
 
 function DistributionBar({ pipeline, delivered, onHold }: { pipeline: number; delivered: number; onHold: number }) {
@@ -41,7 +35,6 @@ const SUMMARY = [
   { key: 'pipeline', label: 'In pipeline', icon: GitBranch, color: 'text-violet-600', bg: 'bg-violet-50' },
   { key: 'delivered', label: 'Delivered', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
   { key: 'onHold', label: 'On hold', icon: PauseCircle, color: 'text-zinc-600', bg: 'bg-zinc-100' },
-  { key: 'quality', label: 'Avg quality', icon: Sparkles, color: 'text-violet-600', bg: 'bg-violet-50' },
 ] as const
 
 export function IpOverviewClient({ stats, period }: Props) {
@@ -59,7 +52,6 @@ export function IpOverviewClient({ stats, period }: Props) {
     pipeline: totals.inPipeline,
     delivered: totals.delivered,
     onHold: totals.onHold,
-    quality: totals.avgQuality ? `${totals.avgQuality}%` : '—',
   }
 
   return (
@@ -74,7 +66,7 @@ export function IpOverviewClient({ stats, period }: Props) {
         <PeriodToggle period={period} onChange={setPeriod} />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {SUMMARY.map(s => {
           const Icon = s.icon
           return (
@@ -109,7 +101,6 @@ export function IpOverviewClient({ stats, period }: Props) {
                 <th className="px-3 py-2.5 text-right font-semibold w-16">Active</th>
                 <th className="px-3 py-2.5 text-right font-semibold w-16">Done</th>
                 <th className="px-3 py-2.5 text-right font-semibold w-16">Hold</th>
-                <th className="px-3 py-2.5 text-right font-semibold w-16">Quality</th>
                 <th className="px-4 py-2.5 text-left font-semibold min-w-[140px]">Mix</th>
                 <th className="px-3 py-2.5 w-10" />
               </tr>
@@ -124,9 +115,6 @@ export function IpOverviewClient({ stats, period }: Props) {
                   <td className="px-3 py-3 text-right tabular-nums text-zinc-700">{s.inPipeline}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-emerald-700">{s.delivered}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-zinc-500">{s.onHold}</td>
-                  <td className={cn('px-3 py-3 text-right tabular-nums font-medium', qualityTone(s.avgQuality))}>
-                    {s.avgQuality ? `${s.avgQuality}%` : '—'}
-                  </td>
                   <td className="px-4 py-3">
                     <DistributionBar pipeline={s.inPipeline} delivered={s.delivered} onHold={s.onHold} />
                   </td>
@@ -148,9 +136,6 @@ export function IpOverviewClient({ stats, period }: Props) {
                 <td className="px-3 py-2.5 text-right tabular-nums text-zinc-700">{totals.inPipeline}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700">{totals.delivered}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums text-zinc-500">{totals.onHold}</td>
-                <td className={cn('px-3 py-2.5 text-right tabular-nums font-semibold', qualityTone(totals.avgQuality))}>
-                  {totals.avgQuality ? `${totals.avgQuality}%` : '—'}
-                </td>
                 <td className="px-4 py-2.5">
                   <DistributionBar
                     pipeline={totals.inPipeline}
