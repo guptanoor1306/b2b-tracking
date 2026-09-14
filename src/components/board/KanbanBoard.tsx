@@ -233,7 +233,7 @@ const KanbanCard = memo(function KanbanCard({
     return (
       <Link
         href={projectHref}
-        prefetch
+        prefetch={false}
         draggable={false}
         className={cn(CARD_BASE, cardClass, 'block p-3.5 hover:shadow-md transition-shadow')}
       >
@@ -267,7 +267,7 @@ const KanbanCard = memo(function KanbanCard({
         </div>
         <Link
           href={projectHref}
-          prefetch
+          prefetch={false}
           draggable={false}
           className="flex-1 min-w-0 rounded-lg -m-1 p-1 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
         >
