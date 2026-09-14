@@ -1,11 +1,10 @@
 'use client'
 
-import { useTransition } from 'react'
+import Link from 'next/link'
 import { ArrowUpRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ChannelStats } from '@/lib/data/channel-stats'
 import { getChannelBySlug } from '@/lib/channels'
-import { enterChannel } from '@/lib/actions/channels'
 
 type Props = {
   stats: ChannelStats[]
@@ -53,16 +52,12 @@ export function ChannelCardsHub({ stats, accessibleSlugs, profileName }: Props) 
 
 function ChannelCard({ stat }: { stat: ChannelStats }) {
   const ch = getChannelBySlug(stat.slug)
-  const [pending, startTransition] = useTransition()
-
-  const enter = () => startTransition(() => enterChannel(stat.slug))
 
   return (
-    <button
-      type="button"
-      onClick={enter}
-      disabled={pending}
-      className="relative w-full overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 text-left shadow-sm transition-all hover:border-zinc-300 hover:shadow-md disabled:opacity-70"
+    <Link
+      href={`/studios/enter/${stat.slug}`}
+      prefetch={false}
+      className="relative block w-full overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 text-left shadow-sm transition-all hover:border-zinc-300 hover:shadow-md"
     >
       {ch && (
         <div className={cn(
@@ -96,7 +91,7 @@ function ChannelCard({ stat }: { stat: ChannelStats }) {
         <MiniStat label="Done" value={stat.delivered} accent="text-emerald-600" />
         <MiniStat label="Hold" value={stat.onHold} muted />
       </div>
-    </button>
+    </Link>
   )
 }
 
