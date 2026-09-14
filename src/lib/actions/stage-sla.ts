@@ -5,6 +5,7 @@ import { requireChannelAdmin } from '@/lib/channel-context'
 import { createClient } from '@/lib/supabase/server'
 import { DEFAULT_STAGE_SLA } from '@/lib/stage-sla'
 import { usesExternalIntakeFlow } from '@/lib/zerodha-sla'
+import { isLaSocialChannelDbName, DEFAULT_LA_SOCIAL_STAGE_SLA } from '@/lib/la-social-sla'
 import { stageSlaCacheTag } from '@/lib/cache-tags'
 import { recalculateActiveProjectTargets } from '@/lib/recalculate-project-targets'
 
@@ -15,6 +16,48 @@ type SlaUpdatePayload = {
   level_2_hours?: number | null
   level_3_hours?: number | null
   level_4_hours?: number | null
+}
+
+function usesChannelStageSlaTable(channelDbName: string): boolean {
+  return usesExternalIntakeFlow(channelDbName) || isLaSocialChannelDbName(channelDbName)
+}
+
+async function ensureChannelStageSlaSeeded(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  channelSlug: string,
+  channelDbName: string,
+): Promise<{ error?: string }> {
+  const { count } = await supabase
+    .from('channel_stage_sla')
+    .select('*', { count: 'exact', head: true })
+    .eq('channel_slug', channelSlug)
+
+  if (count && count > 0) return {}
+
+  const defaults = isLaSocialChannelDbName(channelDbName)
+    ? DEFAULT_LA_SOCIAL_STAGE_SLA
+    : null
+
+  if (!defaults) return {}
+
+  const { error } = await supabase.from('channel_stage_sla').insert(
+    defaults.map(r => ({
+      channel_slug: channelSlug,
+      stage_name: r.stage_name,
+      role_owner: r.role_owner,
+      duration_hours: r.duration_hours,
+      level_0_hours: r.level_0_hours,
+      level_1_hours: r.level_1_hours,
+      level_2_hours: r.level_2_hours,
+      level_3_hours: r.level_3_hours,
+      level_4_hours: r.level_4_hours,
+      parallel_group: r.parallel_group,
+      sort_order: r.sort_order,
+    })),
+  )
+
+  if (error) return { error: error.message }
+  return {}
 }
 
 async function logSettingsActivity(
@@ -39,7 +82,12 @@ export async function updateStageSla(stageName: string, updates: SlaUpdatePayloa
   const { profile, channel } = await requireChannelAdmin()
   const supabase = await createClient()
 
-  if (usesExternalIntakeFlow(channel.dbName)) {
+  if (usesChannelStageSlaTable(channel.dbName)) {
+    if (isLaSocialChannelDbName(channel.dbName)) {
+      const seed = await ensureChannelStageSlaSeeded(supabase, channel.slug, channel.dbName)
+      if (seed.error) return { error: seed.error }
+    }
+
     const { data: existing } = await supabase
       .from('channel_stage_sla')
       .select('*')

@@ -7,17 +7,19 @@ import { setStageSlaCache } from '@/lib/timelines'
 import { SettingsClient } from '@/components/settings/SettingsClient'
 import { isSuperAdmin, isExternalClientAdmin } from '@/lib/views'
 import { usesExternalIntakeFlow } from '@/lib/zerodha-sla'
+import { isLaSocialChannelDbName } from '@/lib/la-social-sla'
 
 export default async function SettingsPage() {
   const { profile, channel, channelRole } = await requireChannelAdmin()
   const externalIntake = usesExternalIntakeFlow(channel.dbName)
+  const channelScopedSla = externalIntake || isLaSocialChannelDbName(channel.dbName)
   if (isExternalClientAdmin(channelRole)) redirect('/dashboard')
 
   const [members, holidays, stageSla, slaActivity] = await Promise.all([
     fetchChannelMembers(channel.slug),
     fetchHolidays(),
     fetchStageSlaConfig(channel.dbName),
-    fetchSettingsActivityLogs(channel.slug, externalIntake),
+    fetchSettingsActivityLogs(channel.slug, channelScopedSla),
   ])
 
   setStageSlaCache(stageSla, channel.dbName)

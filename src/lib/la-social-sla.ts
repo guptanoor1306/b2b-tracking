@@ -9,6 +9,14 @@ export const LA_SOCIAL_IPS = ['Zero1', 'PS'] as const
 
 export const LA_SOCIAL_CONTENT_TYPES = ['Reel', 'Static', 'Carousel', 'LinkedIn'] as const
 
+/** Settings UI: content-type columns map to level_0 … level_3 hours. */
+export const LA_SOCIAL_TYPE_SLA_COLUMNS = [
+  { key: 'level_0_hours' as const, label: 'Reel' },
+  { key: 'level_1_hours' as const, label: 'Static' },
+  { key: 'level_2_hours' as const, label: 'Carousel' },
+  { key: 'level_3_hours' as const, label: 'LinkedIn' },
+]
+
 export const LA_SOCIAL_TOPIC = 'Topic Selection & Research'
 export const LA_SOCIAL_WRITING = 'Writing'
 export const LA_SOCIAL_RETRO = 'Retro'
