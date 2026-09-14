@@ -1,10 +1,14 @@
+import { unstable_cache } from 'next/cache'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { canUseDataCache, createCachedReadClient } from '@/lib/supabase/cache-read'
+import { projectsListCacheTag } from '@/lib/cache-tags'
 import { Project, Profile } from '@/lib/types'
-import { calcHealth, filterProjectsByMonth, isAllMonths } from '@/lib/utils'
+import { filterProjectsByMonth, isAllMonths } from '@/lib/utils'
 import { FINAL_STAGE } from '@/lib/constants'
 import { getActiveChannelDbName } from '@/lib/channel-context'
 import { computeProjectHealth } from '@/lib/timelines'
-import { format, startOfMonth, endOfMonth } from 'date-fns'
+import { format, startOfMonth } from 'date-fns'
 
 export type ProjectFilters = {
   ip?: string
@@ -42,23 +46,23 @@ const PROJECT_DETAIL_SELECT = `
   updater:profiles!projects_updated_by_fkey(id, name, email)
 `
 
-export async function fetchAllProjects(): Promise<Project[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('projects')
-    .select(PROJECT_DETAIL_SELECT)
-    .order('updated_at', { ascending: false })
-
-  if (error) throw error
-  return (data ?? []) as Project[]
+function projectListHasExtraFilters(filters: ProjectFilters): boolean {
+  return Boolean(
+    filters.ip
+    || filters.content_type
+    || filters.current_stage
+    || filters.status_health
+    || filters.editor
+    || filters.agency
+    || filters.owner,
+  )
 }
 
-export async function fetchProjects(
-  filters: ProjectFilters = {},
-  channelOverride?: string,
+async function fetchProjectsQuery(
+  filters: ProjectFilters,
+  channel: string,
+  supabase: SupabaseClient,
 ): Promise<Project[]> {
-  const supabase = await createClient()
-  const channel = channelOverride ?? await getActiveChannelDbName()
   let query = supabase
     .from('projects')
     .select(PROJECT_LIST_SELECT)
@@ -76,7 +80,6 @@ export async function fetchProjects(
   if (filters.month && !isAllMonths(filters.month)) {
     const [year, month] = filters.month.split('-').map(Number)
     const startStr = format(startOfMonth(new Date(year, month - 1)), 'yyyy-MM-dd')
-    // Drop projects delivered before this month; active carry-forward rows stay.
     query = query.or(`delivered_date.is.null,delivered_date.gte.${startStr}`)
   }
 
@@ -90,6 +93,41 @@ export async function fetchProjects(
   }
 
   return projects
+}
+
+function getCachedProjectsList(channel: string, monthKey: string) {
+  const filters: ProjectFilters = monthKey === 'all' ? {} : { month: monthKey }
+  return unstable_cache(
+    async () => fetchProjectsQuery(filters, channel, createCachedReadClient()),
+    ['projects-list', channel, monthKey],
+    { revalidate: 300, tags: [projectsListCacheTag(channel)] },
+  )()
+}
+
+export async function fetchAllProjects(): Promise<Project[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('projects')
+    .select(PROJECT_DETAIL_SELECT)
+    .order('updated_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as Project[]
+}
+
+export async function fetchProjects(
+  filters: ProjectFilters = {},
+  channelOverride?: string,
+): Promise<Project[]> {
+  const channel = channelOverride ?? await getActiveChannelDbName()
+  const monthKey = filters.month && !isAllMonths(filters.month) ? filters.month : 'all'
+
+  if (!projectListHasExtraFilters(filters) && canUseDataCache()) {
+    return getCachedProjectsList(channel, monthKey)
+  }
+
+  const supabase = await createClient()
+  return fetchProjectsQuery(filters, channel, supabase)
 }
 
 export async function fetchProjectById(id: string) {

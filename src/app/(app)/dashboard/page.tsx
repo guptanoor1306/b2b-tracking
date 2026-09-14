@@ -6,7 +6,11 @@ import { fetchProjects } from '@/lib/data/projects'
 import { computeOnTimeDeliveryStats } from '@/lib/data/dashboard-metrics'
 import { DashboardRecentCommentsAsync } from '@/components/dashboard/DashboardRecentCommentsAsync'
 import { fetchHolidayDates } from '@/lib/data/holidays'
-import { fetchStageSlaConfig, fetchOpenHoldStartersForChannel, fetchHoldPeriodsForChannel } from '@/lib/data/stage-sla'
+import {
+  fetchStageSlaConfig,
+  fetchOpenHoldStarters,
+  fetchHoldPeriodsForProjects,
+} from '@/lib/data/stage-sla'
 import { setStageSlaCache } from '@/lib/timelines'
 import { AdminDashboard } from '@/components/dashboard/AdminDashboard'
 import { ExternalDashboard } from '@/components/dashboard/ExternalDashboard'
@@ -42,6 +46,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const params = await searchParams
   const month = resolveMonthFilter(params.month)
   const channelNamePromise = getActiveChannelDbName()
+  const projectsPromise = channelNamePromise.then(name => fetchProjects({ month }, name))
   const [
     channelName,
     projects,
@@ -52,12 +57,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
     holdPeriodsByProjectId,
   ] = await Promise.all([
     channelNamePromise,
-    channelNamePromise.then(name => fetchProjects({ month }, name)),
+    projectsPromise,
     fetchHolidayDates(),
     channelNamePromise.then(name => fetchStageSlaConfig(name)),
     getActiveChannelRole(profile),
-    channelNamePromise.then(name => fetchOpenHoldStartersForChannel(name)),
-    channelNamePromise.then(name => fetchHoldPeriodsForChannel(name)),
+    projectsPromise.then(ps => fetchOpenHoldStarters(ps.map(p => p.id))),
+    projectsPromise.then(ps => fetchHoldPeriodsForProjects(ps.map(p => p.id))),
   ])
   setStageSlaCache(stageSla, channelName)
   const effectiveRole = effectiveRoleForChannel(channelRole, profile.role)
