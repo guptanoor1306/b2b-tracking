@@ -6,7 +6,7 @@ import { CreateRequestButton } from '@/components/board/CreateRequestButton'
 import { MonthFilterSlot } from '@/components/dashboard/MonthFilterSlot'
 import { fetchProjects } from '@/lib/data/projects'
 import { fetchHolidayDates } from '@/lib/data/holidays'
-import { fetchStageSlaConfig, fetchHoldPeriodsForChannel } from '@/lib/data/stage-sla'
+import { fetchStageSlaConfig, fetchHoldPeriodsForProjects } from '@/lib/data/stage-sla'
 import { fetchChannelMembers } from '@/lib/data/channel-access'
 import { setStageSlaCache } from '@/lib/timelines'
 import { getSessionProfile } from '@/lib/auth'
@@ -39,14 +39,15 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   const month = resolveMonthFilter(params.month)
   const channelNamePromise = getActiveChannelDbName()
   const channelSlugPromise = getActiveChannelSlug()
+  const projectsPromise = channelNamePromise.then(name => fetchProjects({ month }, name))
   const [channelName, channelSlug, projects, users, holidays, stageSla, holdPeriodsByProjectId, channelRole] = await Promise.all([
     channelNamePromise,
     channelSlugPromise,
-    channelNamePromise.then(name => fetchProjects({ month }, name)),
+    projectsPromise,
     channelSlugPromise.then(slug => fetchChannelMembers(slug ?? '')),
     fetchHolidayDates(),
     channelNamePromise.then(name => fetchStageSlaConfig(name)),
-    channelNamePromise.then(name => fetchHoldPeriodsForChannel(name)),
+    projectsPromise.then(ps => fetchHoldPeriodsForProjects(ps.map(p => p.id))),
     getActiveChannelRole(profile),
   ])
   setStageSlaCache(stageSla, channelName)

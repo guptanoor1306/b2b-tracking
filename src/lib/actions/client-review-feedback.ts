@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { revalidateProjectsListCache } from '@/lib/revalidate-project-list'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSessionProfile } from '@/lib/auth'
@@ -154,5 +155,6 @@ export async function submitClientReviewFeedback(
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/dashboard')
   revalidatePath('/board')
+  revalidateProjectsListCache(project.channel)
   return { success: true }
 }

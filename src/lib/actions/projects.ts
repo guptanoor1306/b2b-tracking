@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { revalidateProjectsListCache } from '@/lib/revalidate-project-list'
 import { createClient } from '@/lib/supabase/server'
 import { getSessionProfile } from '@/lib/auth'
 import { getActiveChannelRole } from '@/lib/channel-context'
@@ -218,6 +219,7 @@ export async function createProject(input: ProjectInput) {
   revalidatePath('/dashboard')
   revalidatePath('/projects')
   revalidatePath('/board')
+  revalidateProjectsListCache(channelName)
   return { id: data.id }
 }
 
@@ -351,6 +353,7 @@ export async function createExternalProjectRequest(input: ExternalRequestInput) 
 
   revalidatePath('/dashboard')
   revalidatePath('/board')
+  revalidateProjectsListCache(channelName)
   return { id: data.id }
 }
 
@@ -415,6 +418,7 @@ export async function approveExternalRequest(projectId: string) {
   revalidatePath('/dashboard')
   revalidatePath('/board')
   revalidatePath('/projects')
+  revalidateProjectsListCache(project.channel)
   return { success: true }
 }
 
@@ -457,6 +461,7 @@ export async function declineExternalRequest(projectId: string, reason: string) 
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/dashboard')
   revalidatePath('/board')
+  revalidateProjectsListCache(project.channel)
   return { success: true }
 }
 
@@ -488,6 +493,7 @@ export async function resubmitExternalRequest(projectId: string) {
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/dashboard')
   revalidatePath('/board')
+  revalidateProjectsListCache(project.channel)
   return { success: true }
 }
 
@@ -595,6 +601,7 @@ export async function updateProject(id: string, input: Partial<ProjectInput>) {
   revalidatePath('/dashboard')
   revalidatePath('/board')
   revalidatePath('/projects')
+  revalidateProjectsListCache(existing.channel)
   return { success: true }
 }
 
@@ -725,6 +732,7 @@ export async function changeProjectStage(
   revalidatePath('/dashboard')
   revalidatePath('/board')
   revalidatePath('/projects')
+  revalidateProjectsListCache(project.channel)
   return { success: true }
 }
 
@@ -795,6 +803,7 @@ export async function updateStageHistoryDate(
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/board')
   revalidatePath('/dashboard')
+  revalidateProjectsListCache(project.channel)
   return { success: true }
 }
 
@@ -813,9 +822,11 @@ export async function updateStageAssignee(projectId: string, assigneeId: string 
 
   if (error) return { error: error.message }
 
+  const channelName = await getActiveChannelDbName()
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/dashboard')
   revalidatePath('/board')
+  revalidateProjectsListCache(channelName)
   return { success: true }
 }
 
@@ -963,6 +974,7 @@ export async function deleteProject(projectId: string) {
   const { profile } = session
 
   const supabase = await createClient()
+  const { data: row } = await supabase.from('projects').select('channel').eq('id', projectId).single()
   const { error } = await supabase.from('projects').delete().eq('id', projectId)
 
   if (error) return { error: error.message }
@@ -970,6 +982,7 @@ export async function deleteProject(projectId: string) {
   revalidatePath('/dashboard')
   revalidatePath('/board')
   revalidatePath('/projects')
+  revalidateProjectsListCache(row?.channel)
   return { success: true }
 }
 
@@ -1067,6 +1080,7 @@ export async function toggleProjectHold(projectId: string, note?: string) {
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/board')
   revalidatePath('/dashboard')
+  revalidateProjectsListCache(project.channel)
   return { success: true }
 }
 
@@ -1085,7 +1099,7 @@ export async function updateOpenHoldReason(projectId: string, reason: string) {
   const supabase = await createClient()
   const { data: project } = await supabase
     .from('projects')
-    .select('id, is_on_hold, on_hold_since')
+    .select('id, channel, is_on_hold, on_hold_since')
     .eq('id', projectId)
     .single()
 
@@ -1125,6 +1139,7 @@ export async function updateOpenHoldReason(projectId: string, reason: string) {
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/board')
   revalidatePath('/dashboard')
+  revalidateProjectsListCache(project.channel)
   return { success: true }
 }
 
