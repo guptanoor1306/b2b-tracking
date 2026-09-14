@@ -121,6 +121,7 @@ export function IpOverviewClient({ stats, period }: Props) {
                   <td className="px-3 py-3">
                     <Link
                       href={`/board?ip=${encodeURIComponent(s.ip)}`}
+                      prefetch={false}
                       className="inline-flex items-center justify-center w-7 h-7 rounded-md text-zinc-400 hover:text-violet-600 hover:bg-violet-50 opacity-0 group-hover:opacity-100 transition-all"
                       title={`View ${s.ip} on board`}
                     >

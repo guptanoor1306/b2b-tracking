@@ -106,7 +106,7 @@ export function ExternalDashboard({
           {statCards.map(s => {
             const Icon = s.icon
             return (
-              <Link key={s.key} href={s.href} className="block group">
+              <Link key={s.key} href={s.href} prefetch={false} className="block group">
                 <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm text-center transition-all group-hover:border-violet-200 group-hover:shadow-md">
                   <div className={`mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl ${s.iconBg}`}>
                     <Icon size={20} />

@@ -76,7 +76,7 @@ export function Sidebar({ showChannelSwitcher = false }: { showChannelSwitcher?:
       {!collapsed && showChannelSwitcher && (
         <Link
           href="/studios"
-          prefetch
+          prefetch={false}
           onClick={() => setPendingHref('/studios')}
           className={cn(
             'relative z-10 mx-2 mt-3 flex min-h-11 items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 active:bg-zinc-200/80',
@@ -97,7 +97,7 @@ export function Sidebar({ showChannelSwitcher = false }: { showChannelSwitcher?:
             <Link
               key={item.href}
               href={item.href}
-              prefetch
+              prefetch={false}
               onClick={() => setPendingHref(item.href)}
               title={collapsed ? item.label : undefined}
               className={linkClass(item.href, active)}
@@ -117,7 +117,7 @@ export function Sidebar({ showChannelSwitcher = false }: { showChannelSwitcher?:
         {profile && (
           <Link
             href="/account"
-            prefetch
+            prefetch={false}
             onClick={() => setPendingHref('/account')}
             title={collapsed ? 'Profile' : undefined}
             className={linkClass('/account', pathname === '/account', 'gap-2 bg-zinc-50 border border-zinc-100 mb-1 hover:bg-zinc-100 active:bg-zinc-200/80')}

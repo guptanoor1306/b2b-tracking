@@ -73,7 +73,7 @@ export function StudiosSidebar({ isSuperAdmin, collapsed, onToggle }: Props) {
             <Link
               key={item.href}
               href={item.href}
-              prefetch
+              prefetch={false}
               onClick={() => setPendingHref(item.href)}
               title={collapsed ? item.label : undefined}
               className={cn(
@@ -100,7 +100,7 @@ export function StudiosSidebar({ isSuperAdmin, collapsed, onToggle }: Props) {
         {!collapsed && profile && !loading && (
           <Link
             href="/studios/account"
-            prefetch
+            prefetch={false}
             onClick={() => setPendingHref('/studios/account')}
             className="block px-2 py-2 rounded-lg bg-zinc-50 border border-zinc-100 mb-1 hover:bg-zinc-100 transition-colors"
           >

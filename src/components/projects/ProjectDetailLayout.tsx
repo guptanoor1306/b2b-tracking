@@ -112,6 +112,7 @@ export function ProjectDetailLayout({
     <div className="theme-v2 min-h-0 max-w-full space-y-4 pb-8 pt-1">
       <Link
         href="/board"
+        prefetch={false}
         className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-violet-600 transition-colors"
       >
         ← Board
