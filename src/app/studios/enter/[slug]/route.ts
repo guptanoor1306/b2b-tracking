@@ -6,7 +6,7 @@ import { fetchUserChannelSlugs } from '@/lib/data/channel-access'
 
 type Params = Promise<{ slug: string }>
 
-/** GET only — sets active channel cookie (login redirect & direct links). Card clicks use enterChannel() action. */
+/** GET only — sets active channel cookie (login redirect & direct links). */
 export async function GET(_request: Request, { params }: { params: Params }) {
   const { slug } = await params
   const profile = await getSessionProfile()

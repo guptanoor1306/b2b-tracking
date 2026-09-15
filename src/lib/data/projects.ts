@@ -121,12 +121,16 @@ export async function fetchProjects(
 ): Promise<Project[]> {
   const channel = channelOverride ?? await getActiveChannelDbName()
   const monthKey = filters.month && !isAllMonths(filters.month) ? filters.month : 'all'
+  const supabase = await createClient()
 
   if (!projectListHasExtraFilters(filters) && canUseDataCache()) {
-    return getCachedProjectsList(channel, monthKey)
+    try {
+      return await getCachedProjectsList(channel, monthKey)
+    } catch (err) {
+      console.error('[fetchProjects] cache read failed, using live query:', err)
+    }
   }
 
-  const supabase = await createClient()
   return fetchProjectsQuery(filters, channel, supabase)
 }
 
