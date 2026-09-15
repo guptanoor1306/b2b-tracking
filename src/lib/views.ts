@@ -81,7 +81,7 @@ export function resolveStageAssigneeId(
     case 'Request Received':
       return project.external_team_member_id ?? editor
     case '1st Cut Review Done':
-      return project.writer_id ?? editor
+      return editor
     case '1st Draft Review Done':
     case '2nd Draft Review Done':
       return editor

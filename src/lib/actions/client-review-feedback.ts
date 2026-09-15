@@ -20,6 +20,7 @@ import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchChannelSuperAdmins } from '@/lib/data/channel-access'
 import { computeProjectHealth } from '@/lib/timelines'
 import { insertStageHistoryRecord } from '@/lib/data/stage-history'
+import { notifyStageActionable } from '@/lib/email/notifications'
 import { Project } from '@/lib/types'
 
 export async function resolveZerodhaStageAssigneeId(
@@ -151,6 +152,15 @@ export async function submitClientReviewFeedback(
       : `Client submitted ${items.length} feedback item(s)`,
     is_hold_event: false,
   })
+
+  const updatedProject = {
+    ...project,
+    current_stage: doneStage,
+    stage_assignee_id: resolvedAssignee,
+    status_health,
+    last_status_update_at: now,
+  } as Project
+  void notifyStageActionable(updatedProject, doneStage, resolvedAssignee).catch(() => {})
 
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/dashboard')
