@@ -141,7 +141,11 @@ export function QuickAddModal({ open, onClose, users, holidays = [] }: Props) {
       external_team_member_id: form.external_team_member_id || null,
       received_date: form.received_date || null,
       picked_up_date: form.received_date || null,
-      target_delivery_date: externalIntake ? (form.target_delivery_date || null) : null,
+      target_delivery_date: externalIntake
+        ? (form.target_delivery_date || null)
+        : isLaSocial
+          ? (form.target_delivery_date.trim() || null)
+          : null,
       drive_link: isLaSocial ? (form.drive_link.trim() || null) : undefined,
     })
 
@@ -209,12 +213,20 @@ export function QuickAddModal({ open, onClose, users, holidays = [] }: Props) {
           ) : null}
         </div>
         {isLaSocial && (
-          <Input
-            label="Brief link (optional)"
-            placeholder="https://..."
-            value={form.drive_link}
-            onChange={e => set('drive_link', e.target.value)}
-          />
+          <>
+            <Input
+              label="Release date (optional)"
+              type="date"
+              value={form.target_delivery_date}
+              onChange={e => set('target_delivery_date', e.target.value)}
+            />
+            <Input
+              label="Brief link (optional)"
+              placeholder="https://..."
+              value={form.drive_link}
+              onChange={e => set('drive_link', e.target.value)}
+            />
+          </>
         )}
         {!isLaSocial && (
           <Select label="Priority" placeholder="Select priority" options={PRIORITIES.map(p => ({ value: p, label: p }))} value={form.priority} onChange={e => set('priority', e.target.value)} />
