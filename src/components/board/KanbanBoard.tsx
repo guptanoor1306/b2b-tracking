@@ -25,11 +25,11 @@ import {
   getIpCardBorderClass,
   getIpAccent,
 } from '@/lib/design/theme-v2'
+import { ProjectCardMeta } from '@/components/projects/ProjectCardMeta'
 import {
   isZerodhaChannelDbName,
   usesExternalIntakeFlow,
   normalizeZerodhaBoardStage,
-  pipelineProgressPercentForChannel,
   isPendingRequestReview,
   isDeclinedRequest,
   isResubmittedRequest,
@@ -77,7 +77,6 @@ function CardContent({
 }) {
   const t = getProjectTimeliness(project, holidays, holdPeriods)
   const target = resolveTargetReleaseDate(project, holidays)
-  const progress = pipelineProgressPercentForChannel(project.current_stage, channelDbName ?? project.channel)
   const delayClass = getTimelinessTextClassV2(t.status)
   const showLanguage = isZerodhaChannelDbName(channelDbName ?? project.channel) && project.video_language
   const deliveredStage = finalStageForChannel(channelDbName ?? project.channel)
@@ -125,26 +124,16 @@ function CardContent({
       )}>
         {project.title}
       </p>
-      <p className="text-xs text-zinc-500 mt-1 truncate font-medium inline-flex items-center gap-1.5 flex-wrap">
-        <span className="inline-flex items-center gap-1.5 min-w-0">
-          <span className={cn('h-2 w-2 shrink-0 rounded-full', getIpAccent(project.ip).bg)} />
-          <span className="truncate">{project.ip}</span>
-        </span>
-        {showLanguage && (
-          <span className="shrink-0 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-            {project.video_language}
-          </span>
-        )}
-      </p>
+      <ProjectCardMeta
+        ip={project.ip}
+        contentType={project.content_type}
+        videoLanguage={project.video_language}
+        showLanguage={Boolean(showLanguage)}
+      />
       {!compact && !hideMetrics && (
-        <div className="mt-3">
-          <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
-            <div
-              className="h-full rounded-full bg-zinc-400 transition-all"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <p className="text-[11px] text-zinc-500 mt-1 font-medium tabular-nums">{progress}% complete</p>
+        <div className="mt-2.5 shrink-0" aria-hidden>
+          <div className="h-1" />
+          <p className="mt-1 text-[10px] leading-none invisible">&nbsp;</p>
         </div>
       )}
       {!compact && (

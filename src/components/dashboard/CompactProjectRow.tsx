@@ -48,7 +48,19 @@ export function CompactProjectRow({
           {project.title}
         </p>
         <p className={cn('text-[11px] mt-0.5 truncate', light ? 'text-zinc-500' : 'text-zinc-600')}>
-          {awaitingReview ? 'Awaiting internal review' : stageText}
+          {awaitingReview ? (
+            'Awaiting internal review'
+          ) : (
+            <>
+              {stageText}
+              {project.content_type?.trim() ? (
+                <>
+                  <span className={light ? 'text-zinc-300' : 'text-zinc-700'}> · </span>
+                  <span className={light ? 'text-zinc-400' : 'text-zinc-500'}>{project.content_type}</span>
+                </>
+              ) : null}
+            </>
+          )}
         </p>
       </div>
       {awaitingReview && light ? (

@@ -15,7 +15,10 @@ export function SimpleProjectCard({ project }: Props) {
           <p className="text-sm font-medium text-zinc-100 truncate group-hover:text-indigo-300 transition-colors">
             {project.title}
           </p>
-          <p className="text-xs text-zinc-600 mt-1 font-mono">{project.content_id} · {project.ip}</p>
+          <p className="text-xs text-zinc-600 mt-1 font-mono truncate">
+            {project.content_id} · {project.ip}
+            {project.content_type?.trim() ? ` · ${project.content_type}` : ''}
+          </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Badge label={project.status_health} variant="health" />
