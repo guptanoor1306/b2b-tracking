@@ -1,10 +1,11 @@
 'use client'
 
-import Link from 'next/link'
+import { useState } from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ChannelStats } from '@/lib/data/channel-stats'
 import { getChannelBySlug } from '@/lib/channels'
+import { EnterChannelCardLink } from '@/components/studios/EnterChannelButton'
 
 type Props = {
   stats: ChannelStats[]
@@ -13,6 +14,8 @@ type Props = {
 }
 
 export function ChannelCardsHub({ stats, accessibleSlugs, profileName }: Props) {
+  const [pendingSlug, setPendingSlug] = useState<string | null>(null)
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-10">
       <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -37,7 +40,12 @@ export function ChannelCardsHub({ stats, accessibleSlugs, profileName }: Props) 
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Your channels</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {stats.map(s => (
-              <ChannelCard key={s.slug} stat={s} />
+              <ChannelCard
+                key={s.slug}
+                stat={s}
+                pendingSlug={pendingSlug}
+                onEnter={setPendingSlug}
+              />
             ))}
           </div>
         </section>
@@ -50,13 +58,22 @@ export function ChannelCardsHub({ stats, accessibleSlugs, profileName }: Props) 
   )
 }
 
-function ChannelCard({ stat }: { stat: ChannelStats }) {
+function ChannelCard({
+  stat,
+  pendingSlug,
+  onEnter,
+}: {
+  stat: ChannelStats
+  pendingSlug: string | null
+  onEnter: (slug: string) => void
+}) {
   const ch = getChannelBySlug(stat.slug)
 
   return (
-    <Link
-      href={`/studios/enter/${stat.slug}`}
-      prefetch={false}
+    <EnterChannelCardLink
+      slug={stat.slug}
+      pendingSlug={pendingSlug}
+      onEnter={onEnter}
       className="relative block w-full overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 text-left shadow-sm transition-all hover:border-zinc-300 hover:shadow-md"
     >
       {ch && (
@@ -91,7 +108,7 @@ function ChannelCard({ stat }: { stat: ChannelStats }) {
         <MiniStat label="Done" value={stat.delivered} accent="text-emerald-600" />
         <MiniStat label="Hold" value={stat.onHold} muted />
       </div>
-    </Link>
+    </EnterChannelCardLink>
   )
 }
 
