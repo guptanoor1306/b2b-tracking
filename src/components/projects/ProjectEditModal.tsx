@@ -171,13 +171,33 @@ export function ProjectEditModal({ open, onClose, project, users }: Props) {
                 <UserSearchSelect label="Editor 2 (optional)" users={users} value={form.editor_2_id} onChange={v => set('editor_2_id', v)} />
               </div>
             </SlideOverSection>
-            <SlideOverSection title="Brief link">
+            <SlideOverSection title="Content links">
               <ProjectLinkField
-                label="Drive link"
+                label="Script link"
                 url={project.drive_link}
                 canEdit
                 onSave={async value => {
                   const result = await updateProject(project.id, { drive_link: value.trim() || null })
+                  if (result.error) throw new Error(result.error)
+                  router.refresh()
+                }}
+              />
+              <ProjectLinkField
+                label="Storyboard / Canva link"
+                url={project.screen_captures_link}
+                canEdit
+                onSave={async value => {
+                  const result = await updateProject(project.id, { screen_captures_link: value.trim() || null })
+                  if (result.error) throw new Error(result.error)
+                  router.refresh()
+                }}
+              />
+              <ProjectLinkField
+                label="Final delivery link"
+                url={project.final_file_link}
+                canEdit
+                onSave={async value => {
+                  const result = await updateProject(project.id, { final_file_link: value.trim() || null })
                   if (result.error) throw new Error(result.error)
                   router.refresh()
                 }}

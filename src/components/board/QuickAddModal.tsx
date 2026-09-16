@@ -221,7 +221,7 @@ export function QuickAddModal({ open, onClose, users, holidays = [] }: Props) {
               onChange={e => set('target_delivery_date', e.target.value)}
             />
             <Input
-              label="Brief link (optional)"
+              label="Script link (optional)"
               placeholder="https://..."
               value={form.drive_link}
               onChange={e => set('drive_link', e.target.value)}

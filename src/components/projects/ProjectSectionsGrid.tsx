@@ -138,7 +138,10 @@ export function ProjectSectionsGrid({
 
   const refresh = () => router.refresh()
 
-  const saveLinkField = async (field: 'assets_link' | 'drive_link' | 'script_link' | 'screen_captures_link' | 'audio_link', value: string) => {
+  const saveLinkField = async (
+    field: 'assets_link' | 'drive_link' | 'script_link' | 'screen_captures_link' | 'audio_link' | 'final_file_link',
+    value: string,
+  ) => {
     await updateProject(project.id, { [field]: value.trim() || null })
     refresh()
   }
@@ -422,12 +425,23 @@ export function ProjectSectionsGrid({
       <div className="grid gap-4 md:grid-cols-2">
         <SectionCard title="Content links">
           <ProjectLinkField
-            label="Drive link"
+            label="Script link"
             url={project.drive_link}
             canEdit={canEditLinks}
             onSave={value => saveLinkField('drive_link', value)}
           />
-          <p className="text-[11px] text-zinc-500 -mt-2">Brief / reference link for the project</p>
+          <ProjectLinkField
+            label="Storyboard / Canva link"
+            url={project.screen_captures_link}
+            canEdit={canEditLinks}
+            onSave={value => saveLinkField('screen_captures_link', value)}
+          />
+          <ProjectLinkField
+            label="Final delivery link"
+            url={project.final_file_link}
+            canEdit={canEditLinks}
+            onSave={value => saveLinkField('final_file_link', value)}
+          />
         </SectionCard>
         <SectionCard
           title="Feedback & Changes"

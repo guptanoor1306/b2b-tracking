@@ -12,6 +12,7 @@ import {
   Home, LayoutDashboard, LogOut, Grid3X3,
   PanelLeftClose, PanelLeft, Settings, UserCircle, Loader2,
 } from 'lucide-react'
+import { useStoredListHref } from '@/lib/useStoredListHref'
 
 const NAV = [
   { href: '/dashboard', label: 'Home', icon: Home, show: () => true },
@@ -39,6 +40,8 @@ export function Sidebar({ showChannelSwitcher = false }: { showChannelSwitcher?:
   }, [pathname])
 
   const visible = NAV.filter(n => n.show(channelRole, profile?.role))
+  const boardHref = useStoredListHref('/board')
+  const dashboardHref = useStoredListHref('/dashboard')
 
   const linkClass = (href: string, active: boolean, extra?: string) => cn(
     'relative z-10 flex min-h-11 items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors active:bg-zinc-100',
@@ -91,12 +94,16 @@ export function Sidebar({ showChannelSwitcher = false }: { showChannelSwitcher?:
       <nav className="flex-1 px-2 py-4 space-y-0.5">
         {visible.map(item => {
           const Icon = item.icon
+          const href =
+            item.href === '/board' ? boardHref
+            : item.href === '/dashboard' ? dashboardHref
+            : item.href
           const active = pathname === item.href || pathname.startsWith(item.href + '/')
           const pending = pendingHref === item.href
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={href}
               prefetch={false}
               onClick={() => setPendingHref(item.href)}
               title={collapsed ? item.label : undefined}

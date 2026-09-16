@@ -7,6 +7,7 @@ import {
   businessHoursBetween,
   businessHoursBetweenExcluding,
   isBusinessDay,
+  WORK_HOURS_PER_DAY,
 } from '@/lib/businessTime'
 import {
   StageSlaRow,
@@ -257,17 +258,17 @@ export function resolveTargetReleaseDate(
 
 export function formatSlaDuration(hours: number): string {
   if (hours < 1) return `${Math.round(hours * 60)}m`
-  if (hours < 24) return hours === 1 ? '1h' : `${hours % 1 === 0 ? hours : hours.toFixed(1)}h`
-  const days = hours / 24
+  if (hours < WORK_HOURS_PER_DAY) return hours === 1 ? '1h' : `${hours % 1 === 0 ? hours : hours.toFixed(1)}h`
+  const days = hours / WORK_HOURS_PER_DAY
   return days === 1 ? '1d' : `${days % 1 === 0 ? days : days.toFixed(1)}d`
 }
 
 function formatOverrun(hours: number): string {
-  if (hours < 24) {
+  if (hours < WORK_HOURS_PER_DAY) {
     const h = Math.round(hours * 10) / 10
     return `${h}h over`
   }
-  const days = Math.round((hours / 24) * 10) / 10
+  const days = Math.round((hours / WORK_HOURS_PER_DAY) * 10) / 10
   return `${days}d over`
 }
 

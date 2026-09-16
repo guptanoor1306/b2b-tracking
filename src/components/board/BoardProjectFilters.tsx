@@ -6,6 +6,8 @@ import { ChevronDown, Filter } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatCsvFilter, parseCsvFilter, toggleCsvFilterValue } from '@/lib/board-filters'
 import { getIpAccent } from '@/lib/design/theme-v2'
+import { saveListQuery } from '@/lib/list-query-session'
+import { useActiveChannel } from '@/context/ChannelContext'
 
 type Props = {
   ips: string[]
@@ -56,6 +58,7 @@ function FilterGroup({ title, options, selected, onToggle, renderOption }: Filte
 export function BoardProjectFilters({ ips, languages = [], types }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const channelSlug = useActiveChannel()?.slug ?? ''
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -85,7 +88,9 @@ export function BoardProjectFilters({ ips, languages = [], types }: Props) {
     params.delete('ip')
     params.delete('language')
     params.delete('content_type')
-    router.push(`/board?${params.toString()}`)
+    const qs = params.toString()
+    if (channelSlug) saveListQuery('/board', channelSlug, qs)
+    router.push(qs ? `/board?${qs}` : '/board')
     setOpen(false)
   }
 

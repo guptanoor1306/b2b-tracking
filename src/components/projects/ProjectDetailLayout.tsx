@@ -24,6 +24,7 @@ import { Pencil } from 'lucide-react'
 import { useState } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { useStoredListHref } from '@/lib/useStoredListHref'
 
 type Props = {
   project: Project
@@ -108,10 +109,12 @@ export function ProjectDetailLayout({
     </section>
   )
 
+  const boardHref = useStoredListHref('/board')
+
   return (
     <div className="theme-v2 min-h-0 max-w-full space-y-4 pb-8 pt-1">
       <Link
-        href="/board"
+        href={boardHref}
         prefetch={false}
         className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-violet-600 transition-colors"
       >

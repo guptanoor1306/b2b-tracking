@@ -221,11 +221,17 @@ export function isTimestampInMonth(dateStr: string, month: string): boolean {
   return isValid(d) && d >= start && d <= end
 }
 
+function formatDurationHours(hours: number): string {
+  const rounded = Math.round(hours * 10) / 10
+  const text = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
+  return `${text}h`
+}
+
 export function formatDuration(days: number, hours: number): string {
   if (days === 0 && hours === 0) return '< 1 hour'
-  if (days === 0) return `${hours}h`
+  if (days === 0) return formatDurationHours(hours)
   if (hours === 0) return `${days}d`
-  return `${days}d ${hours}h`
+  return `${days}d ${formatDurationHours(hours)}`
 }
 
 export function sumDurations(durations: Pick<StageDuration, 'days' | 'hours'>[]): { days: number; hours: number } {

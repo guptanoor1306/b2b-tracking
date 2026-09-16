@@ -10,6 +10,7 @@ import { Topbar } from './Topbar'
 import { StudioChannel } from '@/lib/channels'
 import { ChannelMemberRole, Profile } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { ListQuerySync } from '@/components/navigation/ListQuerySync'
 
 function MainColumn({ children }: { children: ReactNode }) {
   const { collapsed } = useSidebar()
@@ -55,6 +56,7 @@ export function AppShell({
     <ChannelProvider channel={activeChannel} channelRole={channelRole}>
       <ServerProfileSync profile={serverProfile} />
       <SidebarProvider>
+        <ListQuerySync />
         <div className="min-h-screen min-w-0 bg-zinc-100">
           <Sidebar showChannelSwitcher={showChannelSwitcher} />
           <MainColumn>{children}</MainColumn>
