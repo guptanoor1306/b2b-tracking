@@ -1,18 +1,32 @@
-/** Shared external-intake pipeline (Zerodha Online, Cash & Copium, …). */
+/** Shared external-intake pipeline (Zerodha Online, Cash & Copium, Beyond Zerodha, …). */
 
 export const CASH_AND_COPIUM_CHANNEL_DB_NAME = 'Cash & Copium'
 export const CASH_AND_COPIUM_CHANNEL_SLUG = 'cash-and-copium'
+
+export const BEYOND_ZERODHA_CHANNEL_DB_NAME = 'Beyond Zerodha'
+export const BEYOND_ZERODHA_CHANNEL_SLUG = 'beyond-zerodha'
 
 export const CASH_AND_COPIUM_CONTENT_TYPES = ['Long-Form', 'Reel'] as const
 
 export type ReelTimestampPair = { start: string; end: string }
 
+const CASH_COPIUM_STYLE_DB_NAMES = new Set<string>([
+  CASH_AND_COPIUM_CHANNEL_DB_NAME,
+  BEYOND_ZERODHA_CHANNEL_DB_NAME,
+])
+
+const CASH_COPIUM_STYLE_SLUGS = new Set<string>([
+  CASH_AND_COPIUM_CHANNEL_SLUG,
+  BEYOND_ZERODHA_CHANNEL_SLUG,
+])
+
+/** Same pipeline, SLAs, and intake UX as Cash & Copium. */
 export function isCashAndCopiumChannelDbName(channel: string | null | undefined): boolean {
-  return channel === CASH_AND_COPIUM_CHANNEL_DB_NAME
+  return !!channel && CASH_COPIUM_STYLE_DB_NAMES.has(channel)
 }
 
 export function isCashAndCopiumChannelSlug(slug: string | null | undefined): boolean {
-  return slug === CASH_AND_COPIUM_CHANNEL_SLUG
+  return !!slug && CASH_COPIUM_STYLE_SLUGS.has(slug)
 }
 
 export function usesExternalIntakeFlow(channel: string | null | undefined): boolean {
@@ -21,7 +35,8 @@ export function usesExternalIntakeFlow(channel: string | null | undefined): bool
 
 export function externalIntakeChannelSlug(channelDbName: string | null | undefined): string | null {
   if (channelDbName === 'Zerodha Online') return 'zerodha-online'
-  if (isCashAndCopiumChannelDbName(channelDbName)) return CASH_AND_COPIUM_CHANNEL_SLUG
+  if (channelDbName === BEYOND_ZERODHA_CHANNEL_DB_NAME) return BEYOND_ZERODHA_CHANNEL_SLUG
+  if (channelDbName === CASH_AND_COPIUM_CHANNEL_DB_NAME) return CASH_AND_COPIUM_CHANNEL_SLUG
   return null
 }
 

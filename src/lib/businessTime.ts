@@ -1,20 +1,32 @@
 import {
   addDays,
+  addHours,
   addMinutes,
+  differenceInHours,
   differenceInMinutes,
+  endOfDay,
   format,
   isValid,
   parseISO,
   startOfDay,
 } from 'date-fns'
 
-/** Office window for SLA / delay math (IST): 10:30–18:30 → 8h per business day. */
+export type BusinessHoursMode = 'calendar' | 'work'
+
+/** Full business-day hours (legacy SLA math for Varsity, Zerodha, Cash & Copium, …). */
+export const CALENDAR_HOURS_PER_DAY = 24
+/** Office window for LA Social (IST): 10:30–18:30. */
 export const WORK_HOURS_PER_DAY = 8
+
 const WORK_TZ = 'Asia/Kolkata'
 const WORK_START_H = 10
 const WORK_START_M = 30
 const WORK_END_H = 18
 const WORK_END_M = 30
+
+export function hoursPerBusinessDay(mode: BusinessHoursMode): number {
+  return mode === 'work' ? WORK_HOURS_PER_DAY : CALENDAR_HOURS_PER_DAY
+}
 
 export function toDateKey(d: Date): string {
   return format(d, 'yyyy-MM-dd')
@@ -31,6 +43,14 @@ export function isHoliday(d: Date, holidays: Set<string>): boolean {
 
 export function isBusinessDay(d: Date, holidays: Set<string>): boolean {
   return !isWeekend(d) && !isHoliday(d, holidays)
+}
+
+function nextBusinessDayStart(d: Date, holidays: Set<string>): Date {
+  let cur = startOfDay(addDays(d, 1))
+  while (!isBusinessDay(cur, holidays)) {
+    cur = addDays(cur, 1)
+  }
+  return cur
 }
 
 function pad2(n: number): string {
@@ -117,8 +137,28 @@ function advanceToWorkTime(cursor: Date, holidays: Set<string>): Date {
   return cur
 }
 
-export function addBusinessHours(start: Date, hours: number, holidays: string[] = []): Date {
-  const holidaySet = new Set(holidays)
+function addBusinessHoursCalendar(start: Date, hours: number, holidaySet: Set<string>): Date {
+  let cur = new Date(start)
+  let remaining = hours
+
+  while (remaining > 0) {
+    if (!isBusinessDay(cur, holidaySet)) {
+      cur = nextBusinessDayStart(cur, holidaySet)
+      continue
+    }
+    const dayEnd = endOfDay(cur)
+    const available = Math.max(0, differenceInHours(dayEnd, cur))
+    if (remaining <= available) {
+      return addHours(cur, remaining)
+    }
+    remaining -= available
+    cur = nextBusinessDayStart(cur, holidaySet)
+  }
+
+  return cur
+}
+
+function addBusinessHoursWork(start: Date, hours: number, holidaySet: Set<string>): Date {
   let cur = advanceToWorkTime(new Date(start), holidaySet)
   let remaining = hours
 
@@ -140,8 +180,38 @@ export function addBusinessHours(start: Date, hours: number, holidays: string[] 
   return cur
 }
 
-export function businessHoursBetween(start: Date, end: Date, holidays: string[] = []): number {
+export function addBusinessHours(
+  start: Date,
+  hours: number,
+  holidays: string[] = [],
+  mode: BusinessHoursMode = 'calendar',
+): Date {
   const holidaySet = new Set(holidays)
+  return mode === 'work'
+    ? addBusinessHoursWork(start, hours, holidaySet)
+    : addBusinessHoursCalendar(start, hours, holidaySet)
+}
+
+function businessHoursBetweenCalendar(start: Date, end: Date, holidaySet: Set<string>): number {
+  if (end <= start) return 0
+
+  let total = 0
+  let cur = new Date(start)
+
+  while (cur < end) {
+    if (!isBusinessDay(cur, holidaySet)) {
+      cur = nextBusinessDayStart(cur, holidaySet)
+      continue
+    }
+    const segmentEnd = end < endOfDay(cur) ? end : endOfDay(cur)
+    total += differenceInHours(segmentEnd, cur)
+    cur = nextBusinessDayStart(cur, holidaySet)
+  }
+
+  return total
+}
+
+function businessHoursBetweenWork(start: Date, end: Date, holidaySet: Set<string>): number {
   if (end <= start) return 0
 
   let total = 0
@@ -166,6 +236,18 @@ export function businessHoursBetween(start: Date, end: Date, holidays: string[] 
   return total
 }
 
+export function businessHoursBetween(
+  start: Date,
+  end: Date,
+  holidays: string[] = [],
+  mode: BusinessHoursMode = 'calendar',
+): number {
+  const holidaySet = new Set(holidays)
+  return mode === 'work'
+    ? businessHoursBetweenWork(start, end, holidaySet)
+    : businessHoursBetweenCalendar(start, end, holidaySet)
+}
+
 type ExcludePeriod = { start: Date; end: Date }
 
 /** Business hours between two dates, excluding hold/pause periods */
@@ -173,10 +255,11 @@ export function businessHoursBetweenExcluding(
   start: Date,
   end: Date,
   holidays: string[] = [],
-  exclude: ExcludePeriod[] = []
+  exclude: ExcludePeriod[] = [],
+  mode: BusinessHoursMode = 'calendar',
 ): number {
   if (end <= start) return 0
-  if (!exclude.length) return businessHoursBetween(start, end, holidays)
+  if (!exclude.length) return businessHoursBetween(start, end, holidays, mode)
 
   const sorted = [...exclude]
     .filter(p => p.end > p.start)
@@ -202,10 +285,10 @@ export function businessHoursBetweenExcluding(
     }
     if (cursor >= end) break
     if (segmentEnd > cursor) {
-      total += businessHoursBetween(cursor, segmentEnd, holidays)
+      total += businessHoursBetween(cursor, segmentEnd, holidays, mode)
       cursor = segmentEnd
     } else {
-      cursor = addMinutes(cursor, 1)
+      cursor = mode === 'work' ? addMinutes(cursor, 1) : addHours(cursor, 1)
     }
   }
 
@@ -278,8 +361,12 @@ export function businessDaysLateExcluding(
   return Math.max(0, baseLate - holdDays)
 }
 
-export function splitBusinessHours(totalHours: number): { days: number; hours: number } {
-  return { days: Math.floor(totalHours / WORK_HOURS_PER_DAY), hours: totalHours % WORK_HOURS_PER_DAY }
+export function splitBusinessHours(
+  totalHours: number,
+  mode: BusinessHoursMode = 'calendar',
+): { days: number; hours: number } {
+  const dayLen = hoursPerBusinessDay(mode)
+  return { days: Math.floor(totalHours / dayLen), hours: totalHours % dayLen }
 }
 
 function formatHoursOneDecimal(hours: number): string {
@@ -288,11 +375,12 @@ function formatHoursOneDecimal(hours: number): string {
   return `${text}h`
 }
 
-export function formatBusinessWaiting(hours: number): string {
+export function formatBusinessWaiting(hours: number, mode: BusinessHoursMode = 'calendar'): string {
+  const dayLen = hoursPerBusinessDay(mode)
   if (hours < 1) return '< 1h'
-  if (hours < WORK_HOURS_PER_DAY) return formatHoursOneDecimal(hours)
-  const days = Math.floor(hours / WORK_HOURS_PER_DAY)
-  const rem = Math.round((hours % WORK_HOURS_PER_DAY) * 10) / 10
+  if (hours < dayLen) return formatHoursOneDecimal(hours)
+  const days = Math.floor(hours / dayLen)
+  const rem = Math.round((hours % dayLen) * 10) / 10
   if (rem === 0) return `${days}d`
   return `${days}d ${formatHoursOneDecimal(rem)}`
 }

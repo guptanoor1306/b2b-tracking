@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/server'
 import { DEFAULT_STAGE_SLA } from '@/lib/stage-sla'
 import { usesExternalIntakeFlow } from '@/lib/zerodha-sla'
 import { isLaSocialChannelDbName, DEFAULT_LA_SOCIAL_STAGE_SLA } from '@/lib/la-social-sla'
+import { isCashAndCopiumChannelSlug } from '@/lib/external-intake-flow'
+import { DEFAULT_CASH_COPIUM_STAGE_SLA } from '@/lib/cash-and-copium-sla'
 import { stageSlaCacheTag } from '@/lib/cache-tags'
 import { recalculateActiveProjectTargets } from '@/lib/recalculate-project-targets'
 
@@ -36,7 +38,9 @@ async function ensureChannelStageSlaSeeded(
 
   const defaults = isLaSocialChannelDbName(channelDbName)
     ? DEFAULT_LA_SOCIAL_STAGE_SLA
-    : null
+    : isCashAndCopiumChannelSlug(channelSlug)
+      ? DEFAULT_CASH_COPIUM_STAGE_SLA
+      : null
 
   if (!defaults) return {}
 

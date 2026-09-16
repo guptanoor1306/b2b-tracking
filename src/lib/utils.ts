@@ -3,7 +3,8 @@ import { twMerge } from 'tailwind-merge'
 import { differenceInDays, differenceInHours, format, parseISO, isValid, startOfMonth, endOfMonth } from 'date-fns'
 import { StageHistory, HoldPeriod } from '@/lib/types'
 import { FINAL_STAGE } from '@/lib/constants'
-import { businessHoursBetween, businessHoursBetweenExcluding, splitBusinessHours } from '@/lib/businessTime'
+import { businessHoursBetweenExcluding, splitBusinessHours } from '@/lib/businessTime'
+import { businessHoursModeForChannel } from '@/lib/sla-timing-mode'
 import { effectiveStageStartIso } from '@/lib/pipeline-parallel'
 
 export function cn(...inputs: ClassValue[]) {
@@ -175,18 +176,24 @@ export function stageHistoryEntries(history: StageHistory[]): StageHistory[] {
     .sort((a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime())
 }
 
-export function computeStageDurations(history: StageHistory[], holidays: string[] = [], holdPeriods: HoldPeriod[] = []): StageDuration[] {
+export function computeStageDurations(
+  history: StageHistory[],
+  holidays: string[] = [],
+  holdPeriods: HoldPeriod[] = [],
+  channel?: string | null,
+): StageDuration[] {
   const sorted = stageHistoryEntries(history)
   const exclude = holdPeriods.map(p => ({
     start: parseISO(p.started_at),
     end: p.ended_at ? parseISO(p.ended_at) : new Date(),
   }))
+  const mode = businessHoursModeForChannel(channel)
   return sorted.map((item, i) => {
     const startedAt = effectiveStageStartIso(sorted, item)
     const start = parseISO(startedAt)
     const end = sorted[i + 1] ? parseISO(sorted[i + 1].changed_at) : new Date()
-    const totalHours = businessHoursBetweenExcluding(start, end, holidays, exclude)
-    const { days, hours } = splitBusinessHours(totalHours)
+    const totalHours = businessHoursBetweenExcluding(start, end, holidays, exclude, mode)
+    const { days, hours } = splitBusinessHours(totalHours, mode)
     return {
       stage: item.new_stage,
       startedAt,

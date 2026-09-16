@@ -65,6 +65,18 @@ export const STUDIOS_CHANNELS: StudioChannel[] = [
     pillBg: 'bg-sky-600',
   },
   {
+    slug: 'beyond-zerodha',
+    name: 'Beyond Zerodha',
+    dbName: 'Beyond Zerodha',
+    tagline: 'External intake — same flow as Cash & Copium',
+    initial: 'BZ',
+    gradientFrom: 'from-lime-500',
+    gradientTo: 'to-green-600',
+    accent: 'text-lime-700',
+    ring: 'ring-lime-200',
+    pillBg: 'bg-lime-600',
+  },
+  {
     slug: 'rohit',
     name: 'Rohit',
     dbName: 'Rohit',

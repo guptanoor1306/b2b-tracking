@@ -88,6 +88,7 @@ export function computeTimelineMetrics(
       history,
       holidays,
       holdPeriodsByProjectId[project.id] ?? [],
+      project.channel,
     )
 
     for (const duration of durations) {

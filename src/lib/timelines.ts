@@ -4,11 +4,12 @@ import {
   addBusinessHours,
   businessDaysLate,
   businessDaysLateExcluding,
-  businessHoursBetween,
   businessHoursBetweenExcluding,
+  hoursPerBusinessDay,
   isBusinessDay,
-  WORK_HOURS_PER_DAY,
+  type BusinessHoursMode,
 } from '@/lib/businessTime'
+import { businessHoursModeForChannel } from '@/lib/sla-timing-mode'
 import {
   StageSlaRow,
   ProjectTeamContext,
@@ -233,7 +234,8 @@ export function computeTargetReleaseDate(
   if (!startDate) return null
   const start = parseISO(startDate)
   if (!isValid(start)) return null
-  return addBusinessHours(start, totalPipelineHours(level, project, channelDbName), holidays)
+  const mode = businessHoursModeForChannel(channelDbName ?? project?.channel)
+  return addBusinessHours(start, totalPipelineHours(level, project, channelDbName), holidays, mode)
 }
 
 export function computeTargetReleaseDateString(
@@ -256,19 +258,21 @@ export function resolveTargetReleaseDate(
   return project.target_delivery_date ?? null
 }
 
-export function formatSlaDuration(hours: number): string {
+export function formatSlaDuration(hours: number, mode: BusinessHoursMode = 'calendar'): string {
+  const dayLen = hoursPerBusinessDay(mode)
   if (hours < 1) return `${Math.round(hours * 60)}m`
-  if (hours < WORK_HOURS_PER_DAY) return hours === 1 ? '1h' : `${hours % 1 === 0 ? hours : hours.toFixed(1)}h`
-  const days = hours / WORK_HOURS_PER_DAY
+  if (hours < dayLen) return hours === 1 ? '1h' : `${hours % 1 === 0 ? hours : hours.toFixed(1)}h`
+  const days = hours / dayLen
   return days === 1 ? '1d' : `${days % 1 === 0 ? days : days.toFixed(1)}d`
 }
 
-function formatOverrun(hours: number): string {
-  if (hours < WORK_HOURS_PER_DAY) {
+function formatOverrun(hours: number, mode: BusinessHoursMode): string {
+  const dayLen = hoursPerBusinessDay(mode)
+  if (hours < dayLen) {
     const h = Math.round(hours * 10) / 10
     return `${h}h over`
   }
-  const days = Math.round((hours / WORK_HOURS_PER_DAY) * 10) / 10
+  const days = Math.round((hours / dayLen) * 10) / 10
   return `${days}d over`
 }
 
@@ -355,12 +359,15 @@ export function getProjectTimeliness(
     end: p.ended_at ? parseISO(p.ended_at) : new Date(),
   }))
 
+  const hoursMode = businessHoursModeForChannel(project.channel)
+
   const hoursInStage = project.last_status_update_at
     ? businessHoursBetweenExcluding(
         parseISO(project.last_status_update_at),
         new Date(),
         holidays,
-        exclude
+        exclude,
+        hoursMode,
       )
     : 0
   const sla = slaMap[stage] ?? null
@@ -372,7 +379,7 @@ export function getProjectTimeliness(
 
   let label: string
   if (stageOverHours > 0) {
-    label = formatOverrun(stageOverHours)
+    label = formatOverrun(stageOverHours, hoursMode)
   } else if (overallLateDays > 0) {
     label = `${overallLateDays}d late`
   } else {
@@ -455,7 +462,8 @@ export function isStageDurationOverSla(
       start: parseISO(p.started_at),
       end: p.ended_at ? parseISO(p.ended_at) : new Date(),
     }))
-    return businessHoursBetweenExcluding(parseISO(startedAt), end, holidays, exclude)
+    const mode = businessHoursModeForChannel(channel)
+    return businessHoursBetweenExcluding(parseISO(startedAt), end, holidays, exclude, mode)
   })()
   return elapsed > sla
 }

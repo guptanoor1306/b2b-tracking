@@ -9,6 +9,7 @@ import { CheckCircle2 } from 'lucide-react'
 import { StageHistory, HoldPeriod, Project } from '@/lib/types'
 import { computeStageDurations, formatDuration, daysInStage, stageHistoryEntries } from '@/lib/utils'
 import { businessHoursBetween, businessHoursBetweenExcluding, splitBusinessHours } from '@/lib/businessTime'
+import { businessHoursModeForChannel } from '@/lib/sla-timing-mode'
 import {
   effectiveStageStartIso,
   shouldShowParallelAnimationRow,
@@ -225,11 +226,13 @@ function segmentWidthPct(segStart: Date, segEnd: Date, barStart: Date, barEnd: D
 function segmentDurationLabel(
   seg: { type: 'active' | 'hold'; start: Date; end: Date },
   holidays: string[],
+  channel: string | null | undefined,
 ): string {
+  const mode = businessHoursModeForChannel(channel)
   const hours = seg.type === 'hold'
-    ? businessHoursBetween(seg.start, seg.end, holidays)
-    : businessHoursBetweenExcluding(seg.start, seg.end, holidays, [])
-  const { days, hours: rem } = splitBusinessHours(hours)
+    ? businessHoursBetween(seg.start, seg.end, holidays, mode)
+    : businessHoursBetweenExcluding(seg.start, seg.end, holidays, [], mode)
+  const { days, hours: rem } = splitBusinessHours(hours, mode)
   return formatDuration(days, rem)
 }
 
@@ -240,6 +243,7 @@ function GanttBar({
   totalDays,
   holdPeriods,
   holidays,
+  channelDbName,
   onSaveStart,
   onSaveEnd,
 }: {
@@ -249,6 +253,7 @@ function GanttBar({
   totalDays: number
   holdPeriods: HoldPeriod[]
   holidays: string[]
+  channelDbName?: string | null
   onSaveStart: (dateStr: string) => void
   onSaveEnd: (dateStr: string) => void
 }) {
@@ -351,7 +356,7 @@ function GanttBar({
         <div className="absolute inset-0 flex overflow-hidden rounded-[3px]">
           {segments.map((seg, si) => {
             const wPct = segmentWidthPct(seg.start, seg.end, displayStart, displayEnd)
-            const segLabel = segmentDurationLabel(seg, holidays)
+            const segLabel = segmentDurationLabel(seg, holidays, channelDbName)
             return (
               <div
                 key={si}
@@ -492,7 +497,7 @@ export function StagePipelineGantt({
     [holdPeriods, timelineHistory, project],
   )
 
-  const durations = computeStageDurations(timelineHistory, holidays, effectiveHoldPeriods)
+  const durations = computeStageDurations(timelineHistory, holidays, effectiveHoldPeriods, project.channel)
 
   const stageAssigneeMap = useMemo(() => {
     const map = new Map<string, { name: string; id?: string }>()
@@ -582,13 +587,15 @@ export function StagePipelineGantt({
             start: parseISO(p.started_at),
             end: p.ended_at ? parseISO(p.ended_at) : new Date(),
           }))
+          const hoursMode = businessHoursModeForChannel(channel)
           const animHours = businessHoursBetweenExcluding(
             parseISO(animStartIso),
             parseISO(animEndIso),
             holidays,
-            exclude
+            exclude,
+            hoursMode,
           )
-          const { days: animDays, hours: animHoursPart } = splitBusinessHours(animHours)
+          const { days: animDays, hours: animHoursPart } = splitBusinessHours(animHours, hoursMode)
 
           built.push({
             key: `${entry.id}-parallel-animation`,
@@ -801,6 +808,7 @@ export function StagePipelineGantt({
               totalDays={totalDays}
               holdPeriods={effectiveHoldPeriods}
               holidays={holidays}
+              channelDbName={channel}
               onSaveStart={d => saveDate(row.entryId, d)}
               onSaveEnd={d => row.endEntryId && saveDate(row.endEntryId, d)}
             />

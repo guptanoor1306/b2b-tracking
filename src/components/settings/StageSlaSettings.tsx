@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { formatDate, cn } from '@/lib/utils'
 import { formatSlaDuration } from '@/lib/timelines'
+import { businessHoursModeForChannel } from '@/lib/sla-timing-mode'
 import { SettingsPanel, SettingsCard } from '@/components/settings/SettingsLayout'
 import { usesExternalIntakeFlow, ZERODHA_LEVEL_LABELS, isCashAndCopiumChannelDbName, CASH_COPIUM_LEVEL_LABELS } from '@/lib/zerodha-sla'
 import { isLaSocialChannelDbName, LA_SOCIAL_TYPE_SLA_COLUMNS } from '@/lib/la-social-sla'
@@ -41,15 +42,16 @@ const VARSITY_LEVEL_COLUMNS: { key: LevelKey; label: string }[] = [
   { key: 'level_3_hours', label: 'L3' },
 ]
 
-function levelCell(row: StageSlaRow, key: LevelKey) {
+function levelCell(row: StageSlaRow, key: LevelKey, mode: ReturnType<typeof businessHoursModeForChannel>) {
   const value = row[key]
-  return value != null ? formatSlaDuration(value) : '—'
+  return value != null ? formatSlaDuration(value, mode) : '—'
 }
 
 export function StageSlaSettings({ rows, activity, channelDbName }: Props) {
   const router = useRouter()
   const isCashCopium = isCashAndCopiumChannelDbName(channelDbName)
   const isLaSocial = isLaSocialChannelDbName(channelDbName)
+  const slaDurationMode = businessHoursModeForChannel(channelDbName)
   const externalIntake = usesExternalIntakeFlow(channelDbName)
   const channelScopedSla = externalIntake || isLaSocial
   const levelColumns = isLaSocial
@@ -93,7 +95,7 @@ export function StageSlaSettings({ rows, activity, channelDbName }: Props) {
   const description = isLaSocial
     ? 'LA Social SLAs by content type (Reel, Static, Carousel, LinkedIn). Default follows Reel hours; per-type columns override when set.'
     : isCashCopium
-      ? 'Cash & Copium SLAs by content type (Long-Form and Reel). Shared stages use the default column; type-specific hours appear in Long-Form / Reel.'
+      ? 'SLAs by content type (Long-Form and Reel). Shared stages use the default column; type-specific hours appear in Long-Form / Reel.'
       : externalIntake
         ? 'Zerodha Online SLAs. Early and late steps are shared across levels; Storyboard through Animation vary by level (Graphics & Animation run in parallel). Hindi projects use the same level options and SLAs as English.'
         : 'Set SLA hours per pipeline stage. Changes apply to active in-pipeline projects and all new projects. Delivered projects keep their original target dates.'
@@ -186,7 +188,7 @@ export function StageSlaSettings({ rows, activity, channelDbName }: Props) {
                       {isEdit ? (
                         <Input value={form.duration_hours} onChange={e => setForm(f => ({ ...f, duration_hours: e.target.value }))} className="h-8 w-20 text-sm" />
                       ) : (
-                        <span className="tabular-nums text-zinc-800">{formatSlaDuration(row.duration_hours)}</span>
+                        <span className="tabular-nums text-zinc-800">{formatSlaDuration(row.duration_hours, slaDurationMode)}</span>
                       )}
                     </td>
                     {levelColumns.map(col => (
@@ -199,7 +201,7 @@ export function StageSlaSettings({ rows, activity, channelDbName }: Props) {
                             placeholder="—"
                           />
                         ) : (
-                          <span className="tabular-nums text-zinc-500">{levelCell(row, col.key)}</span>
+                          <span className="tabular-nums text-zinc-500">{levelCell(row, col.key, slaDurationMode)}</span>
                         )}
                       </td>
                     ))}

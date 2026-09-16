@@ -28,6 +28,8 @@ export {
   isCashAndCopiumChannelSlug,
   CASH_AND_COPIUM_CHANNEL_DB_NAME,
   CASH_AND_COPIUM_CHANNEL_SLUG,
+  BEYOND_ZERODHA_CHANNEL_DB_NAME,
+  BEYOND_ZERODHA_CHANNEL_SLUG,
   CASH_AND_COPIUM_CONTENT_TYPES,
   externalIntakeChannelSlug,
   requiresIntroTimelineOnFirstCutReview,
