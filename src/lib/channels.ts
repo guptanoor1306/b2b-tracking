@@ -65,11 +65,11 @@ export const STUDIOS_CHANNELS: StudioChannel[] = [
     pillBg: 'bg-sky-600',
   },
   {
-    slug: 'beyond-zerodha',
-    name: 'Beyond Zerodha',
-    dbName: 'Beyond Zerodha',
+    slug: 'zerodha-backoffice',
+    name: 'Zerodha Backoffice',
+    dbName: 'Zerodha Backoffice',
     tagline: 'External intake — same flow as Cash & Copium',
-    initial: 'BZ',
+    initial: 'ZB',
     gradientFrom: 'from-lime-500',
     gradientTo: 'to-green-600',
     accent: 'text-lime-700',
@@ -162,12 +162,19 @@ export function liveStudiosChannels(): StudioChannel[] {
 
 export const ACTIVE_CHANNEL_COOKIE = 'active_channel'
 
+/** Old slug before rename to Zerodha Backoffice */
+const LEGACY_CHANNEL_SLUG_ALIASES: Record<string, string> = {
+  'beyond-zerodha': 'zerodha-backoffice',
+}
+
 export function getChannelBySlug(slug: string): StudioChannel | undefined {
-  return STUDIOS_CHANNELS.find(c => c.slug === slug)
+  const resolved = LEGACY_CHANNEL_SLUG_ALIASES[slug] ?? slug
+  return STUDIOS_CHANNELS.find(c => c.slug === resolved)
 }
 
 export function getChannelByDbName(dbName: string): StudioChannel | undefined {
-  return STUDIOS_CHANNELS.find(c => c.dbName === dbName)
+  const resolved = dbName === 'Beyond Zerodha' ? 'Zerodha Backoffice' : dbName
+  return STUDIOS_CHANNELS.find(c => c.dbName === resolved)
 }
 
 export function slugToDbName(slug: string): string | null {
