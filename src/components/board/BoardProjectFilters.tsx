@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronDown, Filter } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { formatCsvFilter, parseCsvFilter, toggleCsvFilterValue } from '@/lib/board-filters'
+import { formatCsvFilter, listPathWithQuery, parseCsvFilter, toggleCsvFilterValue } from '@/lib/board-filters'
 import { getIpAccent } from '@/lib/design/theme-v2'
 import { saveListQuery } from '@/lib/list-query-session'
 import { useActiveChannel } from '@/context/ChannelContext'
@@ -80,7 +80,9 @@ export function BoardProjectFilters({ ips, languages = [], types }: Props) {
     apply('ip', next.ip)
     apply('language', next.language)
     apply('content_type', next.content_type)
-    router.push(`/board?${params.toString()}`)
+    const qs = params.toString()
+    if (channelSlug) saveListQuery('/board', channelSlug, qs)
+    router.push(listPathWithQuery('/board', params))
   }
 
   const clearAll = () => {
@@ -90,7 +92,7 @@ export function BoardProjectFilters({ ips, languages = [], types }: Props) {
     params.delete('content_type')
     const qs = params.toString()
     if (channelSlug) saveListQuery('/board', channelSlug, qs)
-    router.push(qs ? `/board?${qs}` : '/board')
+    router.push(listPathWithQuery('/board', params))
     setOpen(false)
   }
 
