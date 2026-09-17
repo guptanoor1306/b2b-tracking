@@ -81,13 +81,10 @@ export async function requireChannelAdmin(): Promise<{
   return { profile, channel, channelRole: channelRole ?? 'Channel Admin' }
 }
 
-/** Returns next navigation target after sign-in (sets channel cookie when user has one channel). */
+/** Returns next navigation target after sign-in (single-channel users go via enter route to set cookie). */
 export async function resolvePostAuthDestination(profile: Pick<Profile, 'id' | 'role'>): Promise<string> {
   const allowed = await fetchUserChannelSlugs(profile)
   if (allowed.length === 0) return '/studios'
-  if (allowed.length === 1) {
-    await setActiveChannelCookie(allowed[0])
-    return '/dashboard'
-  }
+  if (allowed.length === 1) return `/studios/enter/${allowed[0]}`
   return '/studios'
 }
