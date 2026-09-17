@@ -31,18 +31,45 @@ const PALETTE_LIGHT = [
 type Props = {
   name: string
   id?: string
-  size?: 'sm' | 'md'
+  avatarUrl?: string | null
+  size?: 'sm' | 'md' | 'lg'
   active?: boolean
   theme?: 'dark' | 'light'
   className?: string
 }
 
-export function AssigneeAvatar({ name, id, size = 'sm', active, theme = 'light', className }: Props) {
+export function AssigneeAvatar({
+  name, id, avatarUrl, size = 'sm', active, theme = 'light', className,
+}: Props) {
   const palette = theme === 'light' ? PALETTE_LIGHT : PALETTE
   let hash = 0
   for (let i = 0; i < (id ?? name).length; i++) hash = (hash + (id ?? name).charCodeAt(i) * (i + 1)) % palette.length
   const color = palette[hash]
-  const dim = size === 'sm' ? 'h-6 w-6 text-[9px]' : 'h-8 w-8 text-[10px]'
+  const dim = size === 'sm'
+    ? 'h-6 w-6 text-[9px]'
+    : size === 'lg'
+      ? 'h-16 w-16 text-sm'
+      : 'h-8 w-8 text-[10px]'
+  const ring = active && (theme === 'light'
+    ? 'ring-2 ring-violet-500 ring-offset-1 ring-offset-white'
+    : 'ring-2 ring-violet-400 ring-offset-1 ring-offset-zinc-100')
+
+  if (avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={avatarUrl}
+        alt=""
+        title={name}
+        className={cn(
+          'inline-block rounded-full border border-zinc-200 object-cover shrink-0 bg-zinc-100',
+          dim,
+          ring,
+          className,
+        )}
+      />
+    )
+  }
 
   return (
     <span
@@ -51,9 +78,7 @@ export function AssigneeAvatar({ name, id, size = 'sm', active, theme = 'light',
         'inline-flex items-center justify-center rounded-full border font-semibold shrink-0',
         dim,
         color,
-        active && (theme === 'light'
-          ? 'ring-2 ring-violet-500 ring-offset-1 ring-offset-white'
-          : 'ring-2 ring-violet-400 ring-offset-1 ring-offset-zinc-100'),
+        ring,
         className
       )}
     >

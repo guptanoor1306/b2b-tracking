@@ -4,6 +4,11 @@ import { createClient } from '@/lib/supabase/server'
 import { canUseDataCache, createCachedReadClient } from '@/lib/supabase/cache-read'
 import { projectsListCacheTag } from '@/lib/cache-tags'
 import { Project, Profile } from '@/lib/types'
+import {
+  projectDetailSelect,
+  projectListSelect,
+  resolveProfileEmbed,
+} from '@/lib/profile-fields'
 import { filterProjectsByMonth, isAllMonths } from '@/lib/utils'
 import { FINAL_STAGE } from '@/lib/constants'
 import { getActiveChannelDbName } from '@/lib/channel-context'
@@ -20,31 +25,6 @@ export type ProjectFilters = {
   owner?: string
   month?: string
 }
-
-const PROJECT_LIST_SELECT = `
-  *,
-  stage_assignee:profiles!projects_stage_assignee_id_fkey(id, name, email),
-  external_team_member:profiles!projects_external_team_member_id_fkey(id, name, email),
-  graphic_designer:profiles!projects_graphic_designer_id_fkey(id, name, email)
-`
-
-const PROJECT_DETAIL_SELECT = `
-  *,
-  agency:agencies(id, name),
-  owner:profiles!projects_internal_owner_id_fkey(id, name, email),
-  graphic_designer:profiles!projects_graphic_designer_id_fkey(id, name, email),
-  stage_assignee:profiles!projects_stage_assignee_id_fkey(id, name, email),
-  editor_profile:profiles!projects_editor_id_fkey(id, name, email),
-  editor_2_profile:profiles!projects_editor_2_id_fkey(id, name, email),
-  designer:profiles!projects_designer_id_fkey(id, name, email),
-  designer_2:profiles!projects_designer_2_id_fkey(id, name, email),
-  writer:profiles!projects_writer_id_fkey(id, name, email),
-  sound_designer:profiles!projects_sound_designer_id_fkey(id, name, email),
-  external_team_member:profiles!projects_external_team_member_id_fkey(id, name, email),
-  creator:profiles!projects_created_by_fkey(id, name, email),
-  qc_reviewer:profiles!projects_qc_reviewer_id_fkey(id, name, email),
-  updater:profiles!projects_updated_by_fkey(id, name, email)
-`
 
 function projectListHasExtraFilters(filters: ProjectFilters): boolean {
   return Boolean(
@@ -63,9 +43,10 @@ async function fetchProjectsQuery(
   channel: string,
   supabase: SupabaseClient,
 ): Promise<Project[]> {
+  const embed = await resolveProfileEmbed(supabase)
   let query = supabase
     .from('projects')
-    .select(PROJECT_LIST_SELECT)
+    .select(projectListSelect(embed))
     .eq('channel', channel)
     .order('updated_at', { ascending: false })
 
@@ -86,7 +67,7 @@ async function fetchProjectsQuery(
   const { data, error } = await query
   if (error) throw error
 
-  let projects = (data ?? []) as Project[]
+  let projects = (data ?? []) as unknown as Project[]
 
   if (filters.month && !isAllMonths(filters.month)) {
     projects = filterProjectsByMonth(projects, filters.month)
@@ -106,13 +87,14 @@ function getCachedProjectsList(channel: string, monthKey: string) {
 
 export async function fetchAllProjects(): Promise<Project[]> {
   const supabase = await createClient()
+  const embed = await resolveProfileEmbed(supabase)
   const { data, error } = await supabase
     .from('projects')
-    .select(PROJECT_DETAIL_SELECT)
+    .select(projectDetailSelect(embed))
     .order('updated_at', { ascending: false })
 
   if (error) throw error
-  return (data ?? []) as Project[]
+  return (data ?? []) as unknown as Project[]
 }
 
 export async function fetchProjects(
@@ -137,14 +119,15 @@ export async function fetchProjects(
 export async function fetchProjectById(id: string) {
   const supabase = await createClient()
   const channel = await getActiveChannelDbName()
+  const embed = await resolveProfileEmbed(supabase)
   const { data, error } = await supabase
     .from('projects')
-    .select(PROJECT_DETAIL_SELECT)
+    .select(projectDetailSelect(embed))
     .eq('id', id)
     .eq('channel', channel)
     .single()
   if (error) throw error
-  return data as Project
+  return data as unknown as Project
 }
 
 export async function fetchAgencyProjects(profile: Profile): Promise<Project[]> {
@@ -159,14 +142,15 @@ export async function fetchAgencyProjects(profile: Profile): Promise<Project[]> 
 
   if (!agency) return []
 
+  const embed = await resolveProfileEmbed(supabase)
   const { data, error } = await supabase
     .from('projects')
-    .select(PROJECT_DETAIL_SELECT)
+    .select(projectDetailSelect(embed))
     .eq('assigned_agency_id', agency.id)
     .order('updated_at', { ascending: false })
 
   if (error) throw error
-  return (data ?? []) as Project[]
+  return (data ?? []) as unknown as Project[]
 }
 
 export function computeDashboardStats(projects: Project[]) {

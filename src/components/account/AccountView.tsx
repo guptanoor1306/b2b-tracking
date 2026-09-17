@@ -1,6 +1,7 @@
 import { Profile } from '@/lib/types'
 import { AccountAuthHint } from '@/lib/actions/account'
 import { ChangePasswordForm } from '@/components/account/ChangePasswordForm'
+import { ProfileAvatarEditor } from '@/components/account/ProfileAvatarEditor'
 import { SettingsCard } from '@/components/settings/SettingsLayout'
 
 type Props = {
@@ -16,6 +17,8 @@ export function AccountView({ profile, authHint, className }: Props) {
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Account</h1>
         <p className="mt-1 text-sm font-medium text-zinc-500">Profile and sign-in security</p>
       </header>
+
+      <ProfileAvatarEditor profile={profile} />
 
       <SettingsCard padding="md" className="mb-6">
         <dl className="grid gap-4 sm:grid-cols-2">

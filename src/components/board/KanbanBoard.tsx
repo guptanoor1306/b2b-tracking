@@ -82,12 +82,21 @@ function CardContent({
   const deliveredStage = finalStageForChannel(channelDbName ?? project.channel)
   const isDelivered = normalizeStage(project.current_stage) === FINAL_STAGE
     || project.current_stage === deliveredStage
-  const cardAssignees = isDelivered ? getProjectDeliveredAssignees(project) : []
+  const mergeMemberAvatar = <T extends { id: string; avatar_url?: string | null }>(p: T | null): T | null => {
+    if (!p || p.avatar_url) return p
+    const member = users.find(u => u.id === p.id)
+    return member?.avatar_url ? { ...p, avatar_url: member.avatar_url } : p
+  }
+  const cardAssignees = isDelivered
+    ? getProjectDeliveredAssignees(project).map(a => mergeMemberAvatar(a)!)
+    : []
   const assigneeId = resolveStageAssigneeId(project, project.current_stage)
   const displayAssignee = isDelivered
     ? null
-    : project.stage_assignee
-      ?? (assigneeId ? users.find(u => u.id === assigneeId) ?? null : null)
+    : mergeMemberAvatar(
+      project.stage_assignee
+        ?? (assigneeId ? users.find(u => u.id === assigneeId) ?? null : null),
+    )
   const intakeReview = isAwaitingRequestReview(project) || isDeclinedRequest(project)
   const hideMetrics = suppressProductionMetrics(project)
 
@@ -163,6 +172,7 @@ function CardContent({
                       key={a.id}
                       name={a.name}
                       id={a.id}
+                      avatarUrl={a.avatar_url}
                       size="sm"
                       theme="light"
                       className="ring-2 ring-white"
@@ -178,6 +188,7 @@ function CardContent({
                 <AssigneeAvatar
                   name={displayAssignee.name}
                   id={displayAssignee.id}
+                  avatarUrl={displayAssignee.avatar_url}
                   size="sm"
                   theme="light"
                 />

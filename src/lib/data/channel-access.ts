@@ -6,6 +6,7 @@ import { Profile, ChannelMember, ChannelMemberRole } from '@/lib/types'
 import { allChannelSlugs } from '@/lib/channels'
 import { isSuperAdmin } from '@/lib/views'
 import { channelMembersCacheTag } from '@/lib/cache-tags'
+import { channelMemberProfileSelect, resolveProfileEmbed } from '@/lib/profile-fields'
 
 export type ProfileChannelRow = {
   profile_id: string
@@ -66,16 +67,17 @@ export async function fetchChannelSuperAdmins(slug: string): Promise<ChannelMemb
 
 async function fetchChannelMembersUncached(slug: string): Promise<ChannelMember[]> {
   const supabase = createCachedReadClient()
+  const embed = await resolveProfileEmbed(supabase)
   const { data, error } = await supabase
     .from('profile_channels')
-    .select('profile_id, channel_slug, channel_role, profile:profiles(id, name, email, role, is_active, created_at, updated_at, organization)')
+    .select(channelMemberProfileSelect(embed))
     .eq('channel_slug', slug)
 
   if (error || !data?.length) return []
 
   return data
     .map(row => {
-      const mapped = mapProfileChannelRow(row as Parameters<typeof mapProfileChannelRow>[0])
+      const mapped = mapProfileChannelRow(row as unknown as Parameters<typeof mapProfileChannelRow>[0])
       if (!mapped.profile || !mapped.profile.is_active) return null
       return { ...mapped.profile, channel_role: mapped.channel_role }
     })
@@ -93,16 +95,17 @@ function getCachedChannelMembers(slug: string) {
 
 async function fetchChannelMembersLive(slug: string): Promise<ChannelMember[]> {
   const supabase = await createClient()
+  const embed = await resolveProfileEmbed(supabase)
   const { data, error } = await supabase
     .from('profile_channels')
-    .select('profile_id, channel_slug, channel_role, profile:profiles(id, name, email, role, is_active, created_at, updated_at, organization)')
+    .select(channelMemberProfileSelect(embed))
     .eq('channel_slug', slug)
 
   if (error || !data?.length) return []
 
   return data
     .map(row => {
-      const mapped = mapProfileChannelRow(row as Parameters<typeof mapProfileChannelRow>[0])
+      const mapped = mapProfileChannelRow(row as unknown as Parameters<typeof mapProfileChannelRow>[0])
       if (!mapped.profile || !mapped.profile.is_active) return null
       return { ...mapped.profile, channel_role: mapped.channel_role }
     })

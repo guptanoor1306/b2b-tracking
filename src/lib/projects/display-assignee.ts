@@ -2,7 +2,9 @@ import { Project, Profile } from '@/lib/types'
 import { resolveStageAssigneeId } from '@/lib/views'
 
 export type AssigneeContext = 'stage' | 'hold' | 'delivered'
-export type DisplayProfile = Pick<Profile, 'id' | 'name' | 'email'>
+export type DisplayProfile = Pick<Profile, 'id' | 'name' | 'email'> & {
+  avatar_url?: Profile['avatar_url']
+}
 
 function profileFromProject(project: Project, id: string): DisplayProfile | null {
   const candidates: (Profile | null | undefined)[] = [

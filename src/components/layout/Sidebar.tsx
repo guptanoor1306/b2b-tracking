@@ -10,8 +10,9 @@ import { useSidebar } from '@/context/SidebarContext'
 import { isSuperAdmin, canManageUsers, isExternalClientAdmin } from '@/lib/views'
 import {
   Home, LayoutDashboard, LogOut, Grid3X3,
-  PanelLeftClose, PanelLeft, Settings, UserCircle, Loader2,
+  PanelLeftClose, PanelLeft, Settings, Loader2,
 } from 'lucide-react'
+import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { useStoredListHref } from '@/lib/useStoredListHref'
 
 const NAV = [
@@ -129,7 +130,14 @@ export function Sidebar({ showChannelSwitcher = false }: { showChannelSwitcher?:
             title={collapsed ? 'Profile' : undefined}
             className={linkClass('/account', pathname === '/account', 'gap-2 bg-zinc-50 border border-zinc-100 mb-1 hover:bg-zinc-100 active:bg-zinc-200/80')}
           >
-            <UserCircle size={collapsed ? 18 : 16} className="shrink-0 text-zinc-500" />
+            <AssigneeAvatar
+              name={profile.name}
+              id={profile.id}
+              avatarUrl={profile.avatar_url}
+              size="sm"
+              theme="light"
+              className="shrink-0"
+            />
             {!collapsed && (
               <div className="min-w-0">
                 <p className="text-xs font-medium text-zinc-700 truncate">{profile.name}</p>
