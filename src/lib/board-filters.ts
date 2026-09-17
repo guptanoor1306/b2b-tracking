@@ -17,8 +17,3 @@ export function toggleCsvFilterValue(current: string[], value: string): string[]
   if (current.includes(value)) return current.filter(item => item !== value)
   return [...current, value]
 }
-
-export function listPathWithQuery(path: '/board' | '/dashboard', params: URLSearchParams): string {
-  const qs = params.toString()
-  return qs ? `${path}?${qs}` : path
-}

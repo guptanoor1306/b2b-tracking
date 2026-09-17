@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useRef } from 'react'
+import { Suspense, useEffect } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   readListQuery,
@@ -17,42 +17,25 @@ function ListQuerySyncInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const channelSlug = useActiveChannel()?.slug ?? ''
-  /** True once this channel+path visit had URL query params (user changed filters). */
-  const hadQueryOnVisitRef = useRef(false)
 
   useEffect(() => {
     removeLegacyListQueryKeys()
   }, [])
 
   useEffect(() => {
-    hadQueryOnVisitRef.current = false
-  }, [channelSlug, pathname])
+    if (!channelSlug || (pathname !== '/board' && pathname !== '/dashboard')) return
+    const path = pathname as ListQueryPath
+    const stored = readListQuery(path, channelSlug)
+    if (!stored) return
+    if (searchParams.toString()) return
+    router.replace(`${path}?${stored}`)
+  }, [channelSlug, pathname, router, searchParams])
 
   useEffect(() => {
     if (!channelSlug || !LIST_PATHS.has(pathname)) return
     const path = pathname as ListQueryPath
-    const qs = searchParams.toString()
-
-    if (qs) {
-      hadQueryOnVisitRef.current = true
-      saveListQuery(path, channelSlug, qs)
-      return
-    }
-
-    // Bare URL: user cleared filters — do not re-apply stale session storage.
-    if (hadQueryOnVisitRef.current) {
-      saveListQuery(path, channelSlug, '')
-      return
-    }
-
-    // First paint on path with no query — restore last session filters for this channel.
-    const stored = readListQuery(path, channelSlug)
-    if (stored) {
-      router.replace(`${path}?${stored}`)
-      return
-    }
-    saveListQuery(path, channelSlug, '')
-  }, [channelSlug, pathname, router, searchParams])
+    saveListQuery(path, channelSlug, searchParams.toString())
+  }, [channelSlug, pathname, searchParams])
 
   return null
 }
