@@ -1,10 +1,12 @@
 'use client'
 
 import { Profile } from '@/lib/types'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { BoardProjectFilters } from '@/components/board/BoardProjectFilters'
 import { BoardAssigneeFilter } from '@/components/board/BoardAssigneeFilter'
-import { parseCsvFilter } from '@/lib/board-filters'
+import { listPathWithQuery, parseCsvFilter } from '@/lib/board-filters'
+import { saveListQuery } from '@/lib/list-query-session'
+import { useActiveChannel } from '@/context/ChannelContext'
 
 type Props = {
   ips: string[]
@@ -19,13 +21,27 @@ type Props = {
 export function BoardFiltersBar({
   ips, languages = [], types, users, currentUserId, showAssigneeFilter, matchCount,
 }: Props) {
+  const router = useRouter()
   const searchParams = useSearchParams()
+  const channelSlug = useActiveChannel()?.slug ?? ''
   const activeIps = parseCsvFilter(searchParams.get('ip'))
   const activeLanguages = parseCsvFilter(searchParams.get('language'))
   const activeTypes = parseCsvFilter(searchParams.get('content_type'))
   const activeAssignee = searchParams.get('assignee') ?? ''
   const activeUser = users.find(u => u.id === activeAssignee)
   const hasProjectFilters = activeIps.length > 0 || activeLanguages.length > 0 || activeTypes.length > 0
+  const hasAnyFilter = hasProjectFilters || Boolean(activeAssignee)
+
+  const clearAllFilters = () => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('ip')
+    params.delete('language')
+    params.delete('content_type')
+    params.delete('assignee')
+    const qs = params.toString()
+    if (channelSlug) saveListQuery('/board', channelSlug, qs)
+    router.push(listPathWithQuery('/board', params))
+  }
 
   return (
     <div className="mb-4 rounded-xl border border-zinc-200/80 bg-white px-4 py-3 shadow-sm space-y-2">
@@ -41,7 +57,7 @@ export function BoardFiltersBar({
           />
         )}
       </div>
-      {(hasProjectFilters || activeAssignee) && (
+      {hasAnyFilter && (
         <p className="text-xs text-zinc-500 border-t border-zinc-100 pt-2">
           Showing {matchCount} project{matchCount !== 1 ? 's' : ''}
           {activeIps.length > 0 && (
@@ -56,6 +72,14 @@ export function BoardFiltersBar({
           {activeAssignee && activeUser && (
             <> · Member: <span className="font-medium text-zinc-700">{activeUser.name}</span></>
           )}
+          {' · '}
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            className="font-medium text-violet-600 hover:text-violet-800 underline-offset-2 hover:underline"
+          >
+            Clear all filters
+          </button>
         </p>
       )}
     </div>

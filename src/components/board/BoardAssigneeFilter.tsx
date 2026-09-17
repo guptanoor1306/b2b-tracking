@@ -4,6 +4,9 @@ import { Profile } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronDown } from 'lucide-react'
+import { listPathWithQuery } from '@/lib/board-filters'
+import { saveListQuery } from '@/lib/list-query-session'
+import { useActiveChannel } from '@/context/ChannelContext'
 
 type Props = {
   users: Profile[]
@@ -19,6 +22,7 @@ export function BoardAssigneeFilter({
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const channelSlug = useActiveChannel()?.slug ?? ''
   const active = searchParams.get('assignee') ?? ''
   const activeUser = users.find(u => u.id === active)
   const meUser = users.find(u => u.id === currentUserId)
@@ -31,7 +35,9 @@ export function BoardAssigneeFilter({
     const params = new URLSearchParams(searchParams.toString())
     if (!id) params.delete('assignee')
     else params.set('assignee', id)
-    router.push(`/board?${params.toString()}`)
+    const qs = params.toString()
+    if (channelSlug) saveListQuery('/board', channelSlug, qs)
+    router.push(listPathWithQuery('/board', params))
   }
 
   const content = (

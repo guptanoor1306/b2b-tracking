@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, useRef } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   readListQuery,
@@ -17,25 +17,39 @@ function ListQuerySyncInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const channelSlug = useActiveChannel()?.slug ?? ''
+  const hadQueryOnVisitRef = useRef(false)
 
   useEffect(() => {
     removeLegacyListQueryKeys()
   }, [])
 
   useEffect(() => {
-    if (!channelSlug || (pathname !== '/board' && pathname !== '/dashboard')) return
-    const path = pathname as ListQueryPath
-    const stored = readListQuery(path, channelSlug)
-    if (!stored) return
-    if (searchParams.toString()) return
-    router.replace(`${path}?${stored}`)
-  }, [channelSlug, pathname, router, searchParams])
+    hadQueryOnVisitRef.current = false
+  }, [channelSlug, pathname])
 
   useEffect(() => {
     if (!channelSlug || !LIST_PATHS.has(pathname)) return
     const path = pathname as ListQueryPath
-    saveListQuery(path, channelSlug, searchParams.toString())
-  }, [channelSlug, pathname, searchParams])
+    const qs = searchParams.toString()
+
+    if (qs) {
+      hadQueryOnVisitRef.current = true
+      saveListQuery(path, channelSlug, qs)
+      return
+    }
+
+    if (hadQueryOnVisitRef.current) {
+      saveListQuery(path, channelSlug, '')
+      return
+    }
+
+    const stored = readListQuery(path, channelSlug)
+    if (stored) {
+      router.replace(`${path}?${stored}`)
+      return
+    }
+    saveListQuery(path, channelSlug, '')
+  }, [channelSlug, pathname, router, searchParams])
 
   return null
 }
