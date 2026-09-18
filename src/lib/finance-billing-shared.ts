@@ -7,7 +7,15 @@ import {
   startOfMonth,
 } from 'date-fns'
 
-export const FINANCE_BILLING_CHANNELS = ['Varsity', 'Zerodha Online'] as const
+export const FINANCE_BILLING_CHANNELS = [
+  'Varsity',
+  'Zerodha Online',
+  'Cash & Copium',
+  'Zerodha Backoffice',
+] as const
+
+/** Legacy DB name — still fetched for billing rows. */
+export const FINANCE_BILLING_LEGACY_CHANNELS = ['Beyond Zerodha'] as const
 
 export type FinanceBillingPeriod = 'week' | 'month'
 
@@ -18,6 +26,8 @@ export type FinanceBillingRow = {
   contentId: string
   title: string
   channel: string
+  ip: string
+  videoLanguage: string | null
   contentType: string
   pickedAt: string
   currentStage: string
@@ -34,6 +44,7 @@ export type FinanceChannelBilling = {
   slug: string
   picked: number
   delivered: number
+  deliveredByContentType: Record<string, number>
   onHold: number
   carryOver: number
   periodRows: FinanceBillingRow[]
@@ -48,6 +59,7 @@ export type FinanceBillingReport = {
   totals: {
     picked: number
     delivered: number
+    deliveredByContentType: Record<string, number>
     onHold: number
     carryOver: number
   }
@@ -110,6 +122,30 @@ export function financeWeekStartKey(anchor: Date): string {
   return format(startOfWeek(anchor, { weekStartsOn: 1 }), 'yyyy-MM-dd')
 }
 
+export function tallyDeliveredByContentType(rows: FinanceBillingRow[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const row of rows) {
+    if (!row.isDelivered) continue
+    const key = row.contentType?.trim() || 'Unspecified'
+    counts[key] = (counts[key] ?? 0) + 1
+  }
+  return Object.fromEntries(
+    Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)),
+  )
+}
+
+export function mergeContentTypeCounts(
+  ...maps: Record<string, number>[]
+): Record<string, number> {
+  const merged: Record<string, number> = {}
+  for (const map of maps) {
+    for (const [key, n] of Object.entries(map)) {
+      merged[key] = (merged[key] ?? 0) + n
+    }
+  }
+  return Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)))
+}
+
 function allChannelRows(channel: FinanceChannelBilling): FinanceBillingRow[] {
   return [...channel.periodRows, ...channel.carryOverRows]
 }
@@ -121,6 +157,8 @@ export function exportFinanceBillingCsv(report: FinanceBillingReport): string {
       'Channel',
       'Content ID',
       'Title',
+      'IP',
+      'Language',
       'Video type',
       'Picked date',
       'Current stage',
@@ -137,6 +175,8 @@ export function exportFinanceBillingCsv(report: FinanceBillingReport): string {
         escape(channel.channel),
         escape(row.contentId ?? ''),
         escape(row.title),
+        escape(row.ip ?? ''),
+        escape(row.videoLanguage ?? ''),
         escape(row.contentType ?? ''),
         escape(isValid(picked) ? format(picked, 'yyyy-MM-dd') : row.pickedAt),
         escape(row.currentStage),

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { addMonths, addWeeks, format, parseISO, subMonths, subWeeks } from 'date-fns'
@@ -14,7 +15,7 @@ import { PeriodToggle } from '@/components/ui/PeriodToggle'
 import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import {
-  CheckCircle2, Clapperboard, ChevronLeft, ChevronRight,
+  CheckCircle2, Clapperboard, ChevronDown, ChevronLeft, ChevronRight,
   Download, ExternalLink, AlertTriangle, PauseCircle,
 } from 'lucide-react'
 
@@ -27,6 +28,14 @@ const INPUT_CLS = 'rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm 
 export function FinanceBillingClient({ report }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [expandedChannels, setExpandedChannels] = useState<Record<string, boolean>>({})
+
+  const toggleChannel = (channelName: string) => {
+    setExpandedChannels(prev => ({
+      ...prev,
+      [channelName]: !prev[channelName],
+    }))
+  }
 
   const navigate = (updates: Record<string, string | undefined>) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -96,7 +105,7 @@ export function FinanceBillingClient({ report }: Props) {
             <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600">Finance</p>
             <h1 className="mt-1 text-2xl font-semibold text-zinc-900">Billing</h1>
             <p className="mt-1.5 text-sm text-zinc-500">
-              Videos picked in production · Varsity & Zerodha Online
+              Videos picked in production · Varsity, Zerodha Online, Cash & Copium, Zerodha Backoffice
             </p>
           </div>
 
@@ -174,6 +183,39 @@ export function FinanceBillingClient({ report }: Props) {
         </div>
       </div>
 
+      <div className={cn(
+        'grid grid-cols-2 gap-4',
+        report.period === 'month' ? 'lg:grid-cols-4' : 'lg:grid-cols-3',
+      )}>
+        <SummaryCard
+          label="Picked in production"
+          value={report.totals.picked}
+          icon={Clapperboard}
+          tone="violet"
+        />
+        <DeliveredSummaryCard
+          delivered={report.totals.delivered}
+          picked={report.totals.picked}
+          byContentType={report.totals.deliveredByContentType}
+        />
+        <SummaryCard
+          label="On hold"
+          value={report.totals.onHold}
+          icon={PauseCircle}
+          tone="amber"
+          hint={report.totals.onHold > 0 ? 'Needs finance review' : undefined}
+        />
+        {report.period === 'month' && (
+          <SummaryCard
+            label="Prior period"
+            value={report.totals.carryOver}
+            icon={AlertTriangle}
+            tone="amber"
+            hint={report.totals.carryOver > 0 ? 'Do not bill again' : undefined}
+          />
+        )}
+      </div>
+
       {(report.totals.onHold > 0 || (report.period === 'month' && report.totals.carryOver > 0)) && (
         <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
           <div className="flex gap-2">
@@ -195,46 +237,53 @@ export function FinanceBillingClient({ report }: Props) {
         </div>
       )}
 
-      <div className={cn(
-        'grid grid-cols-2 gap-4',
-        report.period === 'month' ? 'lg:grid-cols-4' : 'lg:grid-cols-3',
-      )}>
-        <SummaryCard
-          label="Picked in production"
-          value={report.totals.picked}
-          icon={Clapperboard}
-          tone="violet"
-        />
-        <SummaryCard
-          label="Delivered"
-          value={report.totals.delivered}
-          icon={CheckCircle2}
-          tone="emerald"
-          hint={report.totals.picked > 0
-            ? `${Math.round((report.totals.delivered / report.totals.picked) * 100)}% of picked`
-            : undefined}
-        />
-        <SummaryCard
-          label="On hold"
-          value={report.totals.onHold}
-          icon={PauseCircle}
-          tone="amber"
-          hint={report.totals.onHold > 0 ? 'Needs finance review' : undefined}
-        />
-        {report.period === 'month' && (
-          <SummaryCard
-            label="Prior period"
-            value={report.totals.carryOver}
-            icon={AlertTriangle}
-            tone="amber"
-            hint={report.totals.carryOver > 0 ? 'Do not bill again' : undefined}
-          />
-        )}
-      </div>
-
       {report.channels.map(channel => (
-        <ChannelSection key={channel.channel} channel={channel} />
+        <ChannelSection
+          key={channel.channel}
+          channel={channel}
+          expanded={!!expandedChannels[channel.channel]}
+          onToggle={() => toggleChannel(channel.channel)}
+        />
       ))}
+    </div>
+  )
+}
+
+function DeliveredSummaryCard({
+  delivered,
+  picked,
+  byContentType,
+}: {
+  delivered: number
+  picked: number
+  byContentType: Record<string, number>
+}) {
+  const entries = Object.entries(byContentType)
+  const hint = picked > 0
+    ? `${Math.round((delivered / picked) * 100)}% of picked`
+    : undefined
+
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm ring-1 ring-emerald-100">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="p-1.5 rounded-lg bg-emerald-50">
+          <CheckCircle2 size={16} className="text-emerald-600" />
+        </div>
+        <span className="text-xs text-zinc-500 font-medium">Delivered</span>
+      </div>
+      <p className="text-3xl font-semibold text-zinc-900 tabular-nums">{delivered}</p>
+      {hint && <p className="text-[11px] text-zinc-400 mt-1">{hint}</p>}
+      {entries.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-zinc-100 space-y-1">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">By video type</p>
+          {entries.map(([type, count]) => (
+            <div key={type} className="flex items-center justify-between gap-2 text-[11px]">
+              <span className="text-zinc-600 truncate">{type}</span>
+              <span className="font-semibold tabular-nums text-emerald-700 shrink-0">{count}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -274,36 +323,74 @@ function SummaryCard({
 
 function ChannelSection({
   channel,
+  expanded,
+  onToggle,
 }: {
   channel: FinanceBillingReport['channels'][number]
+  expanded: boolean
+  onToggle: () => void
 }) {
   const hasPeriodRows = channel.periodRows.length > 0
   const hasCarryOver = channel.carryOverRows.length > 0
+  const hasDetails = hasPeriodRows || hasCarryOver
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-zinc-100 flex flex-wrap items-center justify-between gap-3 bg-zinc-50/50">
-        <div>
+      <div className="flex items-start gap-2 px-5 py-4 bg-zinc-50/50 border-b border-zinc-100">
+        <button
+          type="button"
+          onClick={onToggle}
+          disabled={!hasDetails}
+          className={cn(
+            'mt-0.5 shrink-0 rounded-md p-1 text-zinc-500 transition-colors',
+            hasDetails ? 'hover:bg-white hover:text-zinc-800' : 'opacity-30 cursor-default',
+          )}
+          aria-expanded={expanded}
+          aria-label={expanded ? `Collapse ${channel.channel}` : `Expand ${channel.channel}`}
+        >
+          <ChevronDown
+            size={18}
+            className={cn('transition-transform', expanded && 'rotate-180')}
+          />
+        </button>
+        <button
+          type="button"
+          onClick={hasDetails ? onToggle : undefined}
+          className={cn(
+            'min-w-0 flex-1 text-left',
+            hasDetails && 'cursor-pointer',
+          )}
+        >
           <p className="text-base font-semibold text-zinc-900">{channel.channel}</p>
           <p className="text-xs text-zinc-500 mt-0.5">
             {channel.picked} picked this period · {channel.delivered} delivered
             {channel.onHold > 0 ? ` · ${channel.onHold} on hold` : ''}
             {channel.carryOver > 0 ? ` · ${channel.carryOver} from prior period` : ''}
           </p>
-        </div>
+          {channel.delivered > 0 && Object.keys(channel.deliveredByContentType).length > 0 && (
+            <p className="text-[11px] text-emerald-700/90 mt-1">
+              Delivered by type:{' '}
+              {Object.entries(channel.deliveredByContentType)
+                .map(([t, n]) => `${t} (${n})`)
+                .join(' · ')}
+            </p>
+          )}
+          {!hasDetails && (
+            <p className="text-[11px] text-zinc-400 italic mt-1">
+              No videos picked in production for this period.
+            </p>
+          )}
+        </button>
         <Link
           href={`/studios/enter/${channel.slug}`}
-          className="text-xs font-medium text-violet-600 hover:text-violet-700"
+          onClick={e => e.stopPropagation()}
+          className="shrink-0 text-xs font-medium text-violet-600 hover:text-violet-700 pt-1"
         >
           Open channel →
         </Link>
       </div>
 
-      {!hasPeriodRows && !hasCarryOver ? (
-        <p className="px-5 py-10 text-sm text-zinc-400 italic text-center">
-          No videos picked in production for this period.
-        </p>
-      ) : (
+      {expanded && hasDetails && (
         <div className="divide-y divide-zinc-100">
           {hasPeriodRows && (
             <BillingTable
@@ -348,6 +435,8 @@ function BillingTable({
           <thead>
             <tr className="text-[10px] text-zinc-500 uppercase border-b border-zinc-100 bg-white">
               <th className="px-5 py-3 text-left font-semibold min-w-[12rem]">Video</th>
+              <th className="px-4 py-3 text-left font-semibold w-24">IP</th>
+              <th className="px-4 py-3 text-left font-semibold w-24">Language</th>
               <th className="px-4 py-3 text-left font-semibold w-28">Video type</th>
               <th className="px-4 py-3 text-left font-semibold w-36">Picked</th>
               <th className="px-4 py-3 text-left font-semibold min-w-[10rem]">Current stage</th>
@@ -371,6 +460,10 @@ function BillingTable({
                   {row.contentId && (
                     <p className="text-[11px] text-zinc-400 mt-0.5 font-mono">{row.contentId}</p>
                   )}
+                </td>
+                <td className="px-4 py-3.5 text-zinc-600 whitespace-nowrap">{row.ip || '—'}</td>
+                <td className="px-4 py-3.5 text-zinc-600 whitespace-nowrap">
+                  {row.videoLanguage || '—'}
                 </td>
                 <td className="px-4 py-3.5 text-zinc-600 whitespace-nowrap">
                   {row.contentType || '—'}

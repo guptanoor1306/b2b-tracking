@@ -11,7 +11,7 @@ import {
 } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { FINAL_STAGE, STAGES_INTERNAL } from '@/lib/constants'
+import { STAGES_INTERNAL } from '@/lib/constants'
 import {
   isZerodhaChannelDbName,
   normalizeZerodhaBoardStage,
@@ -19,14 +19,25 @@ import {
   ZERODHA_READY_TO_PRODUCE,
   ZERODHA_REQUEST_RECEIVED,
 } from '@/lib/zerodha-sla'
+import {
+  STAGES_CASH_COPIUM_INTERNAL,
+  normalizeCashCopiumBoardStage,
+  CC_READY_TO_PRODUCE,
+  CC_REQUEST_RECEIVED,
+} from '@/lib/cash-and-copium-sla'
+import { isCashAndCopiumChannelDbName } from '@/lib/external-intake-flow'
 import { getChannelByDbName } from '@/lib/channels'
+import { isProjectDelivered } from '@/lib/timelines'
 import { StageHistory } from '@/lib/types'
 import {
   FINANCE_BILLING_CHANNELS,
+  FINANCE_BILLING_LEGACY_CHANNELS,
   financeMonthKey,
   financeWeekStartKey,
   billingPeriodLabelForDate,
   buildFinanceNotes,
+  tallyDeliveredByContentType,
+  mergeContentTypeCounts,
   type FinanceBillingPeriod,
   type FinanceBillingReport,
   type FinanceBillingRow,
@@ -54,48 +65,80 @@ type BillingProject = {
   content_id: string
   title: string
   channel: string
+  ip: string | null
+  video_language: string | null
   content_type: string
   current_stage: string
   status_health: string
   is_on_hold: boolean
   picked_up_date: string | null
+  delivered_date: string | null
   created_at: string
+}
+
+const FINANCE_FETCH_CHANNELS = [
+  ...FINANCE_BILLING_CHANNELS,
+  ...FINANCE_BILLING_LEGACY_CHANNELS,
+] as const
+
+function financeDisplayChannel(dbName: string): string {
+  if (dbName === 'Beyond Zerodha') return 'Zerodha Backoffice'
+  return dbName
+}
+
+function isFinanceBillingChannel(dbName: string): boolean {
+  return (FINANCE_FETCH_CHANNELS as readonly string[]).includes(dbName)
 }
 
 const VARSITY_THRESHOLD = 'Video received'
 
+function normalizeBillingStage(channel: string, stage: string): string {
+  if (isCashAndCopiumChannelDbName(channel)) return normalizeCashCopiumBoardStage(stage)
+  if (isZerodhaChannelDbName(channel)) return normalizeZerodhaBoardStage(stage)
+  return stage
+}
+
 function pipelineIndex(channel: string, stage: string): number {
-  if (isZerodhaChannelDbName(channel)) {
-    return (STAGES_ZERODHA_INTERNAL as readonly string[]).indexOf(normalizeZerodhaBoardStage(stage))
+  const normalized = normalizeBillingStage(channel, stage)
+  if (isCashAndCopiumChannelDbName(channel)) {
+    return (STAGES_CASH_COPIUM_INTERNAL as readonly string[]).indexOf(normalized)
   }
-  return (STAGES_INTERNAL as readonly string[]).indexOf(stage)
+  if (isZerodhaChannelDbName(channel)) {
+    return (STAGES_ZERODHA_INTERNAL as readonly string[]).indexOf(normalized)
+  }
+  return (STAGES_INTERNAL as readonly string[]).indexOf(normalized)
 }
 
 function thresholdIndex(channel: string): number {
+  if (isCashAndCopiumChannelDbName(channel)) {
+    return (STAGES_CASH_COPIUM_INTERNAL as readonly string[]).indexOf(CC_READY_TO_PRODUCE)
+  }
   if (isZerodhaChannelDbName(channel)) {
     return (STAGES_ZERODHA_INTERNAL as readonly string[]).indexOf(ZERODHA_READY_TO_PRODUCE)
   }
   return (STAGES_INTERNAL as readonly string[]).indexOf(VARSITY_THRESHOLD)
 }
 
+function isAtBillingThreshold(channel: string, normalized: string): boolean {
+  if (isCashAndCopiumChannelDbName(channel)) {
+    return normalized === CC_REQUEST_RECEIVED || normalized === CC_READY_TO_PRODUCE
+  }
+  if (isZerodhaChannelDbName(channel)) {
+    return normalized === ZERODHA_REQUEST_RECEIVED || normalized === ZERODHA_READY_TO_PRODUCE
+  }
+  return normalized === VARSITY_THRESHOLD
+}
+
 /** Picked in production = moved beyond channel billing threshold stage. */
 export function isPastBillingThreshold(channel: string, stage: string): boolean {
-  const normalized = isZerodhaChannelDbName(channel)
-    ? normalizeZerodhaBoardStage(stage)
-    : stage
+  const normalized = normalizeBillingStage(channel, stage)
 
-  if (isZerodhaChannelDbName(channel)) {
-    if (normalized === ZERODHA_REQUEST_RECEIVED || normalized === ZERODHA_READY_TO_PRODUCE) return false
-  } else if (normalized === VARSITY_THRESHOLD) {
-    return false
-  }
+  if (isAtBillingThreshold(channel, normalized)) return false
 
   const idx = pipelineIndex(channel, normalized)
   const thresh = thresholdIndex(channel)
   if (idx >= 0 && thresh >= 0) return idx > thresh
-  return normalized !== VARSITY_THRESHOLD
-    && normalized !== ZERODHA_REQUEST_RECEIVED
-    && normalized !== ZERODHA_READY_TO_PRODUCE
+  return !isAtBillingThreshold(channel, normalized)
 }
 
 export function resolvePickDate(
@@ -167,11 +210,13 @@ function makeBillingRow(
     projectId: project.id,
     contentId: project.content_id,
     title: project.title,
-    channel: project.channel,
+    channel: financeDisplayChannel(project.channel),
+    ip: project.ip?.trim() || '—',
+    videoLanguage: project.video_language?.trim() || null,
     contentType: project.content_type,
     pickedAt: pickDate,
     currentStage: project.current_stage,
-    isDelivered: project.current_stage === FINAL_STAGE,
+    isDelivered: isProjectDelivered(project),
     kind,
     onHold,
     billedInPeriodLabel,
@@ -196,7 +241,7 @@ export function computeFinanceBillingReport(
   const periodStart = billingPeriodStart(period, anchor)
 
   for (const project of projects) {
-    if (!(FINANCE_BILLING_CHANNELS as readonly string[]).includes(project.channel)) continue
+    if (!isFinanceBillingChannel(project.channel)) continue
 
     const pickDate = resolvePickDate(project, historyByProject.get(project.id) ?? [])
     if (!pickDate) continue
@@ -209,15 +254,17 @@ export function computeFinanceBillingReport(
     const inPeriod = inBillingPeriod(pickDate, period, anchor)
     const beforePeriod = pickParsed < periodStart
 
+    const bucket = financeDisplayChannel(project.channel)
+
     if (inPeriod) {
-      periodRowsByChannel.get(project.channel)?.push(
+      periodRowsByChannel.get(bucket)?.push(
         makeBillingRow(project, pickDate, 'current_period', onHold, null),
       )
       continue
     }
 
-    if (period === 'month' && beforePeriod && project.current_stage !== FINAL_STAGE) {
-      carryOverRowsByChannel.get(project.channel)?.push(
+    if (period === 'month' && beforePeriod && !isProjectDelivered(project)) {
+      carryOverRowsByChannel.get(bucket)?.push(
         makeBillingRow(project, pickDate, 'carry_over', onHold, billedInPeriodLabel),
       )
     }
@@ -230,11 +277,13 @@ export function computeFinanceBillingReport(
     const carryOverRows = (carryOverRowsByChannel.get(channel) ?? []).sort((a, b) =>
       b.pickedAt.localeCompare(a.pickedAt),
     )
+    const deliveredByContentType = tallyDeliveredByContentType(periodRows)
     return {
       channel,
       slug: getChannelByDbName(channel)?.slug ?? channel.toLowerCase(),
       picked: periodRows.length,
       delivered: periodRows.filter(r => r.isDelivered).length,
+      deliveredByContentType,
       onHold: periodRows.filter(r => r.onHold).length,
       carryOver: carryOverRows.length,
       periodRows,
@@ -247,12 +296,16 @@ export function computeFinanceBillingReport(
   const onHold = channels.reduce((sum, c) => sum + c.onHold, 0)
   const carryOver = channels.reduce((sum, c) => sum + c.carryOver, 0)
 
+  const deliveredByContentType = mergeContentTypeCounts(
+    ...channels.map(c => c.deliveredByContentType),
+  )
+
   return {
     period,
     periodLabel: billingPeriodLabel(period, anchor),
     monthKey: financeMonthKey(period === 'month' ? anchor : startOfMonth(anchor)),
     weekStartKey: financeWeekStartKey(anchor),
-    totals: { picked, delivered, onHold, carryOver },
+    totals: { picked, delivered, deliveredByContentType, onHold, carryOver },
     channels,
   }
 }
@@ -261,8 +314,8 @@ async function fetchBillingProjects(): Promise<BillingProject[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('projects')
-    .select('id, content_id, title, channel, content_type, current_stage, status_health, is_on_hold, picked_up_date, created_at')
-    .in('channel', [...FINANCE_BILLING_CHANNELS])
+    .select('id, content_id, title, channel, ip, video_language, content_type, current_stage, status_health, is_on_hold, picked_up_date, delivered_date, created_at')
+    .in('channel', [...FINANCE_FETCH_CHANNELS])
     .order('title')
 
   if (error) throw error
