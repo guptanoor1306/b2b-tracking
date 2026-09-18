@@ -19,8 +19,9 @@ import {
   isAllMonths,
   isProjectRelevantInMonth,
   isDeliveredInMonth,
+  projectDeliveryDate,
 } from '@/lib/utils'
-import { FINAL_STAGE } from '@/lib/constants'
+import { isProjectDelivered } from '@/lib/timelines'
 import {
   usesActionItemsDashboardForChannel,
   usesExternalAdminDashboard,
@@ -97,9 +98,9 @@ export async function DashboardPageContent({
   }
 
   const inPipeline = projects.filter(p =>
-    p.current_stage !== FINAL_STAGE && p.status_health !== 'On hold'
+    !isProjectDelivered(p) && p.status_health !== 'On hold'
   )
-  const delivered = projects.filter(p => p.current_stage === FINAL_STAGE)
+  const delivered = projects.filter(p => isProjectDelivered(p))
   const onHold = projects.filter(p => p.status_health === 'On hold')
 
   const filterByMonth = !isAllMonths(month)
@@ -113,17 +114,20 @@ export async function DashboardPageContent({
     ? onHold.filter(p => isProjectRelevantInMonth(p, month))
     : onHold
 
-  const deliveredOnTime = projects.filter(p =>
-    (filterByMonth ? isDeliveredInMonth(p, month) : true)
-    && p.current_stage === FINAL_STAGE
-    && (!p.target_delivery_date || p.delivered_date! <= p.target_delivery_date)
-  )
-  const deliveredLate = projects.filter(p =>
-    (filterByMonth ? isDeliveredInMonth(p, month) : true)
-    && p.current_stage === FINAL_STAGE
-    && p.target_delivery_date
-    && p.delivered_date! > p.target_delivery_date
-  )
+  const deliveredOnTime = projects.filter(p => {
+    if (!isProjectDelivered(p)) return false
+    if (filterByMonth && !isDeliveredInMonth(p, month)) return false
+    const deliveredOn = projectDeliveryDate(p)
+    if (!deliveredOn) return false
+    return !p.target_delivery_date || deliveredOn <= p.target_delivery_date
+  })
+  const deliveredLate = projects.filter(p => {
+    if (!isProjectDelivered(p)) return false
+    if (filterByMonth && !isDeliveredInMonth(p, month)) return false
+    const deliveredOn = projectDeliveryDate(p)
+    if (!deliveredOn || !p.target_delivery_date) return false
+    return deliveredOn > p.target_delivery_date
+  })
   const inPipelineMonth = filterByMonth ? inPipelineView.length : inPipeline.length
 
   const showSuperadminInsights = showCreateReport && usesExternalIntakeFlow(channelName) && !usesExternalAdminDashboard(effectiveRole)

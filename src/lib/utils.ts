@@ -3,6 +3,7 @@ import { twMerge } from 'tailwind-merge'
 import { differenceInDays, differenceInHours, format, parseISO, isValid, startOfMonth, endOfMonth } from 'date-fns'
 import { StageHistory, HoldPeriod } from '@/lib/types'
 import { FINAL_STAGE } from '@/lib/constants'
+import { isProjectDelivered } from '@/lib/timelines'
 import { businessHoursBetweenExcluding, splitBusinessHours } from '@/lib/businessTime'
 import { businessHoursModeForChannel } from '@/lib/sla-timing-mode'
 import { effectiveStageStartIso } from '@/lib/pipeline-parallel'
@@ -145,18 +146,31 @@ export function isProjectRelevantInMonth(project: MonthFilterProject, month: str
   return isActiveProjectVisibleInMonth(project, month)
 }
 
-export function isDeliveredInMonth(project: Pick<MonthFilterProject, 'delivered_date'>, month: string): boolean {
-  if (isAllMonths(month)) return true
-  return isDateInMonth(project.delivered_date, month)
+export function projectDeliveryDate(
+  project: Pick<MonthFilterProject, 'delivered_date' | 'last_status_update_at'>
+    & { current_stage?: string; channel?: string | null },
+): string | null {
+  if (project.delivered_date) return project.delivered_date
+  if (isProjectDelivered(project)) return project.last_status_update_at?.slice(0, 10) ?? null
+  return null
 }
 
-type MonthFilterableProject = MonthFilterProject & { current_stage: string }
+export function isDeliveredInMonth(
+  project: Pick<MonthFilterProject, 'delivered_date' | 'last_status_update_at'>
+    & { current_stage?: string; channel?: string | null },
+  month: string,
+): boolean {
+  if (isAllMonths(month)) return true
+  return isDateInMonth(projectDeliveryDate(project), month)
+}
+
+type MonthFilterableProject = MonthFilterProject & { current_stage: string; channel?: string | null }
 
 /** Filter board/home lists: delivered by delivery date; active carry forward until delivery. */
 export function filterProjectsByMonth<T extends MonthFilterableProject>(projects: T[], month: string): T[] {
   if (isAllMonths(month)) return projects
   return projects.filter(p => {
-    if (p.current_stage === FINAL_STAGE) return isDeliveredInMonth(p, month)
+    if (isProjectDelivered(p)) return isDeliveredInMonth(p, month)
     return isActiveProjectVisibleInMonth(p, month)
   })
 }

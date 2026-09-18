@@ -1,6 +1,11 @@
 'use client'
 
-import { Project, Profile, StageHistory, Comment, HoldPeriod, RpCut, ClientReviewSubmission, QcReviewSubmission } from '@/lib/types'
+import {
+  Project, Profile, StageHistory, Comment, HoldPeriod, RpCut,
+  ClientReviewSubmission, QcReviewSubmission, StageWorkSession,
+} from '@/lib/types'
+import { isLaSocialChannelDbName, LA_SOCIAL_RETRO } from '@/lib/la-social-sla'
+import { LaSocialStageWorkPanel } from '@/components/projects/LaSocialStageWorkPanel'
 import { Button } from '@/components/ui/Button'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { ProjectSectionsGrid, pendingContentCount, isProjectIntakeView } from '@/components/projects/ProjectSectionsGrid'
@@ -21,7 +26,7 @@ import {
 import { pipelineProgressPercentForChannel } from '@/lib/zerodha-sla'
 import { DuplicateRequestButton } from '@/components/projects/DuplicateRequestButton'
 import { Pencil } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { useStoredListHref } from '@/lib/useStoredListHref'
@@ -45,6 +50,7 @@ type Props = {
   graphicsDesigners: Profile[]
   history: StageHistory[]
   holdPeriods?: HoldPeriod[]
+  stageWorkSessions?: StageWorkSession[]
   comments: Comment[]
   rpCuts?: RpCut[]
   clientReviewSubmissions?: ClientReviewSubmission[]
@@ -60,7 +66,7 @@ export function ProjectDetailLayout({
   canEditLinks = false, canEditCopy = false, canEditIntakeMaterials = false,
   canViewRpCuts = false, canEditRpCuts = false,
   canSendReminder = false, canReviewRequest = false, canResubmitRequest = false, canDuplicateRequest = false,
-  holidays = [], users, graphicsDesigners, history, holdPeriods = [], comments, rpCuts = [],
+  holidays = [], users, graphicsDesigners, history, holdPeriods = [], stageWorkSessions = [], comments, rpCuts = [],
   clientReviewSubmissions = [], canSubmitClientReview = false,
   internalView = false, qcSubmissions = [], currentQcSubmission = null, canSubmitQcReview = false,
 }: Props) {
@@ -78,6 +84,18 @@ export function ProjectDetailLayout({
     : pipelineProgressPercentForChannel(project.current_stage, project.channel)
   const healthPill = HEALTH_PILL_V2[effectiveStatusHealth(project)] ?? 'bg-zinc-100 text-zinc-600 border-zinc-200'
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (window.location.hash !== '#la-social-content-links') return
+    const el = document.getElementById('la-social-content-links')
+    if (!el) return
+    window.requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }, [project.id])
+
+  const isLaSocial = isLaSocialChannelDbName(project.channel)
+  const showStageWork = isLaSocial && internal && project.current_stage !== LA_SOCIAL_RETRO
   const intakeView = isProjectIntakeView(project)
   const pendingLinks = pendingContentCount(project, { checkLinks: canEditLinks, checkCopy: false, intakeView })
   const pendingCopy = pendingContentCount(project, { checkLinks: false, checkCopy: canEditCopy, intakeView })
@@ -213,6 +231,15 @@ export function ProjectDetailLayout({
           </p>
         )}
       </div>
+
+      {showStageWork && (
+        <LaSocialStageWorkPanel
+          projectId={project.id}
+          currentStage={project.current_stage}
+          sessions={stageWorkSessions}
+          canStart={canEdit}
+        />
+      )}
 
       {canReviewRequest && awaitingReview && (
         <RequestReviewBar projectId={project.id} resubmitted={resubmitted} />

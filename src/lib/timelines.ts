@@ -152,17 +152,25 @@ export function resolvePipelineStage(stage: string, channelDbName?: string | nul
   return normalizeStage(stage)
 }
 
+/** Delivered = final stage reached or delivery date set (LA Social: entering Retro). */
+export function isProjectDelivered(project: {
+  current_stage?: string | null
+  delivered_date?: string | null
+  channel?: string | null
+}): boolean {
+  if (project.delivered_date) return true
+  const stage = resolvePipelineStage(project.current_stage ?? '', project.channel)
+  if (stage === FINAL_STAGE || stage === 'Delivered') return true
+  return stage === finalStageForChannel(project.channel)
+}
+
 export function effectiveStatusHealth(project: {
   current_stage: string
   status_health: string
   channel?: string | null
   request_status?: string | null
 }): string {
-  const deliveredStage = finalStageForChannel(project.channel)
-  if (resolvePipelineStage(project.current_stage, project.channel) === deliveredStage
-    || resolvePipelineStage(project.current_stage, project.channel) === FINAL_STAGE) {
-    return 'Delivered'
-  }
+  if (isProjectDelivered(project)) return 'Delivered'
   if (suppressProductionMetrics(project)) {
     return 'On track'
   }
@@ -288,6 +296,11 @@ export type TimelinessResult = {
   stageOverHours: number
 }
 
+export type TimelinessOptions = {
+  /** LA Social: when set, SLA elapsed time is measured from stage Start (not stage entry). */
+  stageWorkStartedAt?: string | null
+}
+
 export function getProjectTimeliness(
   project: {
     current_stage: string
@@ -306,7 +319,8 @@ export function getProjectTimeliness(
     uses_teleprompter?: boolean | null
   },
   holidays: string[] = [],
-  holdPeriods: HoldPeriod[] = []
+  holdPeriods: HoldPeriod[] = [],
+  options: TimelinessOptions = {},
 ): TimelinessResult {
   const stage = resolvePipelineStage(project.current_stage, project.channel)
   const targetReleaseDate = resolveTargetReleaseDate(project, holidays)
@@ -361,9 +375,27 @@ export function getProjectTimeliness(
 
   const hoursMode = businessHoursModeForChannel(project.channel)
 
-  const hoursInStage = project.last_status_update_at
+  const laSocialWorkClock = isLaSocialChannelDbName(project.channel)
+  const stageClockStart = laSocialWorkClock
+    ? (options.stageWorkStartedAt ?? null)
+    : project.last_status_update_at
+
+  if (laSocialWorkClock && !stageClockStart) {
+    return {
+      ...base,
+      hoursInStage: 0,
+      stageOverHours: 0,
+      status: 'on_time',
+      borderClass: 'border-zinc-300/60',
+      textClass: 'text-zinc-500',
+      label: 'Not started',
+      showLabel: true,
+    }
+  }
+
+  const hoursInStage = stageClockStart
     ? businessHoursBetweenExcluding(
-        parseISO(project.last_status_update_at),
+        parseISO(stageClockStart),
         new Date(),
         holidays,
         exclude,
@@ -418,7 +450,8 @@ export function computeProjectHealth(
 ): string {
   if (project.is_on_hold) return 'On hold'
   const stage = resolvePipelineStage(project.current_stage, project.channel)
-  if (stage === FINAL_STAGE) return 'Delivered'
+  const deliveredStage = finalStageForChannel(project.channel)
+  if (stage === FINAL_STAGE || stage === deliveredStage) return 'Delivered'
   if (suppressProductionMetrics(project)) return 'On track'
 
   const { status } = getProjectTimeliness(project, holidays, holdPeriods)

@@ -13,6 +13,8 @@ import {
   LA_SOCIAL_TOPIC,
   LA_SOCIAL_WRITING,
   LA_SOCIAL_CONTENT_TYPES,
+  getLaSocialStageMoveBlock,
+  laSocialProjectLinksHref,
 } from '@/lib/la-social-sla'
 import {
   CASH_AND_COPIUM_CONTENT_TYPES,
@@ -53,6 +55,7 @@ import { minReleaseDateFromRequest } from '@/lib/businessTime'
 import { CONTENT_TYPES } from '@/lib/constants'
 import { ZERODHA_FIRST_DRAFT_QC, normalizeZerodhaBoardStage, getZerodhaQcStageMoveError, getZerodhaQcReviewLinkError } from '@/lib/zerodha-sla'
 import { fetchProjectHoldPeriods } from '@/lib/data/stage-sla'
+import { endOpenStageWorkSessions } from '@/lib/actions/la-social-stage-work'
 
 async function getSessionEffectiveRole() {
   const profile = await getSessionProfile()
@@ -639,6 +642,14 @@ export async function changeProjectStage(
     if (reviewLinkError) return { error: reviewLinkError }
   }
 
+  const laSocialBlock = getLaSocialStageMoveBlock(oldStage, newStage, project)
+  if (laSocialBlock) {
+    return {
+      error: laSocialBlock.message,
+      projectLinksHref: laSocialProjectLinksHref(projectId),
+    }
+  }
+
   const holdPeriods = await fetchProjectHoldPeriods(projectId)
   const channelSlug = await getActiveChannelSlug()
   const status_health = computeProjectHealth({
@@ -711,6 +722,10 @@ export async function changeProjectStage(
 
   const { error } = await supabase.from('projects').update(updates).eq('id', projectId)
   if (error) return { error: error.message }
+
+  if (isLaSocialChannelDbName(project.channel)) {
+    await endOpenStageWorkSessions(supabase, projectId, profile.id)
+  }
 
   const historyResult = await insertStageHistoryRecord({
     project_id: projectId,

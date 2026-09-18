@@ -155,6 +155,17 @@ export type HoldPeriod = {
   note: string | null
 }
 
+/** LA Social: SLA clock for the current stage (Start → move to next stage). */
+export type StageWorkSession = {
+  id: string
+  project_id: string
+  stage_name: string
+  started_at: string
+  ended_at: string | null
+  started_by: string | null
+  ended_by: string | null
+}
+
 export type SettingsActivityLog = {
   id: string
   action_type: string

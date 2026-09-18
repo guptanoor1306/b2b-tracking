@@ -8,7 +8,7 @@ import { DisplayProfile } from '@/lib/projects/display-assignee'
 import { formatWaitingSince, formatDate, isAllMonths, isProjectRelevantInMonth, isDeliveredInMonth } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { resolveTargetReleaseDate } from '@/lib/timelines'
-import { FINAL_STAGE } from '@/lib/constants'
+import { isProjectDelivered } from '@/lib/timelines'
 import {
   isDeclinedRequest,
   isPendingRequestReview,
@@ -51,9 +51,9 @@ export function ExternalDashboard({
 }: Props) {
   const myProjects = projects.filter(p => isUserOnProjectTeam(p, userId))
   const inPipeline = myProjects.filter(
-    p => p.current_stage !== FINAL_STAGE && p.status_health !== 'On hold'
+    p => !isProjectDelivered(p) && p.status_health !== 'On hold'
   )
-  const delivered = myProjects.filter(p => p.current_stage === FINAL_STAGE)
+  const delivered = myProjects.filter(p => isProjectDelivered(p))
   const onHold = myProjects.filter(p => p.status_health === 'On hold')
   const filterByMonth = !isAllMonths(month)
   const inPipelineView = filterByMonth
@@ -75,7 +75,7 @@ export function ExternalDashboard({
     && isDeclinedRequest(p)
   )
   const assignedItems = projects.filter(p => {
-    if (p.current_stage === FINAL_STAGE) return false
+    if (isProjectDelivered(p)) return false
     if (isPendingRequestReview(p) || isResubmittedRequest(p) || isDeclinedRequest(p)) return false
     if (p.stage_assignee_id === userId) return true
     if (isUserOnProjectTeam(p, userId) && p.current_stage !== ZERODHA_REQUEST_RECEIVED) return true

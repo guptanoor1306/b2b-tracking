@@ -1,9 +1,10 @@
 import { Project } from '@/lib/types'
 import type { ProjectHubRow } from '@/lib/data/projects-hub'
 import { liveStudiosChannels } from '@/lib/channels'
-import { FINAL_STAGE, HEALTH_SCORES } from '@/lib/constants'
+import { HEALTH_SCORES } from '@/lib/constants'
 import { computeOverviewTotals, periodLabel, type Period } from '@/lib/data/ip-stats'
-import { isDeliveredInMonth, isProjectRelevantInMonth } from '@/lib/utils'
+import { isDeliveredInMonth, isProjectRelevantInMonth, projectDeliveryDate } from '@/lib/utils'
+import { isProjectDelivered } from '@/lib/timelines'
 import { format, startOfWeek, endOfWeek } from 'date-fns'
 
 export type ChannelStats = {
@@ -21,14 +22,14 @@ export type ChannelStats = {
 function isProjectRelevantInPeriod(p: Project | ProjectHubRow, period: Period, anchor: Date): boolean {
   if (period === 'month') {
     const month = format(anchor, 'yyyy-MM')
-    if (p.current_stage === FINAL_STAGE) return isDeliveredInMonth(p, month)
+    if (isProjectDelivered(p)) return isDeliveredInMonth(p, month)
     return isProjectRelevantInMonth(p, month)
   }
 
   const start = format(startOfWeek(anchor, { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const end = format(endOfWeek(anchor, { weekStartsOn: 1 }), 'yyyy-MM-dd')
-  if (p.current_stage === FINAL_STAGE) {
-    const delivered = p.delivered_date?.slice(0, 10)
+  if (isProjectDelivered(p)) {
+    const delivered = projectDeliveryDate(p)?.slice(0, 10)
     return !!delivered && delivered >= start && delivered <= end
   }
 
@@ -55,9 +56,9 @@ export function computeChannelStats(
     const source = allChannelProjects.filter(p => isProjectRelevantInPeriod(p, period, anchor))
 
     const inPipeline = source.filter(
-      p => p.current_stage !== FINAL_STAGE && p.status_health !== 'On hold'
+      p => !isProjectDelivered(p) && p.status_health !== 'On hold'
     ).length
-    const delivered = source.filter(p => p.current_stage === FINAL_STAGE).length
+    const delivered = source.filter(p => isProjectDelivered(p)).length
     const onHold = source.filter(p => p.status_health === 'On hold').length
     const scores = source.map(p => HEALTH_SCORES[p.status_health] ?? 75)
     const avgQuality = scores.length

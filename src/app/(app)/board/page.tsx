@@ -15,6 +15,8 @@ import { redirect } from 'next/navigation'
 import { filterProjectsByMonth, resolveMonthFilter } from '@/lib/utils'
 import { parseCsvFilter, formatCsvFilter } from '@/lib/board-filters'
 import { isZerodhaChannelDbName, externalStagesForChannel, internalStagesForChannel, VIDEO_LANGUAGES } from '@/lib/zerodha-sla'
+import { isLaSocialChannelDbName } from '@/lib/la-social-sla'
+import { fetchOpenStageWorkForProjects } from '@/lib/data/la-social-stage-work'
 import {
   canSeeBoardAssigneeFilter,
   shouldFilterBoardForViewer,
@@ -40,7 +42,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   const channelNamePromise = getActiveChannelDbName()
   const channelSlugPromise = getActiveChannelSlug()
   const projectsPromise = channelNamePromise.then(name => fetchProjects({ month }, name))
-  const [channelName, channelSlug, projects, users, holidays, stageSla, holdPeriodsByProjectId, channelRole] = await Promise.all([
+  const [channelName, channelSlug, projects, users, holidays, stageSla, holdPeriodsByProjectId, openStageWorkByProjectId, channelRole] = await Promise.all([
     channelNamePromise,
     channelSlugPromise,
     projectsPromise,
@@ -48,6 +50,11 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
     fetchHolidayDates(),
     channelNamePromise.then(name => fetchStageSlaConfig(name)),
     projectsPromise.then(ps => fetchHoldPeriodsForProjects(ps.map(p => p.id))),
+    channelNamePromise.then(name =>
+      isLaSocialChannelDbName(name)
+        ? projectsPromise.then(ps => fetchOpenStageWorkForProjects(ps.map(p => p.id)))
+        : Promise.resolve({}),
+    ),
     getActiveChannelRole(profile),
   ])
   setStageSlaCache(stageSla, channelName)
@@ -116,6 +123,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         users={users}
         holidays={holidays}
         holdPeriodsByProjectId={holdPeriodsByProjectId}
+        openStageWorkByProjectId={openStageWorkByProjectId}
         stages={internal ? internalStages : externalStages}
         readOnly={!canMoveBoardCards(role, channelName)}
         externalView={!internal}

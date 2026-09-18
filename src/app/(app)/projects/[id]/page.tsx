@@ -30,6 +30,7 @@ import { usesExternalIntakeFlow, isCashAndCopiumChannelDbName } from '@/lib/zero
 import { isLaSocialChannelDbName } from '@/lib/la-social-sla'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import { fetchStageSlaConfig, fetchProjectHoldPeriods } from '@/lib/data/stage-sla'
+import { fetchProjectStageWorkSessions } from '@/lib/data/la-social-stage-work'
 import { fetchProjectStageHistory } from '@/lib/data/stage-history'
 import { setStageSlaCache } from '@/lib/timelines'
 import { Comment } from '@/lib/types'
@@ -60,13 +61,15 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
   const showRpCuts = canViewRpCuts(role)
     && !isCashAndCopiumChannelDbName(project.channel)
     && !isLaSocialChannelDbName(project.channel)
-  const [history, channelMembers, commentsRes, holidays, stageSla, holdPeriods, rpCuts, clientReviewSubmissions, qcSubmissions, currentQcSubmission] = await Promise.all([
+  const laSocial = isLaSocialChannelDbName(project.channel)
+  const [history, channelMembers, commentsRes, holidays, stageSla, holdPeriods, stageWorkSessions, rpCuts, clientReviewSubmissions, qcSubmissions, currentQcSubmission] = await Promise.all([
     fetchProjectStageHistory(id, project),
     channelSlug ? fetchChannelMembers(channelSlug) : Promise.resolve([]),
     supabase.from('comments').select('*, author:profiles!comments_created_by_fkey(id, name, email)').eq('project_id', id).order('created_at', { ascending: true }),
     fetchHolidayDates(),
     fetchStageSlaConfig(channelName),
     fetchProjectHoldPeriods(id),
+    laSocial ? fetchProjectStageWorkSessions(id) : Promise.resolve([]),
     showRpCuts ? fetchRpCuts(id) : Promise.resolve([]),
     externalIntake ? fetchClientReviewSubmissions(id) : Promise.resolve([]),
     externalIntake && pipelineInternal ? fetchQcReviewSubmissions(id) : Promise.resolve([]),
@@ -100,6 +103,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       graphicsDesigners={graphicsDesigners.length ? graphicsDesigners : users}
       history={history}
       holdPeriods={holdPeriods}
+      stageWorkSessions={stageWorkSessions}
       comments={(commentsRes.data ?? []) as Comment[]}
       rpCuts={rpCuts}
       clientReviewSubmissions={clientReviewSubmissions}

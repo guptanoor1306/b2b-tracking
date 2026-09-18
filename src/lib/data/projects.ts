@@ -12,7 +12,7 @@ import {
 import { filterProjectsByMonth, isAllMonths } from '@/lib/utils'
 import { FINAL_STAGE } from '@/lib/constants'
 import { getActiveChannelDbName } from '@/lib/channel-context'
-import { computeProjectHealth } from '@/lib/timelines'
+import { computeProjectHealth, isProjectDelivered } from '@/lib/timelines'
 import { format, startOfMonth } from 'date-fns'
 
 export type ProjectFilters = {
@@ -158,7 +158,7 @@ export function computeDashboardStats(projects: Project[]) {
   const monthStart = format(startOfMonth(now), 'yyyy-MM-dd')
 
   return {
-    totalActive: projects.filter(p => p.current_stage !== FINAL_STAGE && p.current_stage !== 'Delivered').length,
+    totalActive: projects.filter(p => !isProjectDelivered(p)).length,
     deliveredThisMonth: projects.filter(
       p => p.delivered_date && p.delivered_date >= monthStart
     ).length,

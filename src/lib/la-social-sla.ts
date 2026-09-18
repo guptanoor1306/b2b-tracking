@@ -34,6 +34,7 @@ export const STAGES_LA_SOCIAL = [
   'Editing',
   'Final review',
   'Final changes',
+  'Founder Review',
   'Upload & Schedule',
   LA_SOCIAL_RETRO,
 ] as const
@@ -90,8 +91,9 @@ export const DEFAULT_LA_SOCIAL_STAGE_SLA: Omit<StageSlaRow, 'id'>[] = [
   row('Editing', 'Editor', h(36, 0, 0, 0), 10),
   row('Final review', 'Primary POC', h(0.5, 0.5, 0.5, 0.5), 11),
   row('Final changes', 'Editor', h(1, 0.5, 0.5, 0.5), 12),
-  row('Upload & Schedule', 'Internal', h(0.5, 0.5, 0.5, 0.5), 13),
-  row(LA_SOCIAL_RETRO, 'Primary POC', h(0.5, 0.5, 0.5, 0.5), 14),
+  row('Founder Review', 'Primary POC', h(8, 8, 8, 8), 13),
+  row('Upload & Schedule', 'Internal', h(0.5, 0.5, 0.5, 0.5), 14),
+  row(LA_SOCIAL_RETRO, 'Primary POC', h(0.5, 0.5, 0.5, 0.5), 15),
 ]
 
 export function laSocialStageSlaRows(): StageSlaRow[] {
@@ -141,6 +143,57 @@ export function filterLaSocialPreWritingFromHistory(
   return history.filter(entry => entry.new_stage !== LA_SOCIAL_TOPIC)
 }
 
+export const LA_SOCIAL_CONTENT_LINKS_ANCHOR = 'la-social-content-links'
+
+export type LaSocialStageMoveBlock = {
+  message: string
+  anchor: typeof LA_SOCIAL_CONTENT_LINKS_ANCHOR
+}
+
+export function laSocialProjectLinksHref(projectId: string): string {
+  return `/projects/${projectId}#${LA_SOCIAL_CONTENT_LINKS_ANCHOR}`
+}
+
+/** LA Social only — block forward moves until required content links exist. */
+export function getLaSocialStageMoveBlock(
+  currentStage: string,
+  newStage: string,
+  project: {
+    channel: string
+    screen_captures_link?: string | null
+    final_file_link?: string | null
+  },
+): LaSocialStageMoveBlock | null {
+  if (!isLaSocialChannelDbName(project.channel)) return null
+
+  const curIdx = laSocialStageIndex(currentStage)
+  const newIdx = laSocialStageIndex(newStage)
+  if (curIdx < 0 || newIdx < 0 || newIdx <= curIdx) return null
+
+  const editingIdx = laSocialStageIndex('Editing')
+  const founderReviewIdx = laSocialStageIndex('Founder Review')
+
+  if (
+    currentStage === 'Storyboard'
+    && newIdx >= editingIdx
+    && !project.screen_captures_link?.trim()
+  ) {
+    return {
+      message: 'Add the Storyboard / Canva link before moving to Editing.',
+      anchor: LA_SOCIAL_CONTENT_LINKS_ANCHOR,
+    }
+  }
+
+  if (newIdx >= founderReviewIdx && !project.final_file_link?.trim()) {
+    return {
+      message: 'Add the Final delivery link before moving to Founder Review.',
+      anchor: LA_SOCIAL_CONTENT_LINKS_ANCHOR,
+    }
+  }
+
+  return null
+}
+
 export function resolveLaSocialStageAssigneeId(
   project: {
     internal_owner_id?: string | null
@@ -182,6 +235,7 @@ export function resolveLaSocialStageAssigneeId(
     case 'Shoot':
     case 'Storyboard':
     case 'Final review':
+    case 'Founder Review':
     case LA_SOCIAL_RETRO:
       return poc
     default:

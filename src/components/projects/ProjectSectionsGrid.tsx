@@ -26,15 +26,19 @@ function SectionCard({
   children,
   footer,
   className,
+  id,
 }: {
   title: string
   badge?: React.ReactNode
   children: React.ReactNode
   footer?: React.ReactNode
   className?: string
+  id?: string
 }) {
   return (
-    <div className={cn(
+    <div
+      id={id}
+      className={cn(
       'flex min-h-0 flex-col rounded-xl border border-zinc-200/90 bg-white shadow-sm',
       className,
     )}>
@@ -423,7 +427,7 @@ export function ProjectSectionsGrid({
   if (isLaSocial) {
     return (
       <div className="grid gap-4 md:grid-cols-2">
-        <SectionCard title="Content links">
+        <SectionCard title="Content links" id="la-social-content-links" className="scroll-mt-24">
           <ProjectLinkField
             label="Script link"
             url={project.drive_link}

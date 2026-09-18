@@ -8,7 +8,7 @@ import {
   useDraggable, useDroppable, rectIntersection,
   type CollisionDetection,
 } from '@dnd-kit/core'
-import { Project, Profile, HoldPeriod } from '@/lib/types'
+import { Project, Profile, HoldPeriod, StageWorkSession } from '@/lib/types'
 import { cn, formatDate } from '@/lib/utils'
 import { changeProjectStage } from '@/lib/actions/projects'
 import { StageChangeModal, needsTeleprompterPrompt } from '@/components/projects/StageChangeModal'
@@ -39,6 +39,11 @@ import {
   suppressProductionMetrics,
   finalStageForChannel,
 } from '@/lib/zerodha-sla'
+import {
+  getLaSocialStageMoveBlock,
+  isLaSocialChannelDbName,
+  laSocialProjectLinksHref,
+} from '@/lib/la-social-sla'
 
 const CARD_BASE = 'rounded-xl border bg-white transition-[box-shadow,opacity] hover:shadow-md'
 
@@ -66,18 +71,21 @@ const boardCollisionDetection: CollisionDetection = args => {
 }
 
 function CardContent({
-  project, holidays, holdPeriods = [], compact = false, channelDbName, users = [],
+  project, holidays, holdPeriods = [], stageWorkStartedAt = null, compact = false, channelDbName, users = [],
 }: {
   project: Project
   holidays: string[]
   holdPeriods?: HoldPeriod[]
+  stageWorkStartedAt?: string | null
   compact?: boolean
   channelDbName?: string | null
   users?: Profile[]
 }) {
-  const t = getProjectTimeliness(project, holidays, holdPeriods)
+  const t = getProjectTimeliness(project, holidays, holdPeriods, { stageWorkStartedAt })
   const target = resolveTargetReleaseDate(project, holidays)
-  const delayClass = getTimelinessTextClassV2(t.status)
+  const delayClass = t.label === 'Not started'
+    ? 'text-zinc-500'
+    : getTimelinessTextClassV2(t.status)
   const showLanguage = isZerodhaChannelDbName(channelDbName ?? project.channel) && project.video_language
   const deliveredStage = finalStageForChannel(channelDbName ?? project.channel)
   const isDelivered = normalizeStage(project.current_stage) === FINAL_STAGE
@@ -207,12 +215,13 @@ function CardContent({
 }
 
 const KanbanCard = memo(function KanbanCard({
-  project, readOnly, holidays, holdPeriods = [], channelDbName, users,
+  project, readOnly, holidays, holdPeriods = [], stageWorkStartedAt = null, channelDbName, users,
 }: {
   project: Project
   readOnly?: boolean
   holidays: string[]
   holdPeriods?: HoldPeriod[]
+  stageWorkStartedAt?: string | null
   channelDbName?: string | null
   users: Profile[]
 }) {
@@ -241,6 +250,7 @@ const KanbanCard = memo(function KanbanCard({
           project={project}
           holidays={holidays}
           holdPeriods={holdPeriods}
+          stageWorkStartedAt={stageWorkStartedAt}
           channelDbName={channelDbName}
           users={users}
         />
@@ -275,6 +285,7 @@ const KanbanCard = memo(function KanbanCard({
             project={project}
             holidays={holidays}
             holdPeriods={holdPeriods}
+            stageWorkStartedAt={stageWorkStartedAt}
             channelDbName={channelDbName}
             users={users}
           />
@@ -285,13 +296,14 @@ const KanbanCard = memo(function KanbanCard({
 })
 
 function KanbanColumn({
-  stage, projects, readOnly, holidays, holdPeriodsByProjectId = {}, index, isLast, hideHeader, channelDbName, users,
+  stage, projects, readOnly, holidays, holdPeriodsByProjectId = {}, openStageWorkByProjectId = {}, index, isLast, hideHeader, channelDbName, users,
 }: {
   stage: string
   projects: Project[]
   readOnly?: boolean
   holidays: string[]
   holdPeriodsByProjectId?: Record<string, HoldPeriod[]>
+  openStageWorkByProjectId?: Record<string, StageWorkSession>
   index: number
   isLast: boolean
   hideHeader?: boolean
@@ -332,17 +344,22 @@ function KanbanColumn({
         {projects.length === 0 && (
           <p className="text-xs text-zinc-400 text-center py-10 font-medium pointer-events-none">Drop here</p>
         )}
-        {projects.map(p => (
+        {projects.map(p => {
+          const openWork = openStageWorkByProjectId[p.id]
+          const stageWorkStartedAt = openWork?.stage_name === p.current_stage ? openWork.started_at : null
+          return (
           <KanbanCard
             key={p.id}
             project={p}
             readOnly={readOnly}
             holidays={holidays}
             holdPeriods={holdPeriodsByProjectId[p.id] ?? []}
+            stageWorkStartedAt={stageWorkStartedAt}
             channelDbName={channelDbName}
             users={users}
           />
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -403,6 +420,7 @@ type Props = {
   stages: readonly string[]
   holidays?: string[]
   holdPeriodsByProjectId?: Record<string, HoldPeriod[]>
+  openStageWorkByProjectId?: Record<string, StageWorkSession>
   readOnly?: boolean
   externalView?: boolean
   viewerUserId?: string
@@ -449,6 +467,7 @@ export function KanbanBoard({
   stages,
   holidays = [],
   holdPeriodsByProjectId = {},
+  openStageWorkByProjectId = {},
   readOnly = false,
   externalView = false,
   viewerUserId,
@@ -460,7 +479,7 @@ export function KanbanBoard({
   const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [pending, setPending] = useState<{ project: Project; newStage: string } | null>(null)
 
-  const [dragError, setDragError] = useState('')
+  const [dragBlock, setDragBlock] = useState<{ message: string; href?: string } | null>(null)
 
   useEffect(() => {
     setProjects(initialProjects)
@@ -532,22 +551,33 @@ export function KanbanBoard({
     const layoutStage = getLayoutStage(project)
     if (layoutStage === newStage) return
 
-    setDragError('')
+    setDragBlock(null)
 
     if (blockReadyToProduce && newStage === 'Ready to Produce') {
-      setDragError('Ready to Produce can only be marked by LearnApp.')
+      setDragBlock({ message: 'Ready to Produce can only be marked by LearnApp.' })
       return
     }
 
     if (usesExternalIntakeFlow(channel?.dbName ?? project.channel) && !externalView) {
       const qcError = getZerodhaQcStageMoveError(project.current_stage, newStage, channel?.dbName ?? project.channel)
       if (qcError) {
-        setDragError(qcError)
+        setDragBlock({ message: qcError })
         return
       }
       const reviewLinkError = getZerodhaQcReviewLinkError(newStage, project.assets_link)
       if (reviewLinkError) {
-        setDragError(reviewLinkError)
+        setDragBlock({ message: reviewLinkError })
+        return
+      }
+    }
+
+    if (isLaSocialChannelDbName(channel?.dbName ?? project.channel)) {
+      const laBlock = getLaSocialStageMoveBlock(project.current_stage, newStage, project)
+      if (laBlock) {
+        setDragBlock({
+          message: laBlock.message,
+          href: laSocialProjectLinksHref(project.id),
+        })
         return
       }
     }
@@ -563,7 +593,12 @@ export function KanbanBoard({
     const result = await changeProjectStage(project.id, newStage)
     if (result.error) {
       setProjects(previous)
-      setDragError(result.error)
+      setDragBlock({
+        message: result.error,
+        href: 'projectLinksHref' in result && result.projectLinksHref
+          ? String(result.projectLinksHref)
+          : undefined,
+      })
     }
   }
 
@@ -614,10 +649,18 @@ export function KanbanBoard({
 
   return (
     <>
-      {dragError && (
-        <p className="mb-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
-          Could not move card: {dragError}
-        </p>
+      {dragBlock && (
+        <div className="mb-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p>{dragBlock.message}</p>
+          {dragBlock.href && (
+            <Link
+              href={dragBlock.href}
+              className="mt-2 inline-flex text-sm font-semibold text-violet-700 hover:text-violet-900 underline-offset-2 hover:underline"
+            >
+              Open project details to add link
+            </Link>
+          )}
+        </div>
       )}
       <div className="sticky top-0 z-30 bg-zinc-100">
         {topChrome && <div className="space-y-4 pb-4">{topChrome}</div>}
@@ -656,6 +699,7 @@ export function KanbanBoard({
                   readOnly={readOnly}
                   holidays={holidays}
                   holdPeriodsByProjectId={holdPeriodsByProjectId}
+                  openStageWorkByProjectId={openStageWorkByProjectId}
                   hideHeader
                   channelDbName={channel?.dbName}
                   users={users}

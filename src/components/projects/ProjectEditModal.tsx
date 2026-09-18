@@ -49,6 +49,7 @@ function buildForm(project: Project) {
     writer_id: project.writer_id ?? '',
     external_team_member_id: project.external_team_member_id ?? '',
     qc_reviewer_id: project.qc_reviewer_id ?? '',
+    target_delivery_date: project.target_delivery_date ?? '',
   }
 }
 
@@ -120,6 +121,9 @@ export function ProjectEditModal({ open, onClose, project, users }: Props) {
       writer_id: form.writer_id || null,
       external_team_member_id: isLaSocial ? undefined : (form.external_team_member_id || null),
       qc_reviewer_id: isLaSocial || isZerodha ? (form.qc_reviewer_id || null) : undefined,
+      ...(isLaSocial
+        ? { target_delivery_date: form.target_delivery_date.trim() || null }
+        : {}),
     })
     setLoading(false)
     if (result.error) {
@@ -159,6 +163,12 @@ export function ProjectEditModal({ open, onClose, project, users }: Props) {
                 options={typeOptions}
                 value={form.content_type}
                 onChange={e => set('content_type', e.target.value)}
+              />
+              <Input
+                label="Release date (optional)"
+                type="date"
+                value={form.target_delivery_date}
+                onChange={e => set('target_delivery_date', e.target.value)}
               />
             </SlideOverSection>
             <SlideOverSection title="Team">
