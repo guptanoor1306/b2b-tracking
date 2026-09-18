@@ -36,7 +36,7 @@ import {
   financeWeekStartKey,
   billingPeriodLabelForDate,
   buildFinanceNotes,
-  tallyDeliveredByContentType,
+  tallyDeliveredByContentTypeFromProjects,
   mergeContentTypeCounts,
   type FinanceBillingPeriod,
   type FinanceBillingReport,
@@ -73,6 +73,7 @@ type BillingProject = {
   is_on_hold: boolean
   picked_up_date: string | null
   delivered_date: string | null
+  last_status_update_at: string | null
   created_at: string
 }
 
@@ -169,6 +170,23 @@ export function resolvePickDate(
 function parseBillingDate(value: string): Date | null {
   const d = parseISO(value.length > 10 ? value : `${value}T12:00:00`)
   return isValid(d) ? d : null
+}
+
+/** Delivery date for period filtering (aligns with Studios hub Done column). */
+export function billingDeliveryDate(project: BillingProject): string | null {
+  if (project.delivered_date) return project.delivered_date
+  if (!isProjectDelivered(project)) return null
+  return project.last_status_update_at ?? null
+}
+
+export function wasDeliveredInBillingPeriod(
+  project: BillingProject,
+  period: FinanceBillingPeriod,
+  anchor: Date,
+): boolean {
+  const deliveryDate = billingDeliveryDate(project)
+  if (!deliveryDate) return false
+  return inBillingPeriod(deliveryDate, period, anchor)
 }
 
 export function inBillingPeriod(
@@ -270,6 +288,17 @@ export function computeFinanceBillingReport(
     }
   }
 
+  const deliveredInPeriodByChannel = new Map<string, BillingProject[]>()
+  for (const channel of FINANCE_BILLING_CHANNELS) {
+    deliveredInPeriodByChannel.set(channel, [])
+  }
+  for (const project of projects) {
+    if (!isFinanceBillingChannel(project.channel)) continue
+    if (!wasDeliveredInBillingPeriod(project, period, anchor)) continue
+    const bucket = financeDisplayChannel(project.channel)
+    deliveredInPeriodByChannel.get(bucket)?.push(project)
+  }
+
   const channels: FinanceChannelBilling[] = FINANCE_BILLING_CHANNELS.map(channel => {
     const periodRows = (periodRowsByChannel.get(channel) ?? []).sort((a, b) =>
       b.pickedAt.localeCompare(a.pickedAt),
@@ -277,12 +306,13 @@ export function computeFinanceBillingReport(
     const carryOverRows = (carryOverRowsByChannel.get(channel) ?? []).sort((a, b) =>
       b.pickedAt.localeCompare(a.pickedAt),
     )
-    const deliveredByContentType = tallyDeliveredByContentType(periodRows)
+    const deliveredInPeriod = deliveredInPeriodByChannel.get(channel) ?? []
+    const deliveredByContentType = tallyDeliveredByContentTypeFromProjects(deliveredInPeriod)
     return {
       channel,
       slug: getChannelByDbName(channel)?.slug ?? channel.toLowerCase(),
       picked: periodRows.length,
-      delivered: periodRows.filter(r => r.isDelivered).length,
+      delivered: deliveredInPeriod.length,
       deliveredByContentType,
       onHold: periodRows.filter(r => r.onHold).length,
       carryOver: carryOverRows.length,
@@ -314,7 +344,7 @@ async function fetchBillingProjects(): Promise<BillingProject[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('projects')
-    .select('id, content_id, title, channel, ip, video_language, content_type, current_stage, status_health, is_on_hold, picked_up_date, delivered_date, created_at')
+    .select('id, content_id, title, channel, ip, video_language, content_type, current_stage, status_health, is_on_hold, picked_up_date, delivered_date, last_status_update_at, created_at')
     .in('channel', [...FINANCE_FETCH_CHANNELS])
     .order('title')
 

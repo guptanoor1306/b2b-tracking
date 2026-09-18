@@ -134,6 +134,19 @@ export function tallyDeliveredByContentType(rows: FinanceBillingRow[]): Record<s
   )
 }
 
+export function tallyDeliveredByContentTypeFromProjects(
+  projects: { content_type: string | null | undefined }[],
+): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const p of projects) {
+    const key = p.content_type?.trim() || 'Unspecified'
+    counts[key] = (counts[key] ?? 0) + 1
+  }
+  return Object.fromEntries(
+    Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)),
+  )
+}
+
 export function mergeContentTypeCounts(
   ...maps: Record<string, number>[]
 ): Record<string, number> {

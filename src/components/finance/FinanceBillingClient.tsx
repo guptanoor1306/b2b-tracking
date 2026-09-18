@@ -195,7 +195,7 @@ export function FinanceBillingClient({ report }: Props) {
         />
         <DeliveredSummaryCard
           delivered={report.totals.delivered}
-          picked={report.totals.picked}
+          periodLabel={report.periodLabel}
           byContentType={report.totals.deliveredByContentType}
         />
         <SummaryCard
@@ -251,17 +251,15 @@ export function FinanceBillingClient({ report }: Props) {
 
 function DeliveredSummaryCard({
   delivered,
-  picked,
+  periodLabel,
   byContentType,
 }: {
   delivered: number
-  picked: number
+  periodLabel: string
   byContentType: Record<string, number>
 }) {
   const entries = Object.entries(byContentType)
-  const hint = picked > 0
-    ? `${Math.round((delivered / picked) * 100)}% of picked`
-    : undefined
+  const hint = `Completed in ${periodLabel}`
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm ring-1 ring-emerald-100">
@@ -363,7 +361,7 @@ function ChannelSection({
         >
           <p className="text-base font-semibold text-zinc-900">{channel.channel}</p>
           <p className="text-xs text-zinc-500 mt-0.5">
-            {channel.picked} picked this period · {channel.delivered} delivered
+            {channel.picked} picked this period · {channel.delivered} delivered this period
             {channel.onHold > 0 ? ` · ${channel.onHold} on hold` : ''}
             {channel.carryOver > 0 ? ` · ${channel.carryOver} from prior period` : ''}
           </p>
