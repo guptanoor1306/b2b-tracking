@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { addMonths, addWeeks, format, parseISO, subMonths, subWeeks } from 'date-fns'
 import {
-  exportFinanceBillingCsv,
   financeMonthKey,
   financeWeekStartKey,
   type FinanceBillingReport,
@@ -16,7 +15,7 @@ import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import {
   CheckCircle2, Clapperboard, ChevronDown, ChevronLeft, ChevronRight,
-  Download, ExternalLink, AlertTriangle, PauseCircle,
+  Download, ExternalLink, AlertTriangle,
 } from 'lucide-react'
 
 type Props = {
@@ -86,15 +85,8 @@ export function FinanceBillingClient({ report }: Props) {
   }
 
   const downloadCsv = () => {
-    const csv = exportFinanceBillingCsv(report)
-    const slug = report.period === 'month' ? report.monthKey : `week-${report.weekStartKey}`
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `billing-${slug}.csv`
-    link.click()
-    URL.revokeObjectURL(url)
+    const params = searchParams.toString()
+    window.location.assign(`/api/studios/finance/csv${params ? `?${params}` : ''}`)
   }
 
   return (
@@ -170,9 +162,10 @@ export function FinanceBillingClient({ report }: Props) {
                 type="button"
                 onClick={downloadCsv}
                 className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50"
+                title={`${report.totals.exportRows} project rows`}
               >
                 <Download size={14} />
-                Export CSV
+                Export CSV ({report.totals.exportRows})
               </button>
             </div>
           </div>
@@ -185,25 +178,19 @@ export function FinanceBillingClient({ report }: Props) {
 
       <div className={cn(
         'grid grid-cols-2 gap-4',
-        report.period === 'month' ? 'lg:grid-cols-4' : 'lg:grid-cols-3',
+        report.period === 'month' ? 'lg:grid-cols-3' : 'lg:grid-cols-2',
       )}>
         <SummaryCard
-          label="Picked in production"
-          value={report.totals.picked}
+          label="Started this period"
+          value={report.totals.startedThisPeriod}
           icon={Clapperboard}
           tone="violet"
+          hint={`${report.totals.inPipeline} still in pipeline`}
         />
         <DeliveredSummaryCard
-          delivered={report.totals.delivered}
+          delivered={report.totals.deliveredThisPeriod}
           periodLabel={report.periodLabel}
           byContentType={report.totals.deliveredByContentType}
-        />
-        <SummaryCard
-          label="On hold"
-          value={report.totals.onHold}
-          icon={PauseCircle}
-          tone="amber"
-          hint={report.totals.onHold > 0 ? 'Needs finance review' : undefined}
         />
         {report.period === 'month' && (
           <SummaryCard
@@ -215,6 +202,11 @@ export function FinanceBillingClient({ report }: Props) {
           />
         )}
       </div>
+
+      <p className="text-xs text-zinc-500 -mt-2">
+        CSV includes every row in the channel tables below ({report.totals.exportRows} videos).
+        Delivered counts completions in {report.periodLabel}, including production starts from earlier periods.
+      </p>
 
       {(report.totals.onHold > 0 || (report.period === 'month' && report.totals.carryOver > 0)) && (
         <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
@@ -362,11 +354,11 @@ function ChannelSection({
         >
           <p className="text-base font-semibold text-zinc-900">{channel.channel}</p>
           <p className="text-xs text-zinc-500 mt-0.5">
-            {channel.picked} picked this period · {channel.delivered} delivered this period
+            {channel.startedThisPeriod} started · {channel.inPipeline} in pipeline · {channel.deliveredThisPeriod} delivered this period
             {channel.onHold > 0 ? ` · ${channel.onHold} on hold` : ''}
             {channel.carryOver > 0 ? ` · ${channel.carryOver} from prior period` : ''}
           </p>
-          {channel.delivered > 0 && Object.keys(channel.deliveredByContentType).length > 0 && (
+            {channel.deliveredThisPeriod > 0 && Object.keys(channel.deliveredByContentType).length > 0 && (
             <p className="text-[11px] text-emerald-700/90 mt-1">
               Delivered by type:{' '}
               {Object.entries(channel.deliveredByContentType)
@@ -393,8 +385,8 @@ function ChannelSection({
         <div className="divide-y divide-zinc-100">
           {hasPeriodRows && (
             <BillingTable
-              title="Picked this period"
-              subtitle="Billable for the selected period"
+              title="Started this period"
+              subtitle="Entered production in the selected period"
               rows={channel.periodRows}
             />
           )}

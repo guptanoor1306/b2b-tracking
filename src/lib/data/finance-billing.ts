@@ -38,6 +38,7 @@ import {
   buildFinanceNotes,
   tallyDeliveredByContentTypeFromProjects,
   mergeContentTypeCounts,
+  countFinanceExportRows,
   type FinanceBillingPeriod,
   type FinanceBillingReport,
   type FinanceBillingRow,
@@ -292,16 +293,20 @@ export function computeFinanceBillingReport(
   for (const project of projects) {
     if (!isFinanceBillingChannel(project.channel)) continue
 
-    const pickDate = resolvePickDate(project, historyByProject.get(project.id) ?? [])
+    const pickDate =
+      resolvePickDate(project, historyByProject.get(project.id) ?? [])
+      ?? project.picked_up_date
+      ?? null
     if (!pickDate) continue
 
     const pickParsed = parseBillingDate(pickDate)
-    if (!pickParsed) continue
 
     const onHold = project.is_on_hold || project.status_health === 'On hold'
-    const billedInPeriodLabel = billingPeriodLabelForDate(period, pickParsed)
+    const billedInPeriodLabel = pickParsed
+      ? billingPeriodLabelForDate(period, pickParsed)
+      : null
     const inPeriod = inBillingPeriod(pickDate, period, anchor)
-    const beforePeriod = pickParsed < periodStart
+    const beforePeriod = pickParsed ? pickParsed < periodStart : false
 
     const bucket = financeDisplayChannel(project.channel)
 
@@ -339,7 +344,7 @@ export function computeFinanceBillingReport(
     )
     const deliveredInPeriod = deliveredInPeriodByChannel.get(channel) ?? []
     const deliveredByContentType = tallyDeliveredByContentTypeFromProjects(deliveredInPeriod)
-    const deliveredInPeriodRows = buildDeliveredInPeriodRows(
+    let deliveredInPeriodRows = buildDeliveredInPeriodRows(
       deliveredInPeriod,
       periodRows,
       carryOverRows,
@@ -347,11 +352,38 @@ export function computeFinanceBillingReport(
       period,
       anchor,
     )
+    const listedIds = new Set([
+      ...periodRows.map(r => r.projectId),
+      ...carryOverRows.map(r => r.projectId),
+      ...deliveredInPeriodRows.map(r => r.projectId),
+    ])
+    for (const project of deliveredInPeriod) {
+      if (listedIds.has(project.id)) continue
+      const pickDate =
+        resolvePickDate(project, historyByProject.get(project.id) ?? [])
+        ?? billingDeliveryDate(project)
+        ?? project.created_at
+      const pickParsed = parseBillingDate(pickDate)
+      const billedInPeriodLabel = pickParsed
+        ? billingPeriodLabelForDate(period, pickParsed)
+        : null
+      const onHold = project.is_on_hold || project.status_health === 'On hold'
+      deliveredInPeriodRows.push(
+        makeBillingRow(project, pickDate, 'delivered_in_period', onHold, billedInPeriodLabel),
+      )
+      listedIds.add(project.id)
+    }
+    deliveredInPeriodRows = deliveredInPeriodRows.sort((a, b) =>
+      b.pickedAt.localeCompare(a.pickedAt),
+    )
+    const startedThisPeriod = periodRows.length
+    const inPipeline = periodRows.filter(r => !r.isDelivered).length
     return {
       channel,
       slug: getChannelByDbName(channel)?.slug ?? channel.toLowerCase(),
-      picked: periodRows.length,
-      delivered: deliveredInPeriod.length,
+      startedThisPeriod,
+      inPipeline,
+      deliveredThisPeriod: deliveredInPeriod.length,
       deliveredByContentType,
       onHold: periodRows.filter(r => r.onHold).length,
       carryOver: carryOverRows.length,
@@ -361,8 +393,9 @@ export function computeFinanceBillingReport(
     }
   })
 
-  const picked = channels.reduce((sum, c) => sum + c.picked, 0)
-  const delivered = channels.reduce((sum, c) => sum + c.delivered, 0)
+  const startedThisPeriod = channels.reduce((sum, c) => sum + c.startedThisPeriod, 0)
+  const inPipeline = channels.reduce((sum, c) => sum + c.inPipeline, 0)
+  const deliveredThisPeriod = channels.reduce((sum, c) => sum + c.deliveredThisPeriod, 0)
   const onHold = channels.reduce((sum, c) => sum + c.onHold, 0)
   const carryOver = channels.reduce((sum, c) => sum + c.carryOver, 0)
 
@@ -370,26 +403,51 @@ export function computeFinanceBillingReport(
     ...channels.map(c => c.deliveredByContentType),
   )
 
-  return {
+  const report: FinanceBillingReport = {
     period,
     periodLabel: billingPeriodLabel(period, anchor),
     monthKey: financeMonthKey(period === 'month' ? anchor : startOfMonth(anchor)),
     weekStartKey: financeWeekStartKey(anchor),
-    totals: { picked, delivered, deliveredByContentType, onHold, carryOver },
+    totals: {
+      startedThisPeriod,
+      inPipeline,
+      deliveredThisPeriod,
+      deliveredByContentType,
+      onHold,
+      carryOver,
+      exportRows: 0,
+    },
     channels,
   }
+  report.totals.exportRows = countFinanceExportRows(report)
+  return report
 }
 
 async function fetchBillingProjects(): Promise<BillingProject[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('projects')
-    .select('id, content_id, title, channel, ip, video_language, content_type, current_stage, status_health, is_on_hold, picked_up_date, delivered_date, last_status_update_at, created_at')
-    .in('channel', [...FINANCE_FETCH_CHANNELS])
-    .order('title')
+  const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? createAdminClient()
+    : await createClient()
 
-  if (error) throw error
-  return (data ?? []) as BillingProject[]
+  const all: BillingProject[] = []
+  const pageSize = 1000
+  let offset = 0
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, content_id, title, channel, ip, video_language, content_type, current_stage, status_health, is_on_hold, picked_up_date, delivered_date, last_status_update_at, created_at')
+      .in('channel', [...FINANCE_FETCH_CHANNELS])
+      .order('title')
+      .range(offset, offset + pageSize - 1)
+
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...(data as BillingProject[]))
+    if (data.length < pageSize) break
+    offset += pageSize
+  }
+
+  return all
 }
 
 async function fetchBillingStageHistory(projectIds: string[]): Promise<Map<string, StageHistory[]>> {
@@ -401,27 +459,32 @@ async function fetchBillingStageHistory(projectIds: string[]): Promise<Map<strin
     : await createClient()
 
   const pageSize = 1000
-  let offset = 0
+  const idChunkSize = 40
 
-  while (true) {
-    const { data, error } = await supabase
-      .from('stage_history')
-      .select('id, project_id, old_stage, new_stage, changed_at, is_hold_event')
-      .in('project_id', projectIds)
-      .order('changed_at', { ascending: true })
-      .range(offset, offset + pageSize - 1)
+  for (let i = 0; i < projectIds.length; i += idChunkSize) {
+    const idChunk = projectIds.slice(i, i + idChunkSize)
+    let offset = 0
 
-    if (error) throw error
-    if (!data?.length) break
+    while (true) {
+      const { data, error } = await supabase
+        .from('stage_history')
+        .select('id, project_id, old_stage, new_stage, changed_at, is_hold_event')
+        .in('project_id', idChunk)
+        .order('changed_at', { ascending: true })
+        .range(offset, offset + pageSize - 1)
 
-    for (const row of data) {
-      const list = map.get(row.project_id) ?? []
-      list.push(row as StageHistory)
-      map.set(row.project_id, list)
+      if (error) throw error
+      if (!data?.length) break
+
+      for (const row of data) {
+        const list = map.get(row.project_id) ?? []
+        list.push(row as StageHistory)
+        map.set(row.project_id, list)
+      }
+
+      if (data.length < pageSize) break
+      offset += pageSize
     }
-
-    if (data.length < pageSize) break
-    offset += pageSize
   }
 
   return map

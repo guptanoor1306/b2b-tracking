@@ -42,8 +42,12 @@ export type FinanceBillingRow = {
 export type FinanceChannelBilling = {
   channel: string
   slug: string
-  picked: number
-  delivered: number
+  /** Videos that entered production (billing) in this period. */
+  startedThisPeriod: number
+  /** Started this period and not yet delivered. */
+  inPipeline: number
+  /** Videos completed (delivered) in this period — includes earlier picks. */
+  deliveredThisPeriod: number
   deliveredByContentType: Record<string, number>
   onHold: number
   carryOver: number
@@ -59,11 +63,14 @@ export type FinanceBillingReport = {
   monthKey: string
   weekStartKey: string
   totals: {
-    picked: number
-    delivered: number
+    startedThisPeriod: number
+    inPipeline: number
+    deliveredThisPeriod: number
     deliveredByContentType: Record<string, number>
     onHold: number
     carryOver: number
+    /** Rows in CSV (= all expanded table rows combined). */
+    exportRows: number
   }
   channels: FinanceChannelBilling[]
 }
@@ -170,12 +177,24 @@ function billingCategoryLabel(kind: FinanceBillingRowKind): string {
   return 'This period'
 }
 
+/** All billing table rows for export (same rows as expanded UI sections). */
 export function allFinanceBillingExportRows(channel: FinanceChannelBilling): FinanceBillingRow[] {
   return [
     ...channel.periodRows,
     ...channel.carryOverRows,
-    ...channel.deliveredInPeriodRows,
+    ...(channel.deliveredInPeriodRows ?? []),
   ]
+}
+
+export function countFinanceExportRows(report: FinanceBillingReport): number {
+  return report.channels.reduce(
+    (sum, ch) => sum + allFinanceBillingExportRows(ch).length,
+    0,
+  )
+}
+
+function sanitizeCsvField(value: string): string {
+  return value.replace(/\r\n/g, ' ').replace(/[\r\n]/g, ' ').replace(/"/g, '""')
 }
 
 function allChannelRows(channel: FinanceChannelBilling): FinanceBillingRow[] {
@@ -183,7 +202,7 @@ function allChannelRows(channel: FinanceChannelBilling): FinanceBillingRow[] {
 }
 
 export function exportFinanceBillingCsv(report: FinanceBillingReport): string {
-  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`
+  const escape = (value: string) => `"${sanitizeCsvField(value)}"`
   const lines = [
     [
       'Channel',
@@ -219,5 +238,5 @@ export function exportFinanceBillingCsv(report: FinanceBillingReport): string {
     }
   }
 
-  return lines.join('\n')
+  return `\ufeff${lines.join('\n')}`
 }
