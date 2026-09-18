@@ -217,6 +217,37 @@ function billingPeriodStart(period: FinanceBillingPeriod, anchor: Date): Date {
   )
 }
 
+function buildDeliveredInPeriodRows(
+  deliveredProjects: BillingProject[],
+  periodRows: FinanceBillingRow[],
+  carryOverRows: FinanceBillingRow[],
+  historyByProject: Map<string, StageHistory[]>,
+  period: FinanceBillingPeriod,
+  anchor: Date,
+): FinanceBillingRow[] {
+  const listed = new Set([
+    ...periodRows.map(r => r.projectId),
+    ...carryOverRows.map(r => r.projectId),
+  ])
+  const rows: FinanceBillingRow[] = []
+
+  for (const project of deliveredProjects) {
+    if (listed.has(project.id)) continue
+    const pickDate =
+      resolvePickDate(project, historyByProject.get(project.id) ?? [])
+      ?? billingDeliveryDate(project)
+      ?? project.created_at
+    const pickParsed = parseBillingDate(pickDate)
+    const billedInPeriodLabel = pickParsed
+      ? billingPeriodLabelForDate(period, pickParsed)
+      : null
+    const onHold = project.is_on_hold || project.status_health === 'On hold'
+    rows.push(makeBillingRow(project, pickDate, 'delivered_in_period', onHold, billedInPeriodLabel))
+  }
+
+  return rows.sort((a, b) => b.pickedAt.localeCompare(a.pickedAt))
+}
+
 function makeBillingRow(
   project: BillingProject,
   pickDate: string,
@@ -308,6 +339,14 @@ export function computeFinanceBillingReport(
     )
     const deliveredInPeriod = deliveredInPeriodByChannel.get(channel) ?? []
     const deliveredByContentType = tallyDeliveredByContentTypeFromProjects(deliveredInPeriod)
+    const deliveredInPeriodRows = buildDeliveredInPeriodRows(
+      deliveredInPeriod,
+      periodRows,
+      carryOverRows,
+      historyByProject,
+      period,
+      anchor,
+    )
     return {
       channel,
       slug: getChannelByDbName(channel)?.slug ?? channel.toLowerCase(),
@@ -318,6 +357,7 @@ export function computeFinanceBillingReport(
       carryOver: carryOverRows.length,
       periodRows,
       carryOverRows,
+      deliveredInPeriodRows,
     }
   })
 
@@ -360,18 +400,28 @@ async function fetchBillingStageHistory(projectIds: string[]): Promise<Map<strin
     ? createAdminClient()
     : await createClient()
 
-  const { data, error } = await supabase
-    .from('stage_history')
-    .select('id, project_id, old_stage, new_stage, changed_at, is_hold_event')
-    .in('project_id', projectIds)
-    .order('changed_at', { ascending: true })
+  const pageSize = 1000
+  let offset = 0
 
-  if (error) throw error
+  while (true) {
+    const { data, error } = await supabase
+      .from('stage_history')
+      .select('id, project_id, old_stage, new_stage, changed_at, is_hold_event')
+      .in('project_id', projectIds)
+      .order('changed_at', { ascending: true })
+      .range(offset, offset + pageSize - 1)
 
-  for (const row of data ?? []) {
-    const list = map.get(row.project_id) ?? []
-    list.push(row as StageHistory)
-    map.set(row.project_id, list)
+    if (error) throw error
+    if (!data?.length) break
+
+    for (const row of data) {
+      const list = map.get(row.project_id) ?? []
+      list.push(row as StageHistory)
+      map.set(row.project_id, list)
+    }
+
+    if (data.length < pageSize) break
+    offset += pageSize
   }
 
   return map

@@ -330,7 +330,8 @@ function ChannelSection({
 }) {
   const hasPeriodRows = channel.periodRows.length > 0
   const hasCarryOver = channel.carryOverRows.length > 0
-  const hasDetails = hasPeriodRows || hasCarryOver
+  const hasDeliveredInPeriod = channel.deliveredInPeriodRows.length > 0
+  const hasDetails = hasPeriodRows || hasCarryOver || hasDeliveredInPeriod
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
@@ -405,6 +406,14 @@ function ChannelSection({
               variant="carry_over"
             />
           )}
+          {hasDeliveredInPeriod && (
+            <BillingTable
+              title="Delivered this period (prior pick)"
+              subtitle="Completed in the selected period; production pick was in an earlier period"
+              rows={channel.deliveredInPeriodRows}
+              variant="delivered_in_period"
+            />
+          )}
         </div>
       )}
     </div>
@@ -420,10 +429,13 @@ function BillingTable({
   title: string
   subtitle: string
   rows: FinanceBillingRow[]
-  variant?: 'current' | 'carry_over'
+  variant?: 'current' | 'carry_over' | 'delivered_in_period'
 }) {
   return (
-    <div className={cn(variant === 'carry_over' && 'bg-amber-50/20')}>
+    <div className={cn(
+      variant === 'carry_over' && 'bg-amber-50/20',
+      variant === 'delivered_in_period' && 'bg-emerald-50/15',
+    )}>
       <div className="px-5 py-3 border-b border-zinc-100">
         <p className="text-xs font-semibold text-zinc-800">{title}</p>
         <p className="text-[11px] text-zinc-500 mt-0.5">{subtitle}</p>

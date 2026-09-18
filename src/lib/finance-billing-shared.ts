@@ -19,7 +19,7 @@ export const FINANCE_BILLING_LEGACY_CHANNELS = ['Beyond Zerodha'] as const
 
 export type FinanceBillingPeriod = 'week' | 'month'
 
-export type FinanceBillingRowKind = 'current_period' | 'carry_over'
+export type FinanceBillingRowKind = 'current_period' | 'carry_over' | 'delivered_in_period'
 
 export type FinanceBillingRow = {
   projectId: string
@@ -49,6 +49,8 @@ export type FinanceChannelBilling = {
   carryOver: number
   periodRows: FinanceBillingRow[]
   carryOverRows: FinanceBillingRow[]
+  /** Delivered in selected period but production pick was in an earlier period. */
+  deliveredInPeriodRows: FinanceBillingRow[]
 }
 
 export type FinanceBillingReport = {
@@ -92,6 +94,9 @@ export function buildFinanceNotes(
   const notes: string[] = []
   if (kind === 'carry_over' && billedInPeriodLabel) {
     notes.push(`Already included in ${billedInPeriodLabel} billing — do not bill again for this pick`)
+  }
+  if (kind === 'delivered_in_period' && billedInPeriodLabel) {
+    notes.push(`Delivered in this period; production pick was in ${billedInPeriodLabel}`)
   }
   if (onHold) {
     notes.push('Currently on hold — verify before invoicing')
@@ -159,8 +164,22 @@ export function mergeContentTypeCounts(
   return Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)))
 }
 
+function billingCategoryLabel(kind: FinanceBillingRowKind): string {
+  if (kind === 'carry_over') return 'Prior period — review'
+  if (kind === 'delivered_in_period') return 'Delivered this period (prior pick)'
+  return 'This period'
+}
+
+export function allFinanceBillingExportRows(channel: FinanceChannelBilling): FinanceBillingRow[] {
+  return [
+    ...channel.periodRows,
+    ...channel.carryOverRows,
+    ...channel.deliveredInPeriodRows,
+  ]
+}
+
 function allChannelRows(channel: FinanceChannelBilling): FinanceBillingRow[] {
-  return [...channel.periodRows, ...channel.carryOverRows]
+  return allFinanceBillingExportRows(channel)
 }
 
 export function exportFinanceBillingCsv(report: FinanceBillingReport): string {
@@ -194,7 +213,7 @@ export function exportFinanceBillingCsv(report: FinanceBillingReport): string {
         escape(isValid(picked) ? format(picked, 'yyyy-MM-dd') : row.pickedAt),
         escape(row.currentStage),
         escape(row.isDelivered ? 'Delivered' : 'In pipeline'),
-        escape(row.kind === 'carry_over' ? 'Prior period — review' : 'This period'),
+        escape(billingCategoryLabel(row.kind)),
         escape(row.financeNotes.join(' · ')),
       ].join(','))
     }
