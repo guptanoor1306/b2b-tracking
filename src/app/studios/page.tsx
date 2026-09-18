@@ -1,7 +1,6 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getSessionProfile } from '@/lib/auth'
-import { setActiveChannelCookie } from '@/lib/channel-context'
 import { createClient } from '@/lib/supabase/server'
 import { fetchProjectsHubSnapshot } from '@/lib/data/projects-hub'
 import { fetchUserChannelSlugs, fetchChannelMemberCounts } from '@/lib/data/channel-access'
@@ -25,8 +24,7 @@ export default async function StudiosPage({ searchParams }: { searchParams: Sear
   const accessibleSlugs = await fetchUserChannelSlugs(profile)
 
   if (accessibleSlugs.length === 1) {
-    await setActiveChannelCookie(accessibleSlugs[0])
-    redirect('/dashboard')
+    redirect(`/studios/enter/${accessibleSlugs[0]}`)
   }
 
   const params = await searchParams
