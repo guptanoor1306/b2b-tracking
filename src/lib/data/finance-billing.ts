@@ -51,7 +51,8 @@ import {
 } from '@/lib/finance-billing-shared'
 import {
   billingMarkLookup,
-  fetchFinanceBillingMarks,
+  fetchFinanceBillingMarksForProjects,
+  projectIdsMarkedBilledBeforeMonth,
 } from '@/lib/data/finance-billing-marks'
 
 export {
@@ -531,6 +532,55 @@ function buildDeferredBillingByChannel(
   return byChannel
 }
 
+function filterBillingRows(
+  rows: FinanceBillingRow[],
+  closedProjectIds: Set<string>,
+): FinanceBillingRow[] {
+  if (!closedProjectIds.size) return rows
+  return rows.filter(row => !closedProjectIds.has(row.projectId))
+}
+
+/** Drop videos already marked billed in an earlier month — they must not reappear to invoice again. */
+function applyPreviouslyBilledFilter(
+  report: FinanceBillingReport,
+  closedProjectIds: Set<string>,
+): FinanceBillingReport {
+  if (!closedProjectIds.size) return report
+
+  const channels = report.channels.map(ch => {
+    const periodRows = filterBillingRows(ch.periodRows, closedProjectIds)
+    const carryOverRows = filterBillingRows(ch.carryOverRows, closedProjectIds)
+    const deliveredInPeriodRows = filterBillingRows(ch.deliveredInPeriodRows, closedProjectIds)
+    const deferredBillingRows = filterBillingRows(ch.deferredBillingRows, closedProjectIds)
+    return {
+      ...ch,
+      periodRows,
+      carryOverRows,
+      deliveredInPeriodRows,
+      deferredBillingRows,
+      startedThisPeriod: periodRows.length,
+      inPipeline: periodRows.filter(r => !r.isDelivered).length,
+      onHold: periodRows.filter(r => r.onHold).length,
+      carryOver: carryOverRows.length,
+    }
+  })
+
+  const next: FinanceBillingReport = {
+    ...report,
+    channels,
+    totals: {
+      ...report.totals,
+      startedThisPeriod: channels.reduce((s, c) => s + c.startedThisPeriod, 0),
+      inPipeline: channels.reduce((s, c) => s + c.inPipeline, 0),
+      onHold: channels.reduce((s, c) => s + c.onHold, 0),
+      carryOver: channels.reduce((s, c) => s + c.carryOver, 0),
+      deferredFromPriorMonth: channels.reduce((s, c) => s + c.deferredBillingRows.length, 0),
+    },
+  }
+  next.totals.exportRows = countFinanceExportRows(next)
+  return next
+}
+
 function applyMonthlyBillingMarks(
   report: FinanceBillingReport,
   marks: Map<string, boolean>,
@@ -676,15 +726,23 @@ export async function fetchFinanceBillingReport(
   if (prevMonthKey) {
     const prevAnchor = parseISO(`${prevMonthKey}-01`)
     prevReport = computeFinanceBillingReport(projects, historyByProject, 'month', prevAnchor)
+  }
+
+  const projectIds = new Set<string>([
+    ...allFinanceBillingProjectIds(report),
+    ...(prevReport ? allFinanceBillingProjectIds(prevReport) : []),
+  ])
+  const marks = await fetchFinanceBillingMarksForProjects([...projectIds])
+  const closedProjectIds = projectIdsMarkedBilledBeforeMonth(marks, monthKey)
+
+  report = applyPreviouslyBilledFilter(report, closedProjectIds)
+
+  if (prevMonthKey && prevReport) {
     const currentListedIds = new Set(allFinanceBillingProjectIds(report))
-    const prevMarks = await fetchFinanceBillingMarks(
-      [prevMonthKey],
-      allFinanceBillingProjectIds(prevReport),
-    )
     const deferredByChannel = buildDeferredBillingByChannel(
       prevReport,
       prevMonthKey,
-      prevMarks,
+      marks,
       currentListedIds,
     )
     report = {
@@ -696,17 +754,8 @@ export async function fetchFinanceBillingReport(
         deferredBillingRows: deferredByChannel.get(ch.channel) ?? [],
       })),
     }
-    report.totals.deferredFromPriorMonth = report.channels.reduce(
-      (sum, ch) => sum + ch.deferredBillingRows.length,
-      0,
-    )
-    report.totals.exportRows = countFinanceExportRows(report)
+    report = applyPreviouslyBilledFilter(report, closedProjectIds)
   }
 
-  const projectIds = new Set<string>([
-    ...allFinanceBillingProjectIds(report),
-    ...(prevReport ? allFinanceBillingProjectIds(prevReport) : []),
-  ])
-  const marks = await fetchFinanceBillingMarks([monthKey], [...projectIds])
   return applyMonthlyBillingMarks(report, marks, prevMonthKey)
 }

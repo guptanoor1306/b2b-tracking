@@ -54,6 +54,53 @@ export function billingMarkLookup(
   return marks.get(`${monthKey}:${projectId}`) ?? false
 }
 
+/** All stored marks for these projects (every month). */
+export async function fetchFinanceBillingMarksForProjects(
+  projectIds: string[],
+): Promise<Map<string, boolean>> {
+  const map = new Map<string, boolean>()
+  if (!projectIds.length) return map
+
+  const supabase = billingMarksClient() ?? await createClient()
+  const idChunkSize = 80
+
+  for (let i = 0; i < projectIds.length; i += idChunkSize) {
+    const chunk = projectIds.slice(i, i + idChunkSize)
+    const { data, error } = await supabase
+      .from('finance_billing_marks')
+      .select('project_id, month_key, billed')
+      .in('project_id', chunk)
+
+    if (error) {
+      if (error.code === '42P01') return map
+      throw error
+    }
+
+    for (const row of data ?? []) {
+      map.set(`${row.month_key}:${row.project_id}`, row.billed === true)
+    }
+  }
+
+  return map
+}
+
+/** Project IDs marked billed in any calendar month strictly before `monthKey`. */
+export function projectIdsMarkedBilledBeforeMonth(
+  marks: Map<string, boolean>,
+  monthKey: string,
+): Set<string> {
+  const closed = new Set<string>()
+  for (const [compositeKey, billed] of marks) {
+    if (!billed) continue
+    const sep = compositeKey.indexOf(':')
+    if (sep !== 7) continue
+    const markMonth = compositeKey.slice(0, 7)
+    if (markMonth >= monthKey) continue
+    closed.add(compositeKey.slice(8))
+  }
+  return closed
+}
+
 export async function upsertFinanceBillingMarks(
   monthKey: string,
   entries: { projectId: string; billed: boolean }[],
