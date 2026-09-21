@@ -532,6 +532,109 @@ function buildDeferredBillingByChannel(
   return byChannel
 }
 
+function mergeDeferredIntoReport(
+  report: FinanceBillingReport,
+  deferredByChannel: Map<string, FinanceBillingRow[]>,
+  priorMonthKey: string,
+): FinanceBillingReport {
+  const channels = report.channels.map(ch => ({
+    ...ch,
+    deferredBillingRows: deferredByChannel.get(ch.channel) ?? [],
+  }))
+  const deferredFromPriorMonth = channels.reduce(
+    (sum, ch) => sum + ch.deferredBillingRows.length,
+    0,
+  )
+  const next: FinanceBillingReport = {
+    ...report,
+    priorMonthKey,
+    priorMonthLabel: financeMonthLabel(priorMonthKey),
+    channels,
+    totals: {
+      ...report.totals,
+      deferredFromPriorMonth,
+    },
+  }
+  next.totals.exportRows = countFinanceExportRows(next)
+  return next
+}
+
+function earliestFinanceBillingMonthKey(
+  projects: BillingProject[],
+  historyByProject: Map<string, StageHistory[]>,
+): string {
+  let earliest: string | null = null
+  for (const project of projects) {
+    const pickDate =
+      resolvePickDate(project, historyByProject.get(project.id) ?? [])
+      ?? project.picked_up_date
+      ?? null
+    if (!pickDate) continue
+    const parsed = parseBillingDate(pickDate)
+    if (!parsed) continue
+    const key = financeMonthKey(startOfMonth(parsed))
+    if (!earliest || key < earliest) earliest = key
+  }
+  return earliest ?? financeMonthKey(startOfMonth(new Date()))
+}
+
+/** Month keys from earliest billing activity through target (inclusive), ascending. */
+function financeMonthKeyChain(
+  targetMonthKey: string,
+  earliestMonthKey: string,
+): string[] {
+  const chain: string[] = []
+  let cursor = targetMonthKey
+  while (true) {
+    chain.unshift(cursor)
+    if (cursor <= earliestMonthKey) break
+    const prev = previousFinanceMonthKey(cursor)
+    if (!prev) break
+    cursor = prev
+    if (chain.length > 48) break
+  }
+  return chain
+}
+
+/**
+ * Full billing list for a month = computed rows + deferred from prior month.
+ * Built iteratively from earliest pick month so "Last month" rows chain forward.
+ */
+function computeEnrichedMonthReport(
+  projects: BillingProject[],
+  historyByProject: Map<string, StageHistory[]>,
+  monthKey: string,
+  marks: Map<string, boolean>,
+): FinanceBillingReport {
+  const earliest = earliestFinanceBillingMonthKey(projects, historyByProject)
+  const chain = financeMonthKeyChain(monthKey, earliest)
+  const cache = new Map<string, FinanceBillingReport>()
+
+  for (const mk of chain) {
+    const anchor = parseISO(`${mk}-01`)
+    let report = computeFinanceBillingReport(projects, historyByProject, 'month', anchor)
+    const prevMonthKey = previousFinanceMonthKey(mk)
+    if (prevMonthKey && cache.has(prevMonthKey)) {
+      const prevEnriched = cache.get(prevMonthKey)!
+      const deferredByChannel = buildDeferredBillingByChannel(
+        prevEnriched,
+        prevMonthKey,
+        marks,
+        new Set(allFinanceBillingProjectIds(report)),
+      )
+      report = mergeDeferredIntoReport(report, deferredByChannel, prevMonthKey)
+    }
+    cache.set(mk, report)
+  }
+
+  const result = cache.get(monthKey)
+  if (!result) {
+    const anchor = parseISO(`${monthKey}-01`)
+    return computeFinanceBillingReport(projects, historyByProject, 'month', anchor)
+  }
+  return result
+}
+
 function filterBillingRows(
   rows: FinanceBillingRow[],
   closedProjectIds: Set<string>,
@@ -715,43 +818,23 @@ export async function fetchFinanceBillingReport(
 ): Promise<FinanceBillingReport> {
   const projects = await fetchBillingProjects()
   const historyByProject = await fetchBillingStageHistory(projects.map(p => p.id))
-  let report = computeFinanceBillingReport(projects, historyByProject, period, anchor)
 
-  if (period !== 'month') return report
-
-  const monthKey = report.monthKey
-  const prevMonthKey = previousFinanceMonthKey(monthKey)
-  let prevReport: FinanceBillingReport | null = null
-
-  if (prevMonthKey) {
-    const prevAnchor = parseISO(`${prevMonthKey}-01`)
-    prevReport = computeFinanceBillingReport(projects, historyByProject, 'month', prevAnchor)
+  if (period !== 'month') {
+    return computeFinanceBillingReport(projects, historyByProject, period, anchor)
   }
 
+  const monthKey = financeMonthKey(startOfMonth(anchor))
   const marks = await fetchFinanceBillingMarksForProjects(projects.map(p => p.id))
-  const closedProjectIds = projectIdsMarkedBilledBeforeMonth(marks, monthKey)
+  let report = computeEnrichedMonthReport(
+    projects,
+    historyByProject,
+    monthKey,
+    marks,
+  )
 
+  const closedProjectIds = projectIdsMarkedBilledBeforeMonth(marks, monthKey)
   report = applyPreviouslyBilledFilter(report, closedProjectIds)
 
-  if (prevMonthKey && prevReport) {
-    const currentListedIds = new Set(allFinanceBillingProjectIds(report))
-    const deferredByChannel = buildDeferredBillingByChannel(
-      prevReport,
-      prevMonthKey,
-      marks,
-      currentListedIds,
-    )
-    report = {
-      ...report,
-      priorMonthKey: prevMonthKey,
-      priorMonthLabel: financeMonthLabel(prevMonthKey),
-      channels: report.channels.map(ch => ({
-        ...ch,
-        deferredBillingRows: deferredByChannel.get(ch.channel) ?? [],
-      })),
-    }
-    report = applyPreviouslyBilledFilter(report, closedProjectIds)
-  }
-
+  const prevMonthKey = previousFinanceMonthKey(monthKey)
   return applyMonthlyBillingMarks(report, marks, prevMonthKey)
 }
