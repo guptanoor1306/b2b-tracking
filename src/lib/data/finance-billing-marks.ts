@@ -108,7 +108,7 @@ export async function upsertFinanceBillingMarks(
 ): Promise<void> {
   if (!entries.length) return
 
-  const supabase = await createClient()
+  const supabase = billingMarksClient() ?? await createClient()
   const rows = entries.map(e => ({
     project_id: e.projectId,
     month_key: monthKey,

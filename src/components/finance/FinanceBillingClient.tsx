@@ -34,6 +34,7 @@ export function FinanceBillingClient({ report }: Props) {
   const [draftBilled, setDraftBilled] = useState<Record<string, boolean>>({})
   const [savingChannel, setSavingChannel] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveSuccessChannel, setSaveSuccessChannel] = useState<string | null>(null)
 
   const serverBilledSnapshot = useMemo(() => {
     const snap: Record<string, boolean> = {}
@@ -48,6 +49,7 @@ export function FinanceBillingClient({ report }: Props) {
   useEffect(() => {
     setDraftBilled(serverBilledSnapshot)
     setSaveError(null)
+    setSaveSuccessChannel(null)
   }, [serverBilledSnapshot])
 
   const toggleChannel = (channelName: string) => {
@@ -100,6 +102,7 @@ export function FinanceBillingClient({ report }: Props) {
     if (!report.billingMarksEnabled || !projectIds.length) return
     setSavingChannel(channelName)
     setSaveError(null)
+    setSaveSuccessChannel(null)
     const marks = projectIds.map(projectId => ({
       projectId,
       billed: draftBilled[projectId] ?? false,
@@ -113,7 +116,17 @@ export function FinanceBillingClient({ report }: Props) {
       setSaveError(result.error)
       return
     }
+    setSaveSuccessChannel(channelName)
     router.refresh()
+  }
+
+  const channelHasUnsavedMarks = (channel: FinanceBillingReport['channels'][number]) => {
+    for (const row of allFinanceBillingExportRows(channel)) {
+      const server = serverBilledSnapshot[row.projectId] ?? false
+      const draft = draftBilled[row.projectId] ?? false
+      if (server !== draft) return true
+    }
+    return false
   }
 
   const showBillingCheckboxes = report.period === 'month' && report.billingMarksEnabled
@@ -220,6 +233,9 @@ export function FinanceBillingClient({ report }: Props) {
             return saveChannelMarks(channel.channel, ids)
           }}
           isSaving={savingChannel === channel.channel}
+          hasUnsavedMarks={channelHasUnsavedMarks(channel)}
+          saveSuccess={saveSuccessChannel === channel.channel}
+          billingMonthLabel={report.periodLabel}
         />
       ))}
     </div>
@@ -302,6 +318,9 @@ function ChannelSection({
   onSetBilled,
   onSaveChannel,
   isSaving,
+  hasUnsavedMarks,
+  saveSuccess,
+  billingMonthLabel,
 }: {
   channel: FinanceBillingReport['channels'][number]
   expanded: boolean
@@ -311,6 +330,9 @@ function ChannelSection({
   onSetBilled: (projectId: string, billed: boolean) => void
   onSaveChannel: () => Promise<void>
   isSaving: boolean
+  hasUnsavedMarks: boolean
+  saveSuccess: boolean
+  billingMonthLabel: string
 }) {
   const allRows = showBillingCheckboxes
     ? allFinanceBillingExportRows(channel)
@@ -353,12 +375,19 @@ function ChannelSection({
           {showBillingCheckboxes && hasDetails && (
             <button
               type="button"
-              disabled={isSaving}
+              disabled={isSaving || !hasUnsavedMarks}
               onClick={e => { e.stopPropagation(); void onSaveChannel() }}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-60"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-70',
+                hasUnsavedMarks
+                  ? 'bg-violet-600 text-white hover:bg-violet-700'
+                  : saveSuccess
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-zinc-100 text-zinc-500',
+              )}
             >
               {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              Save
+              {hasUnsavedMarks ? 'Save changes' : saveSuccess ? 'Saved' : 'Up to date'}
             </button>
           )}
           <Link href={`/studios/enter/${channel.slug}`} onClick={e => e.stopPropagation()} className="text-xs font-medium text-violet-600 hover:text-violet-700">
@@ -368,7 +397,12 @@ function ChannelSection({
       </div>
 
       {expanded && hasDetails && showBillingCheckboxes && (
-        <UnifiedBillingTable rows={allRows} draftBilled={draftBilled} onSetBilled={onSetBilled} />
+        <UnifiedBillingTable
+          rows={allRows}
+          draftBilled={draftBilled}
+          onSetBilled={onSetBilled}
+          billingMonthLabel={billingMonthLabel}
+        />
       )}
 
       {expanded && hasDetails && !showBillingCheckboxes && (
@@ -399,17 +433,22 @@ function UnifiedBillingTable({
   rows,
   draftBilled,
   onSetBilled,
+  billingMonthLabel,
 }: {
   rows: FinanceBillingRow[]
   draftBilled: Record<string, boolean>
   onSetBilled: (projectId: string, billed: boolean) => void
+  billingMonthLabel: string
 }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-[10px] text-zinc-500 uppercase border-b border-zinc-100 bg-white">
-            <th className="px-4 py-3 text-left font-semibold w-14">Billed</th>
+            <th className="px-4 py-3 text-left font-semibold min-w-[5rem]">
+              Billed
+              <span className="block normal-case font-normal text-zinc-400">{billingMonthLabel}</span>
+            </th>
             <th className="px-4 py-3 text-left font-semibold min-w-[11rem]">Video</th>
             <th className="px-3 py-3 text-left font-semibold w-20">List</th>
             <th className="px-3 py-3 text-left font-semibold w-24">IP</th>

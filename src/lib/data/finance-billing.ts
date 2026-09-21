@@ -728,11 +728,7 @@ export async function fetchFinanceBillingReport(
     prevReport = computeFinanceBillingReport(projects, historyByProject, 'month', prevAnchor)
   }
 
-  const projectIds = new Set<string>([
-    ...allFinanceBillingProjectIds(report),
-    ...(prevReport ? allFinanceBillingProjectIds(prevReport) : []),
-  ])
-  const marks = await fetchFinanceBillingMarksForProjects([...projectIds])
+  const marks = await fetchFinanceBillingMarksForProjects(projects.map(p => p.id))
   const closedProjectIds = projectIdsMarkedBilledBeforeMonth(marks, monthKey)
 
   report = applyPreviouslyBilledFilter(report, closedProjectIds)
