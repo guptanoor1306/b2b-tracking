@@ -39,12 +39,20 @@ import {
   tallyDeliveredByContentTypeFromProjects,
   mergeContentTypeCounts,
   countFinanceExportRows,
+  allFinanceBillingExportRows,
+  allFinanceBillingProjectIds,
+  previousFinanceMonthKey,
+  financeMonthLabel,
   type FinanceBillingPeriod,
   type FinanceBillingReport,
   type FinanceBillingRow,
   type FinanceBillingRowKind,
   type FinanceChannelBilling,
 } from '@/lib/finance-billing-shared'
+import {
+  billingMarkLookup,
+  fetchFinanceBillingMarks,
+} from '@/lib/data/finance-billing-marks'
 
 export {
   FINANCE_BILLING_CHANNELS,
@@ -249,12 +257,23 @@ function buildDeliveredInPeriodRows(
   return rows.sort((a, b) => b.pickedAt.localeCompare(a.pickedAt))
 }
 
+type BillingRowNoteContext = {
+  billedThisMonth: boolean
+  periodLabel: string | null
+  deferredFromMonthLabel: string | null
+}
+
 function makeBillingRow(
   project: BillingProject,
   pickDate: string,
   kind: FinanceBillingRowKind,
   onHold: boolean,
   billedInPeriodLabel: string | null,
+  noteContext: BillingRowNoteContext = {
+    billedThisMonth: false,
+    periodLabel: null,
+    deferredFromMonthLabel: null,
+  },
 ): FinanceBillingRow {
   return {
     projectId: project.id,
@@ -270,8 +289,53 @@ function makeBillingRow(
     kind,
     onHold,
     billedInPeriodLabel,
-    financeNotes: buildFinanceNotes(kind, onHold, billedInPeriodLabel),
+    billedThisMonth: noteContext.billedThisMonth,
+    financeNotes: buildFinanceNotes(
+      kind,
+      onHold,
+      billedInPeriodLabel,
+      noteContext.billedThisMonth,
+      noteContext.periodLabel,
+      noteContext.deferredFromMonthLabel,
+    ),
   }
+}
+
+function withBillingMarksOnRow(
+  row: FinanceBillingRow,
+  billedThisMonth: boolean,
+  periodLabel: string,
+  deferredFromMonthLabel: string | null,
+): FinanceBillingRow {
+  return {
+    ...row,
+    billedThisMonth,
+    financeNotes: buildFinanceNotes(
+      row.kind,
+      row.onHold,
+      row.billedInPeriodLabel,
+      billedThisMonth,
+      periodLabel,
+      deferredFromMonthLabel,
+    ),
+  }
+}
+
+function mapChannelRowsWithMarks(
+  rows: FinanceBillingRow[],
+  monthKey: string,
+  marks: Map<string, boolean>,
+  periodLabel: string,
+  deferredFromMonthLabel: string | null,
+): FinanceBillingRow[] {
+  return rows.map(row =>
+    withBillingMarksOnRow(
+      row,
+      billingMarkLookup(marks, monthKey, row.projectId),
+      periodLabel,
+      row.kind === 'deferred_prior_month' ? deferredFromMonthLabel : null,
+    ),
+  )
 }
 
 export function computeFinanceBillingReport(
@@ -287,6 +351,8 @@ export function computeFinanceBillingReport(
     periodRowsByChannel.set(channel, [])
     carryOverRowsByChannel.set(channel, [])
   }
+
+  const periodLabel = billingPeriodLabel(period, anchor)
 
   const periodStart = billingPeriodStart(period, anchor)
 
@@ -390,6 +456,7 @@ export function computeFinanceBillingReport(
       periodRows,
       carryOverRows,
       deliveredInPeriodRows,
+      deferredBillingRows: [],
     }
   })
 
@@ -405,7 +472,7 @@ export function computeFinanceBillingReport(
 
   const report: FinanceBillingReport = {
     period,
-    periodLabel: billingPeriodLabel(period, anchor),
+    periodLabel,
     monthKey: financeMonthKey(period === 'month' ? anchor : startOfMonth(anchor)),
     weekStartKey: financeWeekStartKey(anchor),
     totals: {
@@ -415,12 +482,114 @@ export function computeFinanceBillingReport(
       deliveredByContentType,
       onHold,
       carryOver,
+      markedBilledThisMonth: 0,
+      unmarkedBilledThisMonth: 0,
+      deferredFromPriorMonth: 0,
       exportRows: 0,
     },
+    priorMonthKey: null,
+    priorMonthLabel: null,
+    billingMarksEnabled: false,
     channels,
   }
   report.totals.exportRows = countFinanceExportRows(report)
   return report
+}
+
+function buildDeferredBillingByChannel(
+  prevReport: FinanceBillingReport,
+  prevMonthKey: string,
+  marks: Map<string, boolean>,
+  currentListedIds: Set<string>,
+): Map<string, FinanceBillingRow[]> {
+  const byChannel = new Map<string, FinanceBillingRow[]>()
+  for (const channel of FINANCE_BILLING_CHANNELS) {
+    byChannel.set(channel, [])
+  }
+
+  for (const ch of prevReport.channels) {
+    for (const row of allFinanceBillingExportRows(ch)) {
+      if (billingMarkLookup(marks, prevMonthKey, row.projectId)) continue
+      if (currentListedIds.has(row.projectId)) continue
+      const list = byChannel.get(ch.channel) ?? []
+      list.push({
+        ...row,
+        kind: 'deferred_prior_month',
+        billedThisMonth: false,
+      })
+      byChannel.set(ch.channel, list)
+    }
+  }
+
+  for (const [channel, rows] of byChannel) {
+    byChannel.set(
+      channel,
+      rows.sort((a, b) => b.pickedAt.localeCompare(a.pickedAt)),
+    )
+  }
+
+  return byChannel
+}
+
+function applyMonthlyBillingMarks(
+  report: FinanceBillingReport,
+  marks: Map<string, boolean>,
+  prevMonthKey: string | null,
+): FinanceBillingReport {
+  const periodLabel = report.periodLabel
+  const deferredFromMonthLabel = prevMonthKey ? financeMonthLabel(prevMonthKey) : null
+  const monthKey = report.monthKey
+
+  const channels = report.channels.map(ch => ({
+    ...ch,
+    periodRows: mapChannelRowsWithMarks(ch.periodRows, monthKey, marks, periodLabel, null),
+    carryOverRows: mapChannelRowsWithMarks(ch.carryOverRows, monthKey, marks, periodLabel, null),
+    deliveredInPeriodRows: mapChannelRowsWithMarks(
+      ch.deliveredInPeriodRows,
+      monthKey,
+      marks,
+      periodLabel,
+      null,
+    ),
+    deferredBillingRows: mapChannelRowsWithMarks(
+      ch.deferredBillingRows,
+      monthKey,
+      marks,
+      periodLabel,
+      deferredFromMonthLabel,
+    ),
+  }))
+
+  let markedBilledThisMonth = 0
+  let unmarkedBilledThisMonth = 0
+  let deferredFromPriorMonth = 0
+
+  for (const ch of channels) {
+    for (const row of allFinanceBillingExportRows(ch)) {
+      if (row.kind === 'deferred_prior_month') {
+        deferredFromPriorMonth += 1
+        continue
+      }
+      if (row.billedThisMonth) markedBilledThisMonth += 1
+      else unmarkedBilledThisMonth += 1
+    }
+  }
+
+  const next: FinanceBillingReport = {
+    ...report,
+    priorMonthKey: prevMonthKey,
+    priorMonthLabel: deferredFromMonthLabel,
+    billingMarksEnabled: true,
+    channels,
+    totals: {
+      ...report.totals,
+      markedBilledThisMonth,
+      unmarkedBilledThisMonth,
+      deferredFromPriorMonth,
+    },
+  }
+  next.totals.exportRows = countFinanceExportRows(next)
+  return next
 }
 
 async function fetchBillingProjects(): Promise<BillingProject[]> {
@@ -496,5 +665,48 @@ export async function fetchFinanceBillingReport(
 ): Promise<FinanceBillingReport> {
   const projects = await fetchBillingProjects()
   const historyByProject = await fetchBillingStageHistory(projects.map(p => p.id))
-  return computeFinanceBillingReport(projects, historyByProject, period, anchor)
+  let report = computeFinanceBillingReport(projects, historyByProject, period, anchor)
+
+  if (period !== 'month') return report
+
+  const monthKey = report.monthKey
+  const prevMonthKey = previousFinanceMonthKey(monthKey)
+  let prevReport: FinanceBillingReport | null = null
+
+  if (prevMonthKey) {
+    const prevAnchor = parseISO(`${prevMonthKey}-01`)
+    prevReport = computeFinanceBillingReport(projects, historyByProject, 'month', prevAnchor)
+    const currentListedIds = new Set(allFinanceBillingProjectIds(report))
+    const prevMarks = await fetchFinanceBillingMarks(
+      [prevMonthKey],
+      allFinanceBillingProjectIds(prevReport),
+    )
+    const deferredByChannel = buildDeferredBillingByChannel(
+      prevReport,
+      prevMonthKey,
+      prevMarks,
+      currentListedIds,
+    )
+    report = {
+      ...report,
+      priorMonthKey: prevMonthKey,
+      priorMonthLabel: financeMonthLabel(prevMonthKey),
+      channels: report.channels.map(ch => ({
+        ...ch,
+        deferredBillingRows: deferredByChannel.get(ch.channel) ?? [],
+      })),
+    }
+    report.totals.deferredFromPriorMonth = report.channels.reduce(
+      (sum, ch) => sum + ch.deferredBillingRows.length,
+      0,
+    )
+    report.totals.exportRows = countFinanceExportRows(report)
+  }
+
+  const projectIds = new Set<string>([
+    ...allFinanceBillingProjectIds(report),
+    ...(prevReport ? allFinanceBillingProjectIds(prevReport) : []),
+  ])
+  const marks = await fetchFinanceBillingMarks([monthKey], [...projectIds])
+  return applyMonthlyBillingMarks(report, marks, prevMonthKey)
 }

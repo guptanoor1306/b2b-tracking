@@ -5,6 +5,7 @@ import {
   endOfWeek,
   format,
   startOfMonth,
+  subMonths,
 } from 'date-fns'
 
 export const FINANCE_BILLING_CHANNELS = [
@@ -19,7 +20,11 @@ export const FINANCE_BILLING_LEGACY_CHANNELS = ['Beyond Zerodha'] as const
 
 export type FinanceBillingPeriod = 'week' | 'month'
 
-export type FinanceBillingRowKind = 'current_period' | 'carry_over' | 'delivered_in_period'
+export type FinanceBillingRowKind =
+  | 'current_period'
+  | 'carry_over'
+  | 'delivered_in_period'
+  | 'deferred_prior_month'
 
 export type FinanceBillingRow = {
   projectId: string
@@ -36,6 +41,8 @@ export type FinanceBillingRow = {
   onHold: boolean
   /** Period label when this video was first picked / billed (prior period for carry-over). */
   billedInPeriodLabel: string | null
+  /** Super-admin mark: invoiced in the selected calendar month. */
+  billedThisMonth: boolean
   financeNotes: string[]
 }
 
@@ -55,6 +62,8 @@ export type FinanceChannelBilling = {
   carryOverRows: FinanceBillingRow[]
   /** Delivered in selected period but production pick was in an earlier period. */
   deliveredInPeriodRows: FinanceBillingRow[]
+  /** On prior month's billing list but not marked billed there — carry forward. */
+  deferredBillingRows: FinanceBillingRow[]
 }
 
 export type FinanceBillingReport = {
@@ -69,9 +78,20 @@ export type FinanceBillingReport = {
     deliveredByContentType: Record<string, number>
     onHold: number
     carryOver: number
+    /** Marked billed for the selected month (monthly view only). */
+    markedBilledThisMonth: number
+    /** On this month's list but not marked billed yet. */
+    unmarkedBilledThisMonth: number
+    /** Carried from previous month — not marked billed there. */
+    deferredFromPriorMonth: number
     /** Rows in CSV (= all expanded table rows combined). */
     exportRows: number
   }
+  /** Previous calendar month key when period is month; used for deferred billing. */
+  priorMonthKey: string | null
+  priorMonthLabel: string | null
+  /** Super Admin monthly billing marks enabled. */
+  billingMarksEnabled: boolean
   channels: FinanceChannelBilling[]
 }
 
@@ -97,13 +117,22 @@ export function buildFinanceNotes(
   kind: FinanceBillingRowKind,
   onHold: boolean,
   billedInPeriodLabel: string | null,
+  billedThisMonth: boolean,
+  periodLabel: string | null,
+  deferredFromMonthLabel: string | null,
 ): string[] {
   const notes: string[] = []
+  if (kind === 'deferred_prior_month' && deferredFromMonthLabel) {
+    notes.push(`Not invoiced in ${deferredFromMonthLabel} — include in this month's billing if applicable`)
+  }
   if (kind === 'carry_over' && billedInPeriodLabel) {
-    notes.push(`Already included in ${billedInPeriodLabel} billing — do not bill again for this pick`)
+    notes.push(`Picked in ${billedInPeriodLabel} — may already have been billed then; confirm before invoicing again`)
   }
   if (kind === 'delivered_in_period' && billedInPeriodLabel) {
     notes.push(`Delivered in this period; production pick was in ${billedInPeriodLabel}`)
+  }
+  if (billedThisMonth && periodLabel) {
+    notes.push(`Marked billed for ${periodLabel}`)
   }
   if (onHold) {
     notes.push('Currently on hold — verify before invoicing')
@@ -128,6 +157,18 @@ export function parseFinanceBillingAnchor(params: FinanceBillingParams, now = ne
 
 export function financeMonthKey(anchor: Date): string {
   return format(anchor, 'yyyy-MM')
+}
+
+export function previousFinanceMonthKey(monthKey: string): string | null {
+  if (!/^\d{4}-\d{2}$/.test(monthKey)) return null
+  const anchor = parseISO(`${monthKey}-01`)
+  if (!isValid(anchor)) return null
+  return financeMonthKey(subMonths(anchor, 1))
+}
+
+export function financeMonthLabel(monthKey: string): string {
+  const anchor = parseISO(`${monthKey}-01`)
+  return isValid(anchor) ? format(anchor, 'MMMM yyyy') : monthKey
 }
 
 export function financeWeekStartKey(anchor: Date): string {
@@ -174,16 +215,28 @@ export function mergeContentTypeCounts(
 function billingCategoryLabel(kind: FinanceBillingRowKind): string {
   if (kind === 'carry_over') return 'Prior period — review'
   if (kind === 'delivered_in_period') return 'Delivered this period (prior pick)'
+  if (kind === 'deferred_prior_month') return 'Deferred from prior month'
   return 'This period'
 }
 
 /** All billing table rows for export (same rows as expanded UI sections). */
 export function allFinanceBillingExportRows(channel: FinanceChannelBilling): FinanceBillingRow[] {
   return [
+    ...(channel.deferredBillingRows ?? []),
     ...channel.periodRows,
     ...channel.carryOverRows,
     ...(channel.deliveredInPeriodRows ?? []),
   ]
+}
+
+export function allFinanceBillingProjectIds(report: FinanceBillingReport): string[] {
+  const ids = new Set<string>()
+  for (const ch of report.channels) {
+    for (const row of allFinanceBillingExportRows(ch)) {
+      ids.add(row.projectId)
+    }
+  }
+  return [...ids]
 }
 
 export function countFinanceExportRows(report: FinanceBillingReport): number {
@@ -215,6 +268,7 @@ export function exportFinanceBillingCsv(report: FinanceBillingReport): string {
       'Current stage',
       'Status',
       'Billing category',
+      'Billed this month',
       'Finance notes',
     ].join(','),
   ]
@@ -233,6 +287,7 @@ export function exportFinanceBillingCsv(report: FinanceBillingReport): string {
         escape(row.currentStage),
         escape(row.isDelivered ? 'Delivered' : 'In pipeline'),
         escape(billingCategoryLabel(row.kind)),
+        escape(row.billedThisMonth ? 'Yes' : 'No'),
         escape(row.financeNotes.join(' · ')),
       ].join(','))
     }
