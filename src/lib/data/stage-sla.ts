@@ -241,23 +241,67 @@ export async function fetchProjectHoldPeriods(projectId: string) {
   return data ?? []
 }
 
+const HOLD_PROJECT_ID_CHUNK = 80
+
 export async function fetchHoldPeriodsForProjects(projectIds: string[]) {
   if (!projectIds.length) return {} as Record<string, Awaited<ReturnType<typeof fetchProjectHoldPeriods>>>
 
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('project_hold_periods')
-    .select('*')
-    .in('project_id', projectIds)
-    .order('started_at')
+  const map: Record<string, NonNullable<Awaited<ReturnType<typeof fetchProjectHoldPeriods>>>> = {}
 
-  const map: Record<string, NonNullable<typeof data>> = {}
-  for (const row of data ?? []) {
-    const id = row.project_id as string
-    if (!map[id]) map[id] = []
-    map[id].push(row)
+  for (let i = 0; i < projectIds.length; i += HOLD_PROJECT_ID_CHUNK) {
+    const chunk = projectIds.slice(i, i + HOLD_PROJECT_ID_CHUNK)
+    const { data } = await supabase
+      .from('project_hold_periods')
+      .select('*')
+      .in('project_id', chunk)
+      .order('started_at')
+
+    for (const row of data ?? []) {
+      const id = row.project_id as string
+      if (!map[id]) map[id] = []
+      map[id].push(row)
+    }
   }
+
   return map
+}
+
+/** Hold periods + open-hold starters in one DB pass per chunk (dashboard). */
+export async function fetchHoldDataForProjects(projectIds: string[]): Promise<{
+  holdPeriodsByProjectId: Record<string, Awaited<ReturnType<typeof fetchProjectHoldPeriods>>>
+  openHoldStarters: Record<string, Pick<Profile, 'id' | 'name' | 'email'>>
+}> {
+  if (!projectIds.length) {
+    return { holdPeriodsByProjectId: {}, openHoldStarters: {} }
+  }
+
+  const supabase = await createClient()
+  const holdPeriodsByProjectId: Record<string, Awaited<ReturnType<typeof fetchProjectHoldPeriods>>> = {}
+  const openHoldStarters: Record<string, Pick<Profile, 'id' | 'name' | 'email'>> = {}
+
+  for (let i = 0; i < projectIds.length; i += HOLD_PROJECT_ID_CHUNK) {
+    const chunk = projectIds.slice(i, i + HOLD_PROJECT_ID_CHUNK)
+    const { data } = await supabase
+      .from('project_hold_periods')
+      .select('*, starter:profiles!project_hold_periods_started_by_fkey(id, name, email)')
+      .in('project_id', chunk)
+      .order('started_at')
+
+    for (const row of data ?? []) {
+      const id = row.project_id as string
+      if (!holdPeriodsByProjectId[id]) holdPeriodsByProjectId[id] = []
+      holdPeriodsByProjectId[id].push(row)
+
+      if (!row.ended_at) {
+        const raw = row.starter as Pick<Profile, 'id' | 'name' | 'email'> | Pick<Profile, 'id' | 'name' | 'email'>[] | null
+        const starter = Array.isArray(raw) ? raw[0] : raw
+        if (starter) openHoldStarters[id] = starter
+      }
+    }
+  }
+
+  return { holdPeriodsByProjectId, openHoldStarters }
 }
 
 export async function fetchHoldPeriodsForChannel(channelDbName: string) {

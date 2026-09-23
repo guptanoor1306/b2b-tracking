@@ -1,9 +1,10 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSessionProfile } from '@/lib/auth'
 import { usesFinanceDashboard } from '@/lib/views'
 import { upsertFinanceBillingMarks } from '@/lib/data/finance-billing-marks'
+import { FINANCE_BILLING_CACHE_TAG } from '@/lib/data/finance-billing'
 
 export async function saveFinanceBillingMarksForChannel(input: {
   monthKey: string
@@ -25,6 +26,7 @@ export async function saveFinanceBillingMarksForChannel(input: {
   try {
     await upsertFinanceBillingMarks(input.monthKey, input.marks, profile.id)
     revalidatePath('/studios/finance')
+    revalidateTag(FINANCE_BILLING_CACHE_TAG, 'max')
     return { ok: true }
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Save failed'

@@ -5,8 +5,7 @@ import { DashboardRecentCommentsAsync } from '@/components/dashboard/DashboardRe
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import {
   fetchStageSlaConfig,
-  fetchOpenHoldStarters,
-  fetchHoldPeriodsForProjects,
+  fetchHoldDataForProjects,
 } from '@/lib/data/stage-sla'
 import { setStageSlaCache } from '@/lib/timelines'
 import { AdminDashboard } from '@/components/dashboard/AdminDashboard'
@@ -50,15 +49,14 @@ export async function DashboardPageContent({
     projects,
     holidays,
     stageSla,
-    holdStarters,
-    holdPeriodsByProjectId,
+    holdData,
   ] = await Promise.all([
     projectsPromise,
     fetchHolidayDates(),
     fetchStageSlaConfig(channelName),
-    projectsPromise.then(ps => fetchOpenHoldStarters(ps.map(p => p.id))),
-    projectsPromise.then(ps => fetchHoldPeriodsForProjects(ps.map(p => p.id))),
+    projectsPromise.then(ps => fetchHoldDataForProjects(ps.map(p => p.id))),
   ])
+  const { openHoldStarters: holdStarters, holdPeriodsByProjectId } = holdData
 
   setStageSlaCache(stageSla, channelName)
   const effectiveRole = effectiveRoleForChannel(channelRole, profile.role)

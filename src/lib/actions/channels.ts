@@ -10,7 +10,7 @@ import { fetchUserChannelSlugs, fetchChannelRole } from '@/lib/data/channel-acce
 import { isSuperAdmin, canManageChannelMembers } from '@/lib/views'
 import { ChannelMemberRole } from '@/lib/types'
 import { getActiveChannelSlug, resolvePostAuthDestination } from '@/lib/channel-context'
-import { channelMembersCacheTag } from '@/lib/cache-tags'
+import { channelMembersCacheTag, CHANNEL_MEMBER_COUNTS_CACHE_TAG } from '@/lib/cache-tags'
 import { notifyChannelAccess } from '@/lib/email/notifications'
 
 export async function enterChannel(slug: string) {
@@ -70,6 +70,7 @@ export async function addChannelMember(
   if (error) return { error: error.message }
 
   revalidateTag(channelMembersCacheTag(channelSlug), 'max')
+  revalidateTag(CHANNEL_MEMBER_COUNTS_CACHE_TAG, 'max')
   void notifyChannelAccess({ profileId, channelSlug, channelRole }).catch(() => {})
 
   revalidatePath('/studios/settings')
@@ -101,6 +102,7 @@ export async function updateChannelMemberRole(
   if (error) return { error: error.message }
 
   revalidateTag(channelMembersCacheTag(channelSlug), 'max')
+  revalidateTag(CHANNEL_MEMBER_COUNTS_CACHE_TAG, 'max')
   revalidatePath('/studios/settings')
   revalidatePath('/settings')
   return { success: true }
@@ -119,6 +121,7 @@ export async function removeChannelMember(profileId: string, channelSlug: string
   if (error) return { error: error.message }
 
   revalidateTag(channelMembersCacheTag(channelSlug), 'max')
+  revalidateTag(CHANNEL_MEMBER_COUNTS_CACHE_TAG, 'max')
   revalidatePath('/studios/settings')
   revalidatePath('/studios')
   revalidatePath('/settings')

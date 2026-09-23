@@ -5,7 +5,7 @@ import { canUseDataCache, createCachedReadClient } from '@/lib/supabase/cache-re
 import { Profile, ChannelMember, ChannelMemberRole } from '@/lib/types'
 import { allChannelSlugs } from '@/lib/channels'
 import { isSuperAdmin } from '@/lib/views'
-import { channelMembersCacheTag } from '@/lib/cache-tags'
+import { channelMembersCacheTag, CHANNEL_MEMBER_COUNTS_CACHE_TAG } from '@/lib/cache-tags'
 import { channelMemberProfileSelect, resolveProfileEmbed } from '@/lib/profile-fields'
 
 export type ProfileChannelRow = {
@@ -129,13 +129,30 @@ export async function fetchAllProfileChannels(): Promise<ProfileChannelRow[]> {
   return (data ?? []).map(row => mapProfileChannelRow(row as Parameters<typeof mapProfileChannelRow>[0]))
 }
 
-export async function fetchChannelMemberCounts(): Promise<Record<string, number>> {
-  const rows = await fetchAllProfileChannels()
+async function fetchChannelMemberCountsLive(): Promise<Record<string, number>> {
+  const supabase = canUseDataCache() ? createCachedReadClient() : await createClient()
+  const { data, error } = await supabase.from('profile_channels').select('channel_slug')
+  if (error) return {}
+
   const counts: Record<string, number> = {}
-  for (const r of rows) {
-    counts[r.channel_slug] = (counts[r.channel_slug] ?? 0) + 1
+  for (const row of data ?? []) {
+    const slug = row.channel_slug as string
+    counts[slug] = (counts[slug] ?? 0) + 1
   }
   return counts
+}
+
+function getCachedChannelMemberCounts() {
+  return unstable_cache(
+    fetchChannelMemberCountsLive,
+    ['channel-member-counts-v1'],
+    { revalidate: 300, tags: [CHANNEL_MEMBER_COUNTS_CACHE_TAG] },
+  )()
+}
+
+export async function fetchChannelMemberCounts(): Promise<Record<string, number>> {
+  if (!canUseDataCache()) return fetchChannelMemberCountsLive()
+  return getCachedChannelMemberCounts()
 }
 
 export async function fetchMembersByChannel(): Promise<Record<string, ChannelMember[]>> {

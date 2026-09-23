@@ -29,9 +29,19 @@ import {
   isSuperAdmin,
   canMarkReadyToProduce,
 } from '@/lib/views'
-import { filterProjectsByTeamMembership, isUserOnProjectTeam } from '@/lib/projects/team'
+import { filterProjectsByTeamMembership, getProjectTeamMemberIds } from '@/lib/projects/team'
+import type { Project } from '@/lib/types'
 
 type SearchParams = Promise<Record<string, string | undefined>>
+
+function boardRelevantMemberIds(projects: Project[]): Set<string> {
+  const ids = new Set<string>()
+  for (const p of projects) {
+    if (p.stage_assignee_id) ids.add(p.stage_assignee_id)
+    for (const id of getProjectTeamMemberIds(p)) ids.add(id)
+  }
+  return ids
+}
 
 export default async function BoardPage({ searchParams }: { searchParams: SearchParams }) {
   const profile = await getSessionProfile()
@@ -42,36 +52,22 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   const channelNamePromise = getActiveChannelDbName()
   const channelSlugPromise = getActiveChannelSlug()
   const projectsPromise = channelNamePromise.then(name => fetchProjects({ month }, name))
-  const [channelName, channelSlug, projects, users, holidays, stageSla, holdPeriodsByProjectId, openStageWorkByProjectId, channelRole] = await Promise.all([
+
+  const [channelName, channelSlug, projects, users, holidays, stageSla, channelRole] = await Promise.all([
     channelNamePromise,
     channelSlugPromise,
     projectsPromise,
     channelSlugPromise.then(slug => fetchChannelMembers(slug ?? '')),
     fetchHolidayDates(),
     channelNamePromise.then(name => fetchStageSlaConfig(name)),
-    projectsPromise.then(ps => fetchHoldPeriodsForProjects(ps.map(p => p.id))),
-    channelNamePromise.then(name =>
-      isLaSocialChannelDbName(name)
-        ? projectsPromise.then(ps => fetchOpenStageWorkForProjects(ps.map(p => p.id)))
-        : Promise.resolve({}),
-    ),
     getActiveChannelRole(profile),
   ])
+
   setStageSlaCache(stageSla, channelName)
   const role = effectiveRoleForChannel(channelRole, profile.role)
   const superAdmin = isSuperAdmin(profile.role)
   const internal = usesInternalBoardView(profile.role, channelRole)
   const showCreateRequest = canCreateExternalRequest(role, channelName)
-
-  const canFilterByMember = superAdmin || canSeeBoardAssigneeFilter(role)
-  const filterUsers = canFilterByMember
-    ? users
-    : users.filter(u =>
-      projects.some(p =>
-        p.stage_assignee_id === u.id
-        || isUserOnProjectTeam(p, u.id)
-      )
-    )
 
   const monthScoped = filterProjectsByMonth(projects, month)
   const boardIps = [...new Set(monthScoped.map(p => p.ip).filter(ip => ip && ip !== '—'))].sort()
@@ -106,6 +102,20 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   if (selectedTypes.length) {
     filtered = filtered.filter(p => selectedTypes.includes(p.content_type))
   }
+
+  const visibleIds = filtered.map(p => p.id)
+  const [holdPeriodsByProjectId, openStageWorkByProjectId] = await Promise.all([
+    fetchHoldPeriodsForProjects(visibleIds),
+    isLaSocialChannelDbName(channelName)
+      ? fetchOpenStageWorkForProjects(visibleIds)
+      : Promise.resolve({}),
+  ])
+
+  const canFilterByMember = superAdmin || canSeeBoardAssigneeFilter(role)
+  const relevantMemberIds = boardRelevantMemberIds(monthScoped)
+  const filterUsers = canFilterByMember
+    ? users
+    : users.filter(u => relevantMemberIds.has(u.id))
 
   const boardKey = [
     month,

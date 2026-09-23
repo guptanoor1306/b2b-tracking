@@ -8,7 +8,10 @@ import {
   startOfDay,
   endOfDay,
   format,
+  subMonths,
 } from 'date-fns'
+import { unstable_cache } from 'next/cache'
+import { canUseDataCache } from '@/lib/supabase/cache-read'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { STAGES_INTERNAL } from '@/lib/constants'
@@ -91,6 +94,42 @@ const FINANCE_FETCH_CHANNELS = [
   ...FINANCE_BILLING_CHANNELS,
   ...FINANCE_BILLING_LEGACY_CHANNELS,
 ] as const
+
+/** Max months to walk back when chaining deferred billing (including target month). */
+const FINANCE_DEFERRAL_LOOKBACK_MONTHS = 18
+
+export const FINANCE_BILLING_CACHE_TAG = 'finance-billing'
+
+type BillingProjectPrepared = {
+  project: BillingProject
+  pickDate: string
+  pickParsed: Date | null
+  onHold: boolean
+  bucket: string
+}
+
+function buildBillingProjectPrepared(
+  projects: BillingProject[],
+  historyByProject: Map<string, StageHistory[]>,
+): BillingProjectPrepared[] {
+  const prepared: BillingProjectPrepared[] = []
+  for (const project of projects) {
+    if (!isFinanceBillingChannel(project.channel)) continue
+    const pickDate =
+      resolvePickDate(project, historyByProject.get(project.id) ?? [])
+      ?? project.picked_up_date
+      ?? null
+    if (!pickDate) continue
+    prepared.push({
+      project,
+      pickDate,
+      pickParsed: parseBillingDate(pickDate),
+      onHold: project.is_on_hold || project.status_health === 'On hold',
+      bucket: financeDisplayChannel(project.channel),
+    })
+  }
+  return prepared
+}
 
 function financeDisplayChannel(dbName: string): string {
   if (dbName === 'Beyond Zerodha') return 'Zerodha Backoffice'
@@ -344,6 +383,7 @@ export function computeFinanceBillingReport(
   historyByProject: Map<string, StageHistory[]>,
   period: FinanceBillingPeriod,
   anchor = new Date(),
+  prepared?: BillingProjectPrepared[],
 ): FinanceBillingReport {
   const periodRowsByChannel = new Map<string, FinanceBillingRow[]>()
   const carryOverRowsByChannel = new Map<string, FinanceBillingRow[]>()
@@ -356,26 +396,14 @@ export function computeFinanceBillingReport(
   const periodLabel = billingPeriodLabel(period, anchor)
 
   const periodStart = billingPeriodStart(period, anchor)
+  const billingProjects = prepared ?? buildBillingProjectPrepared(projects, historyByProject)
 
-  for (const project of projects) {
-    if (!isFinanceBillingChannel(project.channel)) continue
-
-    const pickDate =
-      resolvePickDate(project, historyByProject.get(project.id) ?? [])
-      ?? project.picked_up_date
-      ?? null
-    if (!pickDate) continue
-
-    const pickParsed = parseBillingDate(pickDate)
-
-    const onHold = project.is_on_hold || project.status_health === 'On hold'
+  for (const { project, pickDate, pickParsed, onHold, bucket } of billingProjects) {
     const billedInPeriodLabel = pickParsed
       ? billingPeriodLabelForDate(period, pickParsed)
       : null
     const inPeriod = inBillingPeriod(pickDate, period, anchor)
     const beforePeriod = pickParsed ? pickParsed < periodStart : false
-
-    const bucket = financeDisplayChannel(project.channel)
 
     if (inPeriod) {
       periodRowsByChannel.get(bucket)?.push(
@@ -395,10 +423,8 @@ export function computeFinanceBillingReport(
   for (const channel of FINANCE_BILLING_CHANNELS) {
     deliveredInPeriodByChannel.set(channel, [])
   }
-  for (const project of projects) {
-    if (!isFinanceBillingChannel(project.channel)) continue
+  for (const { project, bucket } of billingProjects) {
     if (!wasDeliveredInBillingPeriod(project, period, anchor)) continue
-    const bucket = financeDisplayChannel(project.channel)
     deliveredInPeriodByChannel.get(bucket)?.push(project)
   }
 
@@ -559,39 +585,40 @@ function mergeDeferredIntoReport(
   return next
 }
 
-function earliestFinanceBillingMonthKey(
-  projects: BillingProject[],
-  historyByProject: Map<string, StageHistory[]>,
-): string {
+function earliestFinanceBillingMonthKey(prepared: BillingProjectPrepared[]): string {
   let earliest: string | null = null
-  for (const project of projects) {
-    const pickDate =
-      resolvePickDate(project, historyByProject.get(project.id) ?? [])
-      ?? project.picked_up_date
-      ?? null
-    if (!pickDate) continue
-    const parsed = parseBillingDate(pickDate)
-    if (!parsed) continue
-    const key = financeMonthKey(startOfMonth(parsed))
+  for (const { pickParsed } of prepared) {
+    if (!pickParsed) continue
+    const key = financeMonthKey(startOfMonth(pickParsed))
     if (!earliest || key < earliest) earliest = key
   }
   return earliest ?? financeMonthKey(startOfMonth(new Date()))
 }
 
-/** Month keys from earliest billing activity through target (inclusive), ascending. */
+function deferralChainStartMonthKey(
+  targetMonthKey: string,
+  earliestMonthKey: string,
+): string {
+  const cap = financeMonthKey(
+    subMonths(parseISO(`${targetMonthKey}-01`), FINANCE_DEFERRAL_LOOKBACK_MONTHS - 1),
+  )
+  return earliestMonthKey > cap ? earliestMonthKey : cap
+}
+
+/** Month keys from capped start through target (inclusive), ascending. */
 function financeMonthKeyChain(
   targetMonthKey: string,
   earliestMonthKey: string,
 ): string[] {
+  const startKey = deferralChainStartMonthKey(targetMonthKey, earliestMonthKey)
   const chain: string[] = []
   let cursor = targetMonthKey
   while (true) {
     chain.unshift(cursor)
-    if (cursor <= earliestMonthKey) break
+    if (cursor <= startKey) break
     const prev = previousFinanceMonthKey(cursor)
     if (!prev) break
     cursor = prev
-    if (chain.length > 48) break
   }
   return chain
 }
@@ -605,14 +632,21 @@ function computeEnrichedMonthReport(
   historyByProject: Map<string, StageHistory[]>,
   monthKey: string,
   marks: Map<string, boolean>,
+  prepared: BillingProjectPrepared[],
 ): FinanceBillingReport {
-  const earliest = earliestFinanceBillingMonthKey(projects, historyByProject)
+  const earliest = earliestFinanceBillingMonthKey(prepared)
   const chain = financeMonthKeyChain(monthKey, earliest)
   const cache = new Map<string, FinanceBillingReport>()
 
   for (const mk of chain) {
     const anchor = parseISO(`${mk}-01`)
-    let report = computeFinanceBillingReport(projects, historyByProject, 'month', anchor)
+    let report = computeFinanceBillingReport(
+      projects,
+      historyByProject,
+      'month',
+      anchor,
+      prepared,
+    )
     const prevMonthKey = previousFinanceMonthKey(mk)
     if (prevMonthKey && cache.has(prevMonthKey)) {
       const prevEnriched = cache.get(prevMonthKey)!
@@ -812,24 +846,32 @@ async function fetchBillingStageHistory(projectIds: string[]): Promise<Map<strin
   return map
 }
 
-export async function fetchFinanceBillingReport(
+async function fetchFinanceBillingReportUncached(
   period: FinanceBillingPeriod,
   anchor = new Date(),
 ): Promise<FinanceBillingReport> {
   const projects = await fetchBillingProjects()
-  const historyByProject = await fetchBillingStageHistory(projects.map(p => p.id))
+  const projectIds = projects.map(p => p.id)
+
+  const [historyByProject, marks] = await Promise.all([
+    fetchBillingStageHistory(projectIds),
+    period === 'month'
+      ? fetchFinanceBillingMarksForProjects(projectIds)
+      : Promise.resolve(new Map<string, boolean>()),
+  ])
 
   if (period !== 'month') {
     return computeFinanceBillingReport(projects, historyByProject, period, anchor)
   }
 
+  const prepared = buildBillingProjectPrepared(projects, historyByProject)
   const monthKey = financeMonthKey(startOfMonth(anchor))
-  const marks = await fetchFinanceBillingMarksForProjects(projects.map(p => p.id))
   let report = computeEnrichedMonthReport(
     projects,
     historyByProject,
     monthKey,
     marks,
+    prepared,
   )
 
   const closedProjectIds = projectIdsMarkedBilledBeforeMonth(marks, monthKey)
@@ -837,4 +879,20 @@ export async function fetchFinanceBillingReport(
 
   const prevMonthKey = previousFinanceMonthKey(monthKey)
   return applyMonthlyBillingMarks(report, marks, prevMonthKey)
+}
+
+export async function fetchFinanceBillingReport(
+  period: FinanceBillingPeriod,
+  anchor = new Date(),
+): Promise<FinanceBillingReport> {
+  if (period !== 'month' || !canUseDataCache()) {
+    return fetchFinanceBillingReportUncached(period, anchor)
+  }
+
+  const monthKey = financeMonthKey(startOfMonth(anchor))
+  return unstable_cache(
+    async () => fetchFinanceBillingReportUncached('month', parseISO(`${monthKey}-01`)),
+    ['finance-billing-report-v1', monthKey],
+    { tags: [FINANCE_BILLING_CACHE_TAG], revalidate: 300 },
+  )()
 }
