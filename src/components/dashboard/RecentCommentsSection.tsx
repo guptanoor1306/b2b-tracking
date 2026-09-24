@@ -29,6 +29,7 @@ function CommentRow({
     <div className="group relative rounded-lg border border-zinc-100 bg-zinc-50/40 transition-colors hover:border-violet-100 hover:bg-violet-50/30">
       <Link
         href={`/projects/${item.project_id}`}
+        prefetch={false}
         className="block px-3 py-2.5 pr-9"
       >
         <div className="flex gap-2.5">

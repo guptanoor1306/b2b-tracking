@@ -165,6 +165,7 @@ export function AdminDashboard({
                   <Link
                     key={p.id}
                     href={`/projects/${p.id}`}
+                    prefetch={false}
                     className="group flex items-center gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-3 hover:border-zinc-300 hover:shadow-sm transition-all border-l-2 border-l-amber-500"
                   >
                     <div className="min-w-0 flex-1">

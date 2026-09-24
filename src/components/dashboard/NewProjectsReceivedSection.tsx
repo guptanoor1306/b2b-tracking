@@ -32,6 +32,7 @@ export function NewProjectsReceivedSection({ projects }: Props) {
             <Link
               key={p.id}
               href={`/projects/${p.id}`}
+              prefetch={false}
               className="group flex items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 hover:border-amber-200 hover:shadow-sm transition-all"
             >
               <div className="min-w-0 flex-1">

@@ -35,6 +35,7 @@ export function CompactProjectRow({
   return (
     <Link
       href={`/projects/${project.id}`}
+      prefetch={false}
       className={cn(
         'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors group',
         light ? 'hover:bg-zinc-50' : 'hover:bg-white/[0.03]'
