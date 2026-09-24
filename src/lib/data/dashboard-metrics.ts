@@ -8,6 +8,8 @@ import {
   normalizeZerodhaBoardStage,
 } from '@/lib/zerodha-sla'
 import { computeStageDurations, isAllMonths, isDeliveredInMonth, isProjectRelevantInMonth } from '@/lib/utils'
+import { normalizeStage } from '@/lib/timelines'
+import { isLaSocialChannelDbName, LA_SOCIAL_TOPIC, STAGES_LA_SOCIAL } from '@/lib/la-social-sla'
 
 export type OnTimeDeliveryStats = {
   onTime: number
@@ -34,6 +36,19 @@ const TIMELINE_STAGE_METRICS: { key: string; label: string; stage: string }[] = 
   { key: 'first_draft_review', label: '1st Draft Review', stage: ZERODHA_FIRST_DRAFT_REVIEW },
   { key: 'second_draft_review', label: '2nd Draft Review', stage: ZERODHA_SECOND_DRAFT_REVIEW },
 ]
+
+function laSocialTimelineStageMetrics(): { key: string; label: string; stage: string }[] {
+  return STAGES_LA_SOCIAL.filter(stage => stage !== LA_SOCIAL_TOPIC).map(stage => ({
+    key: `la_${stage.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`,
+    label: stage,
+    stage,
+  }))
+}
+
+function timelineStageMetricsForChannel(channelDbName: string | null | undefined) {
+  if (isLaSocialChannelDbName(channelDbName)) return laSocialTimelineStageMetrics()
+  return TIMELINE_STAGE_METRICS
+}
 
 export function computeOnTimeDeliveryStats(onTime: number, late: number): OnTimeDeliveryStats {
   const total = onTime + late
@@ -74,10 +89,13 @@ export function computeTimelineMetrics(
   holidays: string[],
   holdPeriodsByProjectId: Record<string, HoldPeriod[]>,
   month: string,
+  channelDbName?: string | null,
 ): TimelineMetrics {
+  const stageMetrics = timelineStageMetricsForChannel(channelDbName)
+  const laSocial = isLaSocialChannelDbName(channelDbName)
   const scoped = projectsInMetricsScope(projects, month)
   const buckets = new Map<string, number[]>(
-    TIMELINE_STAGE_METRICS.map(metric => [metric.key, []]),
+    stageMetrics.map(metric => [metric.key, []]),
   )
 
   for (const project of scoped) {
@@ -92,15 +110,21 @@ export function computeTimelineMetrics(
     )
 
     for (const duration of durations) {
-      const normalized = normalizeZerodhaBoardStage(duration.stage)
-      const metric = TIMELINE_STAGE_METRICS.find(item => item.stage === normalized)
+      const normalized = laSocial
+        ? normalizeStage(duration.stage)
+        : normalizeZerodhaBoardStage(duration.stage)
+      const metric = stageMetrics.find(item =>
+        laSocial
+          ? normalizeStage(item.stage) === normalized
+          : item.stage === normalized,
+      )
       if (!metric || duration.totalBusinessHours <= 0) continue
       buckets.get(metric.key)?.push(duration.totalBusinessHours)
     }
   }
 
   return {
-    metrics: TIMELINE_STAGE_METRICS.map(metric => {
+    metrics: stageMetrics.map(metric => {
       const samples = buckets.get(metric.key) ?? []
       const avg = averageHours(samples)
       return {

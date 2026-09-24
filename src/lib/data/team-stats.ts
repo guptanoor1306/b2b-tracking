@@ -1,8 +1,8 @@
 import { ChannelMember, Project } from '@/lib/types'
-import { FINAL_STAGE } from '@/lib/constants'
 import { isAllMonths, isDeliveredInMonth, isProjectRelevantInMonth } from '@/lib/utils'
 import { resolveStageAssigneeId } from '@/lib/views'
 import { suppressProductionMetrics } from '@/lib/zerodha-sla'
+import { isProjectDelivered } from '@/lib/timelines'
 
 export type TeamMemberVital = {
   id: string
@@ -37,32 +37,56 @@ function isEditorOnProject(project: Project, memberId: string): boolean {
   return project.editor_id === memberId || project.editor_2_id === memberId
 }
 
-function deliveredProjectsForMember(projects: Project[], memberId: string, month: string): Project[] {
+function memberCreditedOnDelivered(project: Project, memberId: string, creditPrimaryPoc: boolean): boolean {
+  if (isEditorOnProject(project, memberId)) return true
+  if (!creditPrimaryPoc) return false
+  if (project.internal_owner_id === memberId) return true
+  return resolveStageAssigneeId(project, project.current_stage) === memberId
+}
+
+function deliveredProjectsForMember(
+  projects: Project[],
+  memberId: string,
+  month: string,
+  creditPrimaryPoc: boolean,
+): Project[] {
   return projects.filter(project => {
-    if (project.current_stage !== FINAL_STAGE) return false
+    if (!isProjectDelivered(project)) return false
     if (!isAllMonths(month) && !isDeliveredInMonth(project, month)) return false
-    return isEditorOnProject(project, memberId)
+    return memberCreditedOnDelivered(project, memberId, creditPrimaryPoc)
   })
 }
 
 function pipelineProjectsForMember(projects: Project[], memberId: string, month: string): Project[] {
   return projects.filter(project => {
-    if (project.current_stage === FINAL_STAGE || project.status_health === 'On hold') return false
+    if (isProjectDelivered(project) || project.status_health === 'On hold') return false
     if (suppressProductionMetrics(project)) return false
     if (!isAllMonths(month) && !isProjectRelevantInMonth(project, month)) return false
     return resolveStageAssigneeId(project, project.current_stage) === memberId
   })
 }
 
+export type TeamPerformanceOptions = {
+  /** Include Channel Super Admin rows (e.g. LA Social Primary POC). */
+  includeChannelSuperAdmin?: boolean
+}
+
+function isTeamPerformanceMember(member: ChannelMember, options: TeamPerformanceOptions): boolean {
+  if (isProductionTeamMember(member)) return true
+  return !!options.includeChannelSuperAdmin && member.channel_role === 'Channel Super Admin'
+}
+
 export function computeTeamPerformance(
   projects: Project[],
   members: ChannelMember[],
   month: string,
+  options: TeamPerformanceOptions = {},
 ): TeamPerformanceStats {
-  const productionMembers = members.filter(isProductionTeamMember)
+  const productionMembers = members.filter(m => isTeamPerformanceMember(m, options))
+  const creditPrimaryPoc = !!options.includeChannelSuperAdmin
 
   const memberRows: TeamMemberVital[] = productionMembers.map(member => {
-    const delivered = deliveredProjectsForMember(projects, member.id, month)
+    const delivered = deliveredProjectsForMember(projects, member.id, month, creditPrimaryPoc)
     const inPipeline = pipelineProjectsForMember(projects, member.id, month)
     const onTimeCount = delivered.filter(isDeliveredOnTime).length
     const onTimeRate = delivered.length
@@ -72,24 +96,31 @@ export function computeTeamPerformance(
     return {
       id: member.id,
       name: member.name,
-      roleLabel: member.organization?.trim() || 'Team member',
+      roleLabel: member.channel_role === 'Channel Super Admin'
+        ? 'Super admin'
+        : (member.organization?.trim() || 'Team member'),
       delivered: delivered.length,
       inPipeline: inPipeline.length,
       onTimeRate,
     }
   })
-    .filter(row => row.delivered > 0 || row.inPipeline > 0)
+    .filter(row => {
+      if (row.delivered > 0 || row.inPipeline > 0) return true
+      const member = productionMembers.find(m => m.id === row.id)
+      return member?.channel_role === 'Channel Super Admin'
+    })
     .sort((a, b) => (b.delivered + b.inPipeline) - (a.delivered + a.inPipeline))
 
   const deliveredInScope = projects.filter(project => {
-    if (project.current_stage !== FINAL_STAGE) return false
+    if (!isProjectDelivered(project)) return false
     if (!isAllMonths(month) && !isDeliveredInMonth(project, month)) return false
-    const ownerId = project.editor_id ?? project.editor_2_id
-    return ownerId != null && productionMembers.some(member => member.id === ownerId)
+    return productionMembers.some(member =>
+      memberCreditedOnDelivered(project, member.id, creditPrimaryPoc),
+    )
   })
 
   const pipelineInScope = projects.filter(project => {
-    if (project.current_stage === FINAL_STAGE || project.status_health === 'On hold') return false
+    if (isProjectDelivered(project) || project.status_health === 'On hold') return false
     if (suppressProductionMetrics(project)) return false
     if (!isAllMonths(month) && !isProjectRelevantInMonth(project, month)) return false
     const assigneeId = resolveStageAssigneeId(project, project.current_stage)

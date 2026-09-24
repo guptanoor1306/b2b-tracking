@@ -2,6 +2,8 @@ import { Suspense } from 'react'
 import { fetchProjects } from '@/lib/data/projects'
 import { computeOnTimeDeliveryStats } from '@/lib/data/dashboard-metrics'
 import { DashboardRecentCommentsAsync } from '@/components/dashboard/DashboardRecentCommentsAsync'
+import { DashboardSecondaryAsync } from '@/components/dashboard/DashboardSecondaryAsync'
+import { DashboardSecondaryFallback } from '@/components/dashboard/DashboardSecondaryFallback'
 import { fetchHolidayDates } from '@/lib/data/holidays'
 import {
   fetchStageSlaConfig,
@@ -11,8 +13,6 @@ import { setStageSlaCache } from '@/lib/timelines'
 import { AdminDashboard } from '@/components/dashboard/AdminDashboard'
 import { ExternalDashboard } from '@/components/dashboard/ExternalDashboard'
 import { MonthFilterSlot } from '@/components/dashboard/MonthFilterSlot'
-import { SuperadminInsights } from '@/components/dashboard/SuperadminInsights'
-import { SuperadminInsightsFallback } from '@/components/dashboard/SuperadminInsightsFallback'
 import type { ReleaseScheduleItem } from '@/components/dashboard/ReleaseScheduleModal'
 import {
   isAllMonths,
@@ -27,8 +27,8 @@ import {
   canCreateExternalRequest,
   effectiveRoleForChannel,
   isChannelSuperAdmin,
+  channelHasSuperadminInsights,
 } from '@/lib/views'
-import { usesExternalIntakeFlow } from '@/lib/zerodha-sla'
 import type { Profile, ChannelMemberRole } from '@/lib/types'
 
 type Props = {
@@ -128,21 +128,28 @@ export async function DashboardPageContent({
   })
   const inPipelineMonth = filterByMonth ? inPipelineView.length : inPipeline.length
 
-  const showSuperadminInsights = showCreateReport && usesExternalIntakeFlow(channelName) && !usesExternalAdminDashboard(effectiveRole)
+  const showSuperadminInsights =
+    showCreateReport
+    && !usesExternalAdminDashboard(effectiveRole)
+    && channelHasSuperadminInsights(channelName)
+  const showTimelineInsights = showSuperadminInsights
   const onTimeDelivery = usesExternalAdminDashboard(effectiveRole)
     ? null
     : computeOnTimeDeliveryStats(deliveredOnTime.length, deliveredLate.length)
 
-  const insights = showSuperadminInsights ? (
-    <Suspense fallback={<SuperadminInsightsFallback />}>
-      <SuperadminInsights
+  const deferredSecondarySlot = (
+    <Suspense fallback={<DashboardSecondaryFallback showInsights={showSuperadminInsights} showTimelineInsights={showTimelineInsights} />}>
+      <DashboardSecondaryAsync
+        channelName={channelName}
+        showInsights={showSuperadminInsights}
+        showTimelineInsights={showTimelineInsights}
         projects={projects}
         month={month}
         holidays={holidays}
         holdPeriodsByProjectId={holdPeriodsByProjectId}
       />
     </Suspense>
-  ) : null
+  )
 
   return (
     <AdminDashboard
@@ -163,13 +170,8 @@ export async function DashboardPageContent({
       workspaceLabel={usesExternalAdminDashboard(effectiveRole) ? 'Client production overview' : undefined}
       showCreateRequest={showCreateRequest}
       showCreateReport={showCreateReport}
-      insights={insights}
       releaseScheduleItems={releaseScheduleItems}
-      recentCommentsSlot={(
-        <Suspense fallback={null}>
-          <DashboardRecentCommentsAsync channelName={channelName} />
-        </Suspense>
-      )}
+      deferredSecondarySlot={deferredSecondarySlot}
     />
   )
 }

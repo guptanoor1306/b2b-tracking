@@ -112,6 +112,11 @@ export function usesExternalAdminDashboard(role: Role | string): boolean {
   return isExternalClientAdmin(role)
 }
 
+/** Channel Super Admin dashboard widgets (team performance + optional intake timeline metrics). */
+export function channelHasSuperadminInsights(channelDbName: string | null | undefined): boolean {
+  return usesExternalIntakeFlow(channelDbName) || isLaSocialChannelDbName(channelDbName)
+}
+
 const ZERODHA_CLIENT_REVIEW_STAGES = new Set([
   ZERODHA_FIRST_CUT_REVIEW,
   ZERODHA_FIRST_DRAFT_REVIEW,

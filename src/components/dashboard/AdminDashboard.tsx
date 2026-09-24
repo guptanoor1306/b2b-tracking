@@ -44,6 +44,8 @@ type Props = {
   releaseScheduleItems?: ReleaseScheduleItem[]
   recentComments?: RecentCommentFeedItem[]
   recentCommentsSlot?: ReactNode
+  /** Single deferred slot: recent comments (+ optional insights) via display:contents grid children */
+  deferredSecondarySlot?: ReactNode
 }
 
 export function AdminDashboard({
@@ -55,6 +57,7 @@ export function AdminDashboard({
   releaseScheduleItems = [],
   recentComments = [],
   recentCommentsSlot = null,
+  deferredSecondarySlot = null,
 }: Props) {
   const externalIntake = usesExternalIntakeFlow(channelDbName)
   const stageLabel = (project: Project) => {
@@ -220,10 +223,12 @@ export function AdminDashboard({
           {externalIntake && !externalView && (
             <NewProjectsReceivedSection projects={newProjectsReceived} />
           )}
-          {recentCommentsSlot ?? <RecentCommentsSection items={recentComments} />}
+          {deferredSecondarySlot
+            ?? recentCommentsSlot
+            ?? <RecentCommentsSection items={recentComments} />}
         </div>
 
-        {insights}
+        {!deferredSecondarySlot && insights}
 
         {/* 4. Project lists */}
         <div className="space-y-4">
