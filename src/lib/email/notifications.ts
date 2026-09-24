@@ -16,7 +16,11 @@ import {
 } from '@/lib/email/templates'
 import { getProjectTeamMemberIds } from '@/lib/projects/team'
 import { getChannelByDbName, getChannelBySlug } from '@/lib/channels'
-import { usesExternalIntakeFlow } from '@/lib/zerodha-sla'
+import {
+  isZerodhaClientReviewStage,
+  normalizeZerodhaBoardStage,
+  usesExternalIntakeFlow,
+} from '@/lib/zerodha-sla'
 import { Project } from '@/lib/types'
 import { resolveStageAssigneeId } from '@/lib/views'
 import { FINAL_STAGE } from '@/lib/constants'
@@ -140,21 +144,19 @@ export async function notifyProjectTeamOnCreate(project: Project): Promise<void>
   }
 }
 
-export async function notifyStageActionable(
+async function sendStageActionableEmail(
   project: Project,
-  newStage: string,
-  assigneeId: string | null,
+  stage: string,
+  recipientId: string,
 ): Promise<void> {
-  if (!assigneeId) return
-
   if (await wasNotificationSent({
     type: 'stage_actionable',
-    recipientId: assigneeId,
+    recipientId,
     projectId: project.id,
-    stage: newStage,
+    stage,
   })) return
 
-  const [profile] = await fetchProfiles([assigneeId])
+  const [profile] = await fetchProfiles([recipientId])
   if (!profile) return
 
   const channelName = channelNameFromProject(project)
@@ -165,7 +167,7 @@ export async function notifyStageActionable(
     projectTitle: project.title,
     channelName,
     projectId: project.id,
-    stage: newStage,
+    stage,
   })
 
   const result = await sendEmail({ to: profile.email, subject, text, html })
@@ -176,9 +178,45 @@ export async function notifyStageActionable(
       recipientEmail: profile.email,
       projectId: project.id,
       channelSlug,
-      stage: newStage,
+      stage,
     })
   }
+}
+
+async function externalIntakeClientReviewRecipientIds(
+  project: Pick<Project, 'channel' | 'external_team_member_id'>,
+): Promise<string[]> {
+  const channelSlug = channelSlugFromProject(project)
+  const ids = new Set<string>()
+  if (project.external_team_member_id) ids.add(project.external_team_member_id)
+  if (channelSlug) {
+    const superAdmins = await fetchChannelSuperAdminsForNotifications(channelSlug)
+    for (const admin of superAdmins) ids.add(admin.id)
+  }
+  return [...ids]
+}
+
+export async function notifyStageActionable(
+  project: Project,
+  newStage: string,
+  assigneeId: string | null,
+): Promise<void> {
+  const recipientIds = new Set<string>()
+  if (assigneeId) recipientIds.add(assigneeId)
+
+  if (usesExternalIntakeFlow(project.channel)) {
+    const normalized = normalizeZerodhaBoardStage(newStage, project.channel)
+    if (isZerodhaClientReviewStage(normalized, project.channel)) {
+      const extras = await externalIntakeClientReviewRecipientIds(project)
+      for (const id of extras) recipientIds.add(id)
+    }
+  }
+
+  if (!recipientIds.size) return
+
+  await Promise.all(
+    [...recipientIds].map(id => sendStageActionableEmail(project, newStage, id)),
+  )
 }
 
 export async function notifyChannelAccess(params: {
