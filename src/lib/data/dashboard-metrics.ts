@@ -1,15 +1,14 @@
 import { HoldPeriod, Project, StageHistory } from '@/lib/types'
 import {
   ZERODHA_REQUEST_RECEIVED,
-  ZERODHA_READY_TO_PRODUCE,
-  ZERODHA_FIRST_CUT_REVIEW,
-  ZERODHA_FIRST_DRAFT_REVIEW,
-  ZERODHA_SECOND_DRAFT_REVIEW,
+  internalStagesForChannel,
   normalizeZerodhaBoardStage,
+  usesExternalIntakeFlow,
 } from '@/lib/zerodha-sla'
-import { computeStageDurations, isAllMonths, isDeliveredInMonth, isProjectRelevantInMonth } from '@/lib/utils'
-import { normalizeStage } from '@/lib/timelines'
-import { isLaSocialChannelDbName, LA_SOCIAL_TOPIC, STAGES_LA_SOCIAL } from '@/lib/la-social-sla'
+import { computeStageDurations, isAllMonths, isDeliveredInMonth, isProjectRelevantInMonth, previousCalendarMonth } from '@/lib/utils'
+import { isTerminalPipelineStage, normalizeStage } from '@/lib/timelines'
+import { isLaSocialChannelDbName, LA_SOCIAL_TOPIC } from '@/lib/la-social-sla'
+import { STAGES_INTERNAL } from '@/lib/constants'
 
 export type OnTimeDeliveryStats = {
   onTime: number
@@ -22,32 +21,51 @@ export type TimelineMetric = {
   key: string
   label: string
   averageLabel: string
+  averageHours: number | null
   sampleCount: number
+  previousAverageLabel: string | null
+  previousAverageHours: number | null
+  previousSampleCount: number
+  /** % change vs previous month; positive = slower (more hours). */
+  trendPercent: number | null
 }
 
 export type TimelineMetrics = {
   metrics: TimelineMetric[]
+  comparisonMonth: string | null
 }
 
-const TIMELINE_STAGE_METRICS: { key: string; label: string; stage: string }[] = [
-  { key: 'request_response', label: 'Request response', stage: ZERODHA_REQUEST_RECEIVED },
-  { key: 'ready_to_produce', label: 'Ready to produce → picked', stage: ZERODHA_READY_TO_PRODUCE },
-  { key: 'first_cut_review', label: '1st Cut Review', stage: ZERODHA_FIRST_CUT_REVIEW },
-  { key: 'first_draft_review', label: '1st Draft Review', stage: ZERODHA_FIRST_DRAFT_REVIEW },
-  { key: 'second_draft_review', label: '2nd Draft Review', stage: ZERODHA_SECOND_DRAFT_REVIEW },
-]
+type StageMetricDef = { key: string; label: string; stage: string }
 
-function laSocialTimelineStageMetrics(): { key: string; label: string; stage: string }[] {
-  return STAGES_LA_SOCIAL.filter(stage => stage !== LA_SOCIAL_TOPIC).map(stage => ({
-    key: `la_${stage.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`,
-    label: stage,
-    stage,
-  }))
+function stageMetricKey(stage: string): string {
+  return stage.replace(/[^a-z0-9]+/gi, '_').toLowerCase()
 }
 
-function timelineStageMetricsForChannel(channelDbName: string | null | undefined) {
-  if (isLaSocialChannelDbName(channelDbName)) return laSocialTimelineStageMetrics()
-  return TIMELINE_STAGE_METRICS
+function isExcludedFromTimelineTat(stage: string, channelDbName: string | null | undefined): boolean {
+  if (isTerminalPipelineStage(stage, channelDbName)) return true
+  if (isLaSocialChannelDbName(channelDbName)) {
+    return normalizeStage(stage) === normalizeStage(LA_SOCIAL_TOPIC)
+  }
+  if (usesExternalIntakeFlow(channelDbName)) {
+    return normalizeZerodhaBoardStage(stage, channelDbName) === ZERODHA_REQUEST_RECEIVED
+  }
+  return normalizeStage(stage) === normalizeStage('Video received')
+}
+
+function timelineStageMetricsForChannel(channelDbName: string | null | undefined): StageMetricDef[] {
+  const pipeline = isLaSocialChannelDbName(channelDbName)
+    ? internalStagesForChannel(channelDbName)
+    : usesExternalIntakeFlow(channelDbName)
+      ? internalStagesForChannel(channelDbName)
+      : STAGES_INTERNAL
+
+  return pipeline
+    .filter(stage => !isExcludedFromTimelineTat(stage, channelDbName))
+    .map(stage => ({
+      key: stageMetricKey(stage),
+      label: stage,
+      stage,
+    }))
 }
 
 export function computeOnTimeDeliveryStats(onTime: number, late: number): OnTimeDeliveryStats {
@@ -83,15 +101,33 @@ function formatAverageHours(hours: number | null): string {
   return `${days} days`
 }
 
-export function computeTimelineMetrics(
+function normalizeDurationStage(stage: string, channelDbName: string | null | undefined, laSocial: boolean): string {
+  return laSocial
+    ? normalizeStage(stage)
+    : normalizeZerodhaBoardStage(stage, channelDbName)
+}
+
+function stageMatchesMetric(
+  normalizedDurationStage: string,
+  metric: StageMetricDef,
+  channelDbName: string | null | undefined,
+  laSocial: boolean,
+): boolean {
+  if (laSocial) {
+    return normalizeStage(metric.stage) === normalizedDurationStage
+  }
+  return normalizeZerodhaBoardStage(metric.stage, channelDbName) === normalizedDurationStage
+}
+
+function collectTimelineBuckets(
+  stageMetrics: StageMetricDef[],
   projects: Project[],
   historyByProject: Map<string, StageHistory[]>,
   holidays: string[],
   holdPeriodsByProjectId: Record<string, HoldPeriod[]>,
   month: string,
-  channelDbName?: string | null,
-): TimelineMetrics {
-  const stageMetrics = timelineStageMetricsForChannel(channelDbName)
+  channelDbName: string | null | undefined,
+): Map<string, number[]> {
   const laSocial = isLaSocialChannelDbName(channelDbName)
   const scoped = projectsInMetricsScope(projects, month)
   const buckets = new Map<string, number[]>(
@@ -110,29 +146,85 @@ export function computeTimelineMetrics(
     )
 
     for (const duration of durations) {
-      const normalized = laSocial
-        ? normalizeStage(duration.stage)
-        : normalizeZerodhaBoardStage(duration.stage)
+      if (isTerminalPipelineStage(duration.stage, channelDbName)) continue
+      const normalized = normalizeDurationStage(duration.stage, channelDbName, laSocial)
       const metric = stageMetrics.find(item =>
-        laSocial
-          ? normalizeStage(item.stage) === normalized
-          : item.stage === normalized,
+        stageMatchesMetric(normalized, item, channelDbName, laSocial),
       )
       if (!metric || duration.totalBusinessHours <= 0) continue
       buckets.get(metric.key)?.push(duration.totalBusinessHours)
     }
   }
 
-  return {
-    metrics: stageMetrics.map(metric => {
-      const samples = buckets.get(metric.key) ?? []
+  return buckets
+}
+
+function buildTimelineMetrics(
+  stageMetrics: StageMetricDef[],
+  currentBuckets: Map<string, number[]>,
+  previousBuckets: Map<string, number[]> | null,
+): TimelineMetric[] {
+  return stageMetrics
+    .map(metric => {
+      const samples = currentBuckets.get(metric.key) ?? []
+      const prevSamples = previousBuckets?.get(metric.key) ?? []
       const avg = averageHours(samples)
+      const prevAvg = averageHours(prevSamples.length ? prevSamples : [])
+
+      let trendPercent: number | null = null
+      if (avg != null && prevAvg != null && prevAvg > 0) {
+        trendPercent = Math.round(((avg - prevAvg) / prevAvg) * 100)
+      }
+
       return {
         key: metric.key,
         label: metric.label,
         averageLabel: formatAverageHours(avg),
+        averageHours: avg,
         sampleCount: samples.length,
+        previousAverageLabel: previousBuckets ? formatAverageHours(prevAvg) : null,
+        previousAverageHours: prevAvg,
+        previousSampleCount: prevSamples.length,
+        trendPercent,
       }
-    }).filter(metric => metric.sampleCount > 0),
+    })
+    .filter(metric => metric.sampleCount > 0 || metric.previousSampleCount > 0)
+}
+
+export function computeTimelineMetrics(
+  projects: Project[],
+  historyByProject: Map<string, StageHistory[]>,
+  holidays: string[],
+  holdPeriodsByProjectId: Record<string, HoldPeriod[]>,
+  month: string,
+  channelDbName?: string | null,
+): TimelineMetrics {
+  const stageMetrics = timelineStageMetricsForChannel(channelDbName)
+  const currentBuckets = collectTimelineBuckets(
+    stageMetrics,
+    projects,
+    historyByProject,
+    holidays,
+    holdPeriodsByProjectId,
+    month,
+    channelDbName,
+  )
+
+  const comparisonMonth = previousCalendarMonth(month)
+  const previousBuckets = comparisonMonth
+    ? collectTimelineBuckets(
+      stageMetrics,
+      projects,
+      historyByProject,
+      holidays,
+      holdPeriodsByProjectId,
+      comparisonMonth,
+      channelDbName,
+    )
+    : null
+
+  return {
+    metrics: buildTimelineMetrics(stageMetrics, currentBuckets, previousBuckets),
+    comparisonMonth,
   }
 }

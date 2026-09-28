@@ -152,6 +152,12 @@ export function resolvePipelineStage(stage: string, channelDbName?: string | nul
   return normalizeStage(stage)
 }
 
+/** Terminal stage (Final Delivery, Retro, …) — project is done; no SLA/TAT clock on this step. */
+export function isTerminalPipelineStage(stage: string, channelDbName?: string | null): boolean {
+  const terminal = finalStageForChannel(channelDbName ?? null)
+  return resolvePipelineStage(stage, channelDbName) === resolvePipelineStage(terminal, channelDbName)
+}
+
 /** Delivered = final stage reached or delivery date set (LA Social: entering Retro). */
 export function isProjectDelivered(project: {
   current_stage?: string | null

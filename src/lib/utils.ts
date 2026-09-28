@@ -73,6 +73,14 @@ export function monthLabel(month: string): string {
   return format(new Date(y, m - 1), 'MMMM yyyy')
 }
 
+/** Calendar month before `yyyy-MM`, or null for all-time filter. */
+export function previousCalendarMonth(month: string): string | null {
+  if (isAllMonths(month)) return null
+  const [y, m] = month.split('-').map(Number)
+  const d = new Date(y, m - 2, 1)
+  return format(d, 'yyyy-MM')
+}
+
 export const ALL_MONTHS = 'all'
 
 export function isAllMonths(month: string | null | undefined): boolean {

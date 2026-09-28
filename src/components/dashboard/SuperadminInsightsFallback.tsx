@@ -16,11 +16,7 @@ export function SuperadminInsightsFallback({ showTimeline = true }: Props) {
       {showTimeline ? (
         <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm">
           <div className="mb-3 h-8 w-56 animate-pulse rounded-lg bg-zinc-100" />
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {[0, 1, 2].map(i => (
-              <div key={i} className="h-16 animate-pulse rounded-lg bg-zinc-50" />
-            ))}
-          </div>
+          <div className="h-48 animate-pulse rounded-lg bg-zinc-50" />
         </div>
       ) : null}
     </div>

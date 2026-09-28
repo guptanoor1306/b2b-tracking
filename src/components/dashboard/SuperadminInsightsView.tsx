@@ -39,7 +39,7 @@ export function SuperadminInsightsView({
       month,
       channelName,
     )
-    : { metrics: [] }
+    : { metrics: [], comparisonMonth: null }
 
   const showTeam = teamPerformance.members.length > 0
   const showTimeline = showTimelineInsights && timelineMetrics.metrics.length > 0
@@ -48,7 +48,13 @@ export function SuperadminInsightsView({
   return (
     <div className="col-span-full space-y-4">
       {showTeam && <TeamPerformanceVitals stats={teamPerformance} month={month} />}
-      {showTimeline && <TimelineMetricsWidget metrics={timelineMetrics} month={month} />}
+      {showTimeline && (
+        <TimelineMetricsWidget
+          metrics={timelineMetrics}
+          month={month}
+          channelDbName={channelName}
+        />
+      )}
     </div>
   )
 }

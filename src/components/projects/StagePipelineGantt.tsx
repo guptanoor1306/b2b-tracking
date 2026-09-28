@@ -16,11 +16,18 @@ import {
   vdParallelStartIso,
   vdParallelAnchorEntry,
 } from '@/lib/pipeline-parallel'
-import { ANIMATION_VD_STAGE, FINAL_STAGE, GRAPHICS_VD_STAGE } from '@/lib/constants'
+import { ANIMATION_VD_STAGE, GRAPHICS_VD_STAGE } from '@/lib/constants'
 import { StageReminderButton } from '@/components/projects/StageReminderButton'
 import { AssigneeAvatar } from '@/components/ui/AssigneeAvatar'
 import { updateStageHistoryDate } from '@/lib/actions/projects'
-import { isStageDurationOverSla, normalizeStage, isProjectTimelineLocked, resolvePipelineStage } from '@/lib/timelines'
+import {
+  isStageDurationOverSla,
+  normalizeStage,
+  isProjectTimelineLocked,
+  resolvePipelineStage,
+  isTerminalPipelineStage,
+  isProjectDelivered,
+} from '@/lib/timelines'
 import { slaLevelForProject } from '@/lib/stage-sla'
 import { mapInternalToExternalStage } from '@/lib/views'
 import {
@@ -66,6 +73,8 @@ type StageRow = {
   durationLabel: string
   leftPct: number
   widthPct: number
+  /** Final delivery / Retro — point-in-time marker, not a timed bar */
+  isTerminalMilestone?: boolean
 }
 
 type AxisTick = { day: Date; leftPct: number; isToday: boolean }
@@ -83,9 +92,9 @@ function toDateStr(date: Date): string {
 function resolveCurrentStageEnd(
   stage: string,
   startIso: string,
-  project: Pick<Project, 'delivered_date'>,
+  project: Pick<Project, 'delivered_date' | 'channel'>,
 ): { endIso: string; endDate: Date } {
-  if (normalizeStage(stage) === FINAL_STAGE) {
+  if (isTerminalPipelineStage(stage, project.channel)) {
     const endIso = project.delivered_date ? toIsoDate(project.delivered_date) : startIso
     return { endIso, endDate: startOfDay(parseISO(endIso)) }
   }
@@ -123,6 +132,30 @@ function barGeometry(start: Date, end: Date, rangeStart: Date, totalDays: number
   const leftPct = (startIdx / totalDays) * 100
   const widthPct = (span / totalDays) * 100
   return { leftPct, widthPct: Math.min(widthPct, 100 - leftPct) }
+}
+
+function milestoneLeftPct(at: Date, rangeStart: Date, totalDays: number): number {
+  const idx = differenceInCalendarDays(at, rangeStart)
+  return Math.min(100, Math.max(0, (idx / totalDays) * 100))
+}
+
+function GanttTerminalMarker({ leftPct, label }: { leftPct: number; label: string }) {
+  return (
+    <>
+      <div
+        className="pointer-events-none absolute inset-y-1 z-[6] w-px bg-emerald-400/90"
+        style={{ left: `${leftPct}%` }}
+        aria-hidden
+      />
+      <div
+        className="absolute top-1/2 z-[7] h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-sm border-2 border-emerald-600 bg-emerald-500 shadow-sm"
+        style={{ left: `${leftPct}%` }}
+        title={`Delivered · ${label}`}
+        role="img"
+        aria-label={`Delivered ${label}`}
+      />
+    </>
+  )
 }
 
 function computeBarSegments(
@@ -268,16 +301,12 @@ function GanttBar({
     ? 'Late'
     : row.isCurrent
       ? 'In progress'
-      : normalizeStage(row.stage) === FINAL_STAGE
-        ? 'Delivered'
-        : 'On time'
+      : 'On time'
   const borderClass = row.overSla
     ? 'border-[3px] border-red-500'
     : row.isCurrent
       ? 'border-[3px] border-violet-500'
-      : normalizeStage(row.stage) === FINAL_STAGE
-        ? 'border-[3px] border-emerald-500'
-        : 'border-[3px] border-emerald-500'
+      : 'border-[3px] border-emerald-500'
 
   const segments = computeBarSegments(displayStart, displayEnd, holdPeriods)
   const hasHoldGap = segments.some(s => s.type === 'hold')
@@ -453,8 +482,9 @@ function collapseRowsForExternalView(
     }
   }
 
+  const onTerminalStage = currentStage ? isTerminalPipelineStage(currentStage, channelDbName) : false
   for (const row of collapsed) {
-    row.isCurrent = row.stage === currentExt
+    row.isCurrent = !onTerminalStage && row.stage === currentExt
   }
   return collapsed
 }
@@ -513,15 +543,38 @@ export function StagePipelineGantt({
   const { rangeStart, rangeEnd, days, todayOffset, rows, ticks, totalDays } = useMemo(() => {
     const built: Omit<StageRow, 'leftPct' | 'widthPct'>[] = []
     const atFinalDelivery =
-      timelineLocked || stageLabel(currentStage ?? '') === FINAL_STAGE
+      timelineLocked
+      || isProjectDelivered(project)
+      || isTerminalPipelineStage(currentStage ?? '', channel)
 
     stageEntries.forEach((entry, i) => {
+      if (isTerminalPipelineStage(entry.new_stage, channel)) {
+        const atIso = resolveDate(entry.id, entry.changed_at)
+        const at = startOfDay(parseISO(atIso))
+        const stage = stageLabel(entry.new_stage)
+        built.push({
+          key: entry.id,
+          entryId: entry.id,
+          startIso: atIso,
+          endIso: atIso,
+          stage,
+          start: at,
+          end: at,
+          isCurrent: false,
+          isComplete: true,
+          overSla: false,
+          isTerminalMilestone: true,
+          assigneeInfo: stageAssigneeMap.get(entry.new_stage) ?? null,
+          durationLabel: format(at, 'd MMM yyyy'),
+        })
+        return
+      }
+
       const next = stageEntries[i + 1]
       const d = durations[i]
       if (!d) return
 
       const stage = stageLabel(entry.new_stage)
-      const isFinalStageRow = stage === FINAL_STAGE
       const effectiveStart = effectiveStageStartIso(stageEntries, entry)
       const parallelAnchorEntry = stage === ANIMATION_VD_STAGE ? vdParallelAnchorEntry(stageEntries) : null
       const startIso = parallelAnchorEntry
@@ -547,12 +600,7 @@ export function StagePipelineGantt({
         d.totalBusinessHours,
       )
 
-      let durationLabel = formatDuration(d.days, d.hours)
-      if (isFinalStageRow && atFinalDelivery && !next) {
-        durationLabel = project.delivered_date
-          ? format(parseISO(toIsoDate(project.delivered_date)), 'dd MMM')
-          : format(start, 'dd MMM')
-      }
+      const durationLabel = formatDuration(d.days, d.hours)
 
       built.push({
         key: entry.id,
@@ -564,7 +612,7 @@ export function StagePipelineGantt({
         start,
         end: endDate,
         isCurrent,
-        isComplete: !!next || (isFinalStageRow && atFinalDelivery),
+        isComplete: !!next,
         overSla,
         assigneeInfo: stageAssigneeMap.get(entry.new_stage) ?? (
           isCurrent && currentAssignee
@@ -625,20 +673,31 @@ export function StagePipelineGantt({
       }
     })
 
-    const finalBuilt = externalView
-      ? collapseRowsForExternalView(built, currentStage, project.channel)
-      : built
+    const milestoneRows = built.filter(r => r.isTerminalMilestone)
+    const barRows = built.filter(r => !r.isTerminalMilestone)
+    const collapsedBars = externalView
+      ? collapseRowsForExternalView(barRows, currentStage, project.channel)
+      : barRows
+    const finalBuilt = [
+      ...collapsedBars,
+      ...milestoneRows.map(row => ({
+        ...row,
+        stage: externalView ? mapInternalToExternalStage(row.stage, channel) : row.stage,
+      })),
+    ]
 
     if (atFinalDelivery) {
-      const finalRows = finalBuilt.filter(r => normalizeStage(r.stage) === FINAL_STAGE)
-      const pipelineEnd = finalRows.length > 0 ? finalRows[finalRows.length - 1].end : null
+      const terminalEntry = stageEntries.find(e => isTerminalPipelineStage(e.new_stage, channel))
+      const pipelineEnd = terminalEntry
+        ? startOfDay(parseISO(resolveDate(terminalEntry.id, terminalEntry.changed_at)))
+        : project.delivered_date
+          ? startOfDay(parseISO(toIsoDate(project.delivered_date)))
+          : null
       if (pipelineEnd) {
         for (const row of finalBuilt) {
           if (row.end > pipelineEnd) row.end = pipelineEnd
           row.isCurrent = false
-          if (normalizeStage(row.stage) === FINAL_STAGE && !row.isComplete) {
-            row.isComplete = true
-          }
+          row.isComplete = true
         }
       }
     }
@@ -659,8 +718,13 @@ export function StagePipelineGantt({
     let min = finalBuilt[0].start
     let max = finalBuilt[0].end
     for (const r of finalBuilt) {
-      if (r.start < min) min = r.start
-      if (r.end > max) max = r.end
+      if (r.isTerminalMilestone) {
+        if (r.start < min) min = r.start
+        if (r.start > max) max = r.start
+      } else {
+        if (r.start < min) min = r.start
+        if (r.end > max) max = r.end
+      }
     }
 
     const pipelineComplete = atFinalDelivery
@@ -678,6 +742,13 @@ export function StagePipelineGantt({
         : null
 
     const rows: StageRow[] = finalBuilt.map(r => {
+      if (r.isTerminalMilestone) {
+        return {
+          ...r,
+          leftPct: milestoneLeftPct(r.start, rangeStart, totalDays),
+          widthPct: 0,
+        }
+      }
       const { leftPct, widthPct } = barGeometry(r.start, r.end, rangeStart, totalDays)
       return { ...r, leftPct, widthPct }
     })
@@ -693,8 +764,8 @@ export function StagePipelineGantt({
     }
   }, [stageEntries, durations, resolveDate, currentStage, currentAssignee, currentAssigneeId, stageAssigneeMap, holidays, project, effectiveHoldPeriods, externalView, timelineLocked, stageLabel])
 
-  const latestHistory = stageEntries[stageEntries.length - 1]
-  const currentStageDays = daysInStage(latestHistory?.changed_at)
+  const latestTimedHistory = [...stageEntries].reverse().find(e => !isTerminalPipelineStage(e.new_stage, channel))
+  const currentStageDays = daysInStage(latestTimedHistory?.changed_at)
   const gridCols = `${LABEL_WIDTH}px minmax(0, 1fr)`
 
   const saveDate = useCallback(async (historyId: string, dateStr: string) => {
@@ -751,7 +822,8 @@ export function StagePipelineGantt({
           key={row.key}
           className={cn(
             'grid border-b border-zinc-100 last:border-b-0',
-            row.isCurrent && 'bg-violet-50/30'
+            row.isCurrent && 'bg-violet-50/30',
+            row.isTerminalMilestone && 'bg-emerald-50/25',
           )}
           style={{ gridTemplateColumns: gridCols, minHeight: ROW_MIN_H }}
         >
@@ -770,12 +842,16 @@ export function StagePipelineGantt({
                 </p>
                 {row.isComplete && <CheckCircle2 size={14} className="shrink-0 text-emerald-600" />}
               </div>
-              {row.assigneeInfo && (
+              {row.isTerminalMilestone ? (
+                <p className="mt-0.5 text-[11px] font-medium text-emerald-700">
+                  Delivered · {row.durationLabel}
+                </p>
+              ) : row.assigneeInfo ? (
                 <div className="mt-0.5 flex items-center gap-1">
                   <AssigneeAvatar name={row.assigneeInfo.name} id={row.assigneeInfo.id} size="sm" theme="light" />
                   <span className="truncate text-[11px] text-zinc-500">{row.assigneeInfo.name}</span>
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -801,17 +877,21 @@ export function StagePipelineGantt({
               />
             )}
 
-            <GanttBar
-              row={row}
-              canEdit={canEdit}
-              rangeStart={rangeStart}
-              totalDays={totalDays}
-              holdPeriods={effectiveHoldPeriods}
-              holidays={holidays}
-              channelDbName={channel}
-              onSaveStart={d => saveDate(row.entryId, d)}
-              onSaveEnd={d => row.endEntryId && saveDate(row.endEntryId, d)}
-            />
+            {row.isTerminalMilestone ? (
+              <GanttTerminalMarker leftPct={row.leftPct} label={row.durationLabel} />
+            ) : (
+              <GanttBar
+                row={row}
+                canEdit={canEdit}
+                rangeStart={rangeStart}
+                totalDays={totalDays}
+                holdPeriods={effectiveHoldPeriods}
+                holidays={holidays}
+                channelDbName={channel}
+                onSaveStart={d => saveDate(row.entryId, d)}
+                onSaveEnd={d => row.endEntryId && saveDate(row.endEntryId, d)}
+              />
+            )}
           </div>
         </div>
       ))}
@@ -837,15 +917,18 @@ export function StagePipelineGantt({
               <span className="h-4 w-6 rounded bg-zinc-400/30 border border-zinc-400/50" /> Hold
             </span>
           )}
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-3.5 w-3.5 rounded-sm border-2 border-emerald-600 bg-emerald-500" /> Delivered (date marker)
+          </span>
         </div>
-        {rows.some(r => r.isCurrent) && (
+        {rows.some(r => r.isCurrent) ? (
           <StageReminderButton
             projectId={projectId}
             assigneeName={rows.find(r => r.isCurrent)?.assigneeInfo?.name ?? currentAssignee ?? null}
             daysInStage={currentStageDays}
             canSend={canSendReminder}
           />
-        )}
+        ) : null}
       </div>
     </div>
   )
