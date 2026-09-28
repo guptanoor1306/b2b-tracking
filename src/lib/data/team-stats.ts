@@ -1,5 +1,6 @@
 import { ChannelMember, Project } from '@/lib/types'
 import { isAllMonths, isDeliveredInMonth, isProjectRelevantInMonth } from '@/lib/utils'
+import { isDeliveryCreditMember } from '@/lib/projects/team'
 import { resolveStageAssigneeId } from '@/lib/views'
 import { suppressProductionMetrics } from '@/lib/zerodha-sla'
 import { isProjectDelivered } from '@/lib/timelines'
@@ -33,12 +34,8 @@ function isDeliveredOnTime(project: Project): boolean {
   return project.delivered_date <= project.target_delivery_date
 }
 
-function isEditorOnProject(project: Project, memberId: string): boolean {
-  return project.editor_id === memberId || project.editor_2_id === memberId
-}
-
 function memberCreditedOnDelivered(project: Project, memberId: string, creditPrimaryPoc: boolean): boolean {
-  if (isEditorOnProject(project, memberId)) return true
+  if (isDeliveryCreditMember(project, memberId)) return true
   if (!creditPrimaryPoc) return false
   if (project.internal_owner_id === memberId) return true
   return resolveStageAssigneeId(project, project.current_stage) === memberId

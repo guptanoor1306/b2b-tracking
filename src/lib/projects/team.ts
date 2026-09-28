@@ -3,6 +3,7 @@ export type ProjectTeamFields = {
   editor_2_id?: string | null
   designer_id?: string | null
   designer_2_id?: string | null
+  graphic_designer_id?: string | null
   sound_designer_id?: string | null
   writer_id?: string | null
   external_team_member_id?: string | null
@@ -16,6 +17,7 @@ export function getProjectTeamMemberIds(project: ProjectTeamFields): string[] {
     project.editor_2_id,
     project.designer_id,
     project.designer_2_id,
+    project.graphic_designer_id,
     project.sound_designer_id,
     project.writer_id,
     project.external_team_member_id,
@@ -27,6 +29,17 @@ export function getProjectTeamMemberIds(project: ProjectTeamFields): string[] {
 
 export function isUserOnProjectTeam(project: ProjectTeamFields, userId: string): boolean {
   return getProjectTeamMemberIds(project).includes(userId)
+}
+
+/** Editors + graphic designers on a project — each gets delivery credit in team vitals. */
+export function isDeliveryCreditMember(project: ProjectTeamFields, memberId: string): boolean {
+  return (
+    project.editor_id === memberId
+    || project.editor_2_id === memberId
+    || project.designer_id === memberId
+    || project.designer_2_id === memberId
+    || project.graphic_designer_id === memberId
+  )
 }
 
 export function filterProjectsByTeamMembership<
